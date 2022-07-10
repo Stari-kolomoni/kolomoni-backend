@@ -1,4 +1,5 @@
 mod routes;
+mod schemas;
 
 use actix_web::{web, Scope};
 

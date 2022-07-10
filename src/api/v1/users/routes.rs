@@ -1,10 +1,12 @@
-use actix_web::{get, post, delete, HttpResponse, HttpRequest, patch};
+use actix_web::{get, post, delete, HttpResponse, HttpRequest, patch, web};
+use crate::{api::v1::users::schemas::UserRegister, errors::BackendError};
 
 #[post("")]
-async fn register_user() -> HttpResponse {
-    println!("Accessing users");
-    HttpResponse::Ok()
-    .body("TODO")
+async fn register_user(user: web::Json<UserRegister>) -> Result<HttpResponse, BackendError> {
+    if user.display_name.is_some() {
+        println!("  Also goes by the name {}.", user.display_name.as_ref().unwrap())
+    }
+    Ok(HttpResponse::Ok().body("TODO"))
 }
 
 #[post("/login")]

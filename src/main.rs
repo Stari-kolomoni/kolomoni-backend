@@ -1,6 +1,7 @@
 use actix_web::{get, HttpServer, App, HttpResponse};
 
 mod api;
+mod errors;
 
 #[get("/ping")]
 async fn ping() -> HttpResponse {
