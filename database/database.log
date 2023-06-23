@@ -1,0 +1,59 @@
+2023-06-23 10:44:46.185 CEST [17852] LOG:  starting PostgreSQL 15.3, compiled by Visual C++ build 1914, 64-bit
+2023-06-23 10:44:46.190 CEST [17852] LOG:  listening on IPv6 address "::1", port 5432
+2023-06-23 10:44:46.190 CEST [17852] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2023-06-23 10:44:46.360 CEST [19132] LOG:  database system was shut down at 2023-06-23 10:44:30 CEST
+2023-06-23 10:44:46.486 CEST [17852] LOG:  database system is ready to accept connections
+2023-06-23 10:44:47.240 CEST [17852] LOG:  received fast shutdown request
+2023-06-23 10:44:47.352 CEST [17852] LOG:  aborting any active transactions
+2023-06-23 10:44:47.358 CEST [17852] LOG:  background worker "logical replication launcher" (PID 18196) exited with exit code 1
+2023-06-23 10:44:47.359 CEST [1716] LOG:  shutting down
+2023-06-23 10:44:47.403 CEST [1716] LOG:  checkpoint starting: shutdown immediate
+2023-06-23 10:44:55.557 CEST [1716] LOG:  checkpoint complete: wrote 927 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.040 s, sync=7.931 s, total=8.199 s; sync files=257, longest=0.232 s, average=0.031 s; distance=4220 kB, estimate=4220 kB
+2023-06-23 10:44:55.576 CEST [17852] LOG:  database system is shut down
+2023-06-23 10:47:45.453 CEST [6852] LOG:  starting PostgreSQL 15.3, compiled by Visual C++ build 1914, 64-bit
+2023-06-23 10:47:45.457 CEST [6852] LOG:  listening on IPv6 address "::1", port 5432
+2023-06-23 10:47:45.458 CEST [6852] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2023-06-23 10:47:45.711 CEST [18584] LOG:  database system was shut down at 2023-06-23 10:47:32 CEST
+2023-06-23 10:47:45.779 CEST [6852] LOG:  database system is ready to accept connections
+2023-06-23 10:47:46.300 CEST [6852] LOG:  received fast shutdown request
+2023-06-23 10:47:46.666 CEST [6852] LOG:  aborting any active transactions
+2023-06-23 10:47:46.671 CEST [6852] LOG:  background worker "logical replication launcher" (PID 17876) exited with exit code 1
+2023-06-23 10:47:46.672 CEST [13628] LOG:  shutting down
+2023-06-23 10:47:46.734 CEST [13628] LOG:  checkpoint starting: shutdown immediate
+2023-06-23 10:47:56.030 CEST [13628] LOG:  checkpoint complete: wrote 927 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.032 s, sync=8.547 s, total=9.359 s; sync files=257, longest=0.290 s, average=0.034 s; distance=4220 kB, estimate=4220 kB
+2023-06-23 10:47:56.049 CEST [6852] LOG:  database system is shut down
+2023-06-23 10:52:09.039 CEST [18804] LOG:  starting PostgreSQL 15.3, compiled by Visual C++ build 1914, 64-bit
+2023-06-23 10:52:09.043 CEST [18804] LOG:  listening on IPv6 address "::1", port 5432
+2023-06-23 10:52:09.044 CEST [18804] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2023-06-23 10:52:09.221 CEST [4592] LOG:  database system was shut down at 2023-06-23 10:47:55 CEST
+2023-06-23 10:52:09.268 CEST [18804] LOG:  database system is ready to accept connections
+2023-06-23 10:53:05.375 CEST [18804] LOG:  received smart shutdown request
+2023-06-23 10:53:05.826 CEST [18804] LOG:  background worker "logical replication launcher" (PID 18044) exited with exit code 1
+2023-06-23 10:53:05.827 CEST [17828] LOG:  shutting down
+2023-06-23 10:53:05.871 CEST [17828] LOG:  checkpoint starting: shutdown immediate
+2023-06-23 10:53:06.355 CEST [17828] LOG:  checkpoint complete: wrote 42 buffers (0.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.003 s, sync=0.375 s, total=0.528 s; sync files=12, longest=0.087 s, average=0.032 s; distance=229 kB, estimate=229 kB
+2023-06-23 10:53:06.363 CEST [18804] LOG:  database system is shut down
+2023-06-23 10:53:16.231 CEST [18100] LOG:  starting PostgreSQL 15.3, compiled by Visual C++ build 1914, 64-bit
+2023-06-23 10:53:16.235 CEST [18100] LOG:  listening on IPv6 address "::1", port 5432
+2023-06-23 10:53:16.235 CEST [18100] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2023-06-23 10:53:16.670 CEST [2592] LOG:  database system was shut down at 2023-06-23 10:53:06 CEST
+2023-06-23 10:53:16.724 CEST [18100] LOG:  database system is ready to accept connections
+2023-06-23 10:53:20.418 CEST [18100] LOG:  received smart shutdown request
+2023-06-23 10:53:20.712 CEST [18100] LOG:  background worker "logical replication launcher" (PID 2608) exited with exit code 1
+2023-06-23 10:53:20.713 CEST [18436] LOG:  shutting down
+2023-06-23 10:53:20.757 CEST [18436] LOG:  checkpoint starting: shutdown immediate
+2023-06-23 10:53:20.908 CEST [18436] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.032 s, total=0.195 s; sync files=2, longest=0.020 s, average=0.016 s; distance=0 kB, estimate=0 kB
+2023-06-23 10:53:20.915 CEST [18100] LOG:  database system is shut down
+2023-06-23 10:54:24.049 CEST [6088] LOG:  starting PostgreSQL 15.3, compiled by Visual C++ build 1914, 64-bit
+2023-06-23 10:54:24.053 CEST [6088] LOG:  listening on IPv6 address "::1", port 5432
+2023-06-23 10:54:24.053 CEST [6088] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2023-06-23 10:54:24.228 CEST [11240] LOG:  database system was shut down at 2023-06-23 10:53:20 CEST
+2023-06-23 10:54:24.274 CEST [6088] LOG:  database system is ready to accept connections
+2023-06-23 10:54:25.662 CEST [18436] ERROR:  canceling statement due to user request
+2023-06-23 10:54:25.663 CEST [6088] LOG:  received fast shutdown request
+2023-06-23 10:54:26.197 CEST [6088] LOG:  aborting any active transactions
+2023-06-23 10:54:26.198 CEST [6088] LOG:  background worker "logical replication launcher" (PID 18436) exited with exit code 1
+2023-06-23 10:54:26.202 CEST [4128] LOG:  shutting down
+2023-06-23 10:54:26.266 CEST [4128] LOG:  checkpoint starting: shutdown immediate
+2023-06-23 10:54:26.487 CEST [4128] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.039 s, total=0.286 s; sync files=2, longest=0.023 s, average=0.020 s; distance=0 kB, estimate=0 kB
+2023-06-23 10:54:26.495 CEST [6088] LOG:  database system is shut down
