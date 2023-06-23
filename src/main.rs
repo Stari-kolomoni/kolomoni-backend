@@ -1,52 +1,55 @@
-use std::env;
+// TODO Integrate Atlas for migrations
+// TODO Integrate utoipa for OpenAPI documentation
 
-use actix_web::{get, HttpServer, App, HttpResponse, web};
-use diesel::PgConnection;
-use r2d2_diesel::ConnectionManager;
+use anyhow::{Context, Result};
 
 mod api;
+mod configuration;
 
-pub type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
+use actix_web::{App, HttpServer};
+use tracing::{info, Level};
+use tracing_subscriber::FmtSubscriber;
 
-#[get("/ping")]
-async fn ping() -> HttpResponse {
-    HttpResponse::Ok().json("Pong!")
-}
+use crate::api::ping::ping;
+use crate::configuration::Config;
 
-fn create_db_connection() -> Pool {
-    let database_url = env::var("DATABASE_URL")
-        .expect("Database URL not set!");
-    let manager = ConnectionManager::<PgConnection>::new(database_url);
-    let pool = r2d2::Pool::builder()
-        .build(manager)
-        .expect("Pool creation failed!");
-    return pool;
-}
+#[tokio::main]
+async fn main() -> Result<()> {
+    let tracing_subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::DEBUG)
+        .finish();
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    dotenv::dotenv().ok();
+    tracing::subscriber::set_global_default(tracing_subscriber)
+        .with_context(|| "Failed to set up tracing formatter.")?;
 
-    let address = env::var("KOLOMONI_ADDRESS")
-        .expect("Address not set!");
-    let port: u16 = env::var("KOLOMONI_PORT")
-        .expect("Port not set!").parse().unwrap();
+    let configuration =
+        Config::load_from_default_path().with_context(|| "Failed to load configuration.")?;
+    info!(
+        file_path = configuration.file_path.to_string_lossy().as_ref(),
+        "Configuration loaded."
+    );
 
-    let db_connection_pool = create_db_connection();
-
-    let server = HttpServer::new(move || {
-        App::new()
-            .app_data(web::Data::new(db_connection_pool.clone()))
+    #[rustfmt::skip]
+    let server = HttpServer::new(
+        || App::new()
             .service(api::api_router())
             .service(ping)
-    })
-    .bind((address, port));
-    
-    match server {
-        Ok(a) => {
-            println!("Starting server at port {port}");
-            a.run().await
-        },
-        Err(err) => panic!("Problem starting server: {:?}", err)
-    }
+    )
+        .bind((
+            configuration.server.host.as_str(),
+            configuration.server.port as u16,
+        ))
+        .with_context(|| "Failed to set up actix HTTP server.")?;
+    info!(
+        host = configuration.server.host.as_str(),
+        port = configuration.server.port as u16,
+        "HTTP server initialized, running."
+    );
+
+    server
+        .run()
+        .await
+        .with_context(|| "Errored while running HTTP server.")?;
+
+    Ok(())
 }

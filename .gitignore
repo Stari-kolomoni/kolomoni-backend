@@ -23,3 +23,7 @@ Cargo.lock
 database/data
 
 
+## Sensitive files
+*.toml
+!*.TEMPLATE.toml
+

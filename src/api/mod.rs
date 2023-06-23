@@ -1,8 +1,8 @@
-use actix_web::{Scope, web};
+use actix_web::{web, Scope};
 
-mod v1;
+pub mod ping;
+pub mod v1;
 
 pub fn api_router() -> Scope {
-    web::scope("/api")
-        .service(v1::v1_router())
+    web::scope("/api").service(v1::v1_api_router())
 }
