@@ -1,3 +1,30 @@
-[server]
+###
+# HTTP server-related configuration.
+###
+[http]
+# What host to bind the HTTP server to.
 host = "127.0.0.1"
+# What port to bind the HTTP server to.
 port = 8866
+
+###
+# PostgreSQL database-related configuration.
+###
+[database]
+# Host where the database resides.
+host= "127.0.0.1"
+# Post the database is listening on.
+port = 5432
+# Login username.
+username = "postgres"
+# Login password.
+password = "postgres"
+# Database name.
+database_name = "starikolomoni"
+
+###
+# Password-related configuration.
+###
+[passwords]
+# Salt for the Argon2id hasher. 32 characters is probably fine.
+hash_salt = "32 base64 characters"

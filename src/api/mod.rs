@@ -1,6 +1,5 @@
 use actix_web::{web, Scope};
 
-pub mod ping;
 pub mod v1;
 
 pub fn api_router() -> Scope {

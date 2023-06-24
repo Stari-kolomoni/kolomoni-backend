@@ -11,7 +11,13 @@ use crate::configuration::utilities::get_default_configuration_file_path;
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     /// Configuration related to the HTTP server.
-    pub server: ConfigServer,
+    pub http: ConfigHTTP,
+
+    /// Configuration related to the database.
+    pub database: ConfigDatabase,
+
+    /// Password-related configuration.
+    pub passwords: ConfigPasswords,
 
     /// This is the real path this `Config` was loaded from.
     #[serde(skip)]
@@ -44,10 +50,30 @@ impl Config {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct ConfigServer {
+pub struct ConfigHTTP {
     /// Host to bind the HTTP server to.
     pub host: String,
 
     /// Port to bind the HTTP server to.
     pub port: usize,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ConfigDatabase {
+    /// Host of the database.
+    pub host: String,
+
+    /// Port the database is listening at.
+    pub port: usize,
+
+    pub username: String,
+
+    pub password: String,
+
+    pub database_name: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ConfigPasswords {
+    pub hash_salt: String,
 }
