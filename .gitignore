@@ -24,6 +24,7 @@ database/data
 
 
 ## Sensitive files
+database.log
 *.toml
 !*.TEMPLATE.toml
 
