@@ -1,9 +1,3 @@
-// TODO Integrate Atlas for migrations (?)
-
-// TODO Integrate utoipa for OpenAPI documentation
-
-// TODO Integrate SeaORM for Postgres database (or maybe raw sqlx with SeaQuery??)
-
 use std::env;
 use std::env::VarError;
 
@@ -49,6 +43,8 @@ pub async fn connect_and_set_up_database(config: &Config) -> Result<DatabaseConn
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // TODO Integrate utoipa for OpenAPI documentation
+
     if let Err(error) = env::var("RUST_LOG") {
         if error == VarError::NotPresent {
             env::set_var("RUST_LOG", "INFO");
