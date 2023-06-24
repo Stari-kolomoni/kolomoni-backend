@@ -1,7 +1,11 @@
 [package]
-name = "kolomoni-backend"
+name = "stari-kolomoni-backend"
+description = "Backend system for the Stari Kolomoni fantasy translation project."
+license = "GPL-3.0-only"
+license-file = "LICENSE.md"
 version = "0.1.0"
 edition = "2021"
+authors = ["Grimpy101 <gorupgorazd@gmail.com>", "Simon Goričar <simon.peter.goricar@gmail.com>"]
 
 
 [dependencies]
@@ -15,6 +19,6 @@ dunce = "1.0.4"
 toml = "0.7.4"
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
-sqlx = { version = "0.6.3", features = ["runtime-tokio-native-tls"] }
+sea-orm = { version = "^0", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ] }
 utoipa = { version = "3.3.0", features = ["actix_extras"] }
 tokio = { version = "1.28.2", features = ["full"] }
