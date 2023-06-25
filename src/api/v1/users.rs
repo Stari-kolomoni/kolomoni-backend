@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 
 use crate::api::auth::UserAuth;
-use crate::database::entities;
 use crate::database::mutation::users::{Mutation, UserRegistrationInfo};
 use crate::database::queries::users;
+use crate::database::{entities, queries};
 use crate::impl_json_responder_on_serializable;
 use crate::state::AppState;
 
@@ -143,8 +143,62 @@ pub async fn get_current_user_info(
     }
 }
 
+/*
+ * GET /me/permissions
+ */
+
+#[derive(Serialize, Debug)]
+pub struct UserPermissionsResponse {
+    pub permissions: Vec<String>,
+}
+
+impl_json_responder_on_serializable!(UserPermissionsResponse, "UserPermissionsResponse");
+
+
+#[get("/me/permissions")]
+async fn get_current_user_permissions(
+    request: HttpRequest,
+    user_auth: UserAuth,
+    state: web::Data<AppState>,
+) -> impl Responder {
+    let Some(token) = user_auth.auth_token() else {
+        return HttpResponse::Forbidden().finish();
+    };
+
+    let permissions = match queries::user_permissions::Query::get_user_permissions_by_username(
+        &state.database,
+        &token.username,
+    )
+    .await
+    {
+        Ok(optional_permissions) => match optional_permissions {
+            Some(permissions) => permissions,
+            None => {
+                error!(
+                    username = token.username,
+                    "Failed to get user permissions - user with this token doesn't exist!"
+                );
+
+                return HttpResponse::InternalServerError().finish();
+            }
+        },
+        Err(error) => {
+            error!(
+                error = error.to_string(),
+                username = token.username,
+                "Errored while getting user permissions."
+            );
+
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    UserPermissionsResponse { permissions }.respond_to(&request)
+}
+
 pub fn users_router() -> Scope {
     web::scope("users")
         .service(register_user)
         .service(get_current_user_info)
+        .service(get_current_user_permissions)
 }

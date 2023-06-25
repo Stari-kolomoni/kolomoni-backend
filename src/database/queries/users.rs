@@ -4,7 +4,6 @@ use sea_orm::{ColumnTrait, DbConn, EntityTrait, QueryFilter};
 use super::super::entities::{users, users::Entity as User};
 use crate::database::mutation::users::ArgonHasher;
 
-#[allow(dead_code)]
 pub struct Query {}
 
 impl Query {

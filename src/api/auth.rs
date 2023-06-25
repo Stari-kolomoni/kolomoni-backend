@@ -12,6 +12,11 @@ use tracing::{debug, error, info};
 use crate::jwt::{JWTClaims, JWTValidationError};
 use crate::state::AppState;
 
+// TODO impl getting this on UserAuth
+pub struct UserPermissions {
+    permissions: Vec<String>,
+}
+
 pub enum UserAuth {
     Unauthenticated,
     Authenticated { token: JWTClaims },
