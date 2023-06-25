@@ -18,17 +18,26 @@ const JWT_SUBJECT: &str = "API token";
 #[derive(Error, Debug)]
 pub enum JWTValidationError {
     #[error("token has expired")]
-    Expired,
+    Expired(JWTClaims),
 
     #[error("token is invalid: `{0}`")]
     InvalidToken(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
+pub enum JWTTokenType {
+    #[serde(rename = "access")]
+    Access,
+
+    #[serde(rename = "refresh")]
+    Refresh,
 }
 
 /// For more information see:
 /// - https://jwt.io/introduction
 /// - https://datatracker.ietf.org/doc/html/rfc7519#section-4.1
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct JWTClaims {
     /// JWT registered claim: Issuer
     pub iss: String,
@@ -46,10 +55,18 @@ pub struct JWTClaims {
 
     /// JWT private claim: Username
     pub username: String,
+
+    /// JWT private claim: Token type (access or refresh token)
+    pub token_type: JWTTokenType,
 }
 
 impl JWTClaims {
-    pub fn create(username: String, issued_at: DateTime<Utc>, valid_for: Duration) -> Self {
+    pub fn create(
+        username: String,
+        issued_at: DateTime<Utc>,
+        valid_for: Duration,
+        token_type: JWTTokenType,
+    ) -> Self {
         let expires_on = issued_at.add(valid_for);
 
         Self {
@@ -58,6 +75,7 @@ impl JWTClaims {
             iat: issued_at,
             exp: expires_on,
             username,
+            token_type,
         }
     }
 }
@@ -115,7 +133,7 @@ impl JsonWebTokenManager {
 
         // Validate expiry time (if `exp` is in the past, it has expired)
         if token_data.claims.exp <= current_time {
-            return Err(JWTValidationError::Expired);
+            return Err(JWTValidationError::Expired(token_data.claims));
         }
 
         Ok(token_data.claims)

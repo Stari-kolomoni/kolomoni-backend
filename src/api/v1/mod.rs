@@ -9,4 +9,5 @@ pub fn v1_api_router() -> Scope {
         .service(users::users_router())
         .service(ping::ping)
         .service(login::login)
+        .service(login::refresh_login)
 }
