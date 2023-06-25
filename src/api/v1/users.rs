@@ -1,10 +1,20 @@
+use actix_web::body::BoxBody;
 use actix_web::http::header::ContentType;
-use actix_web::{post, web, HttpResponse, Responder, Scope};
-use serde::Deserialize;
+use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder, Scope};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 
+use crate::api::auth::UserAuth;
+use crate::database::entities;
 use crate::database::mutation::users::{Mutation, UserRegistrationInfo};
+use crate::database::queries::users;
+use crate::impl_json_responder_on_serializable;
 use crate::state::AppState;
+
+/*
+ * POST /
+ */
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct UserRegistrationData {
@@ -60,7 +70,81 @@ pub async fn register_user(
     }
 }
 
-// TODO
+
+/*
+ * GET /me
+ */
+
+#[derive(Serialize, Debug)]
+pub struct PublicUserModel {
+    pub username: String,
+    pub display_name: String,
+    pub joined_at: DateTime<Utc>,
+    pub last_modified_at: DateTime<Utc>,
+    pub last_active_at: DateTime<Utc>,
+}
+
+impl PublicUserModel {
+    #[inline]
+    pub fn from_seaorm_model(model: entities::users::Model) -> Self {
+        Self {
+            username: model.username,
+            display_name: model.display_name,
+            joined_at: model.joined_at,
+            last_modified_at: model.last_modified_at,
+            last_active_at: model.last_active_at,
+        }
+    }
+}
+
+#[derive(Serialize, Debug)]
+pub struct UserInfoResponse {
+    pub user: PublicUserModel,
+}
+
+impl UserInfoResponse {
+    pub fn new(model: entities::users::Model) -> Self {
+        Self {
+            user: PublicUserModel::from_seaorm_model(model),
+        }
+    }
+}
+
+impl_json_responder_on_serializable!(UserInfoResponse, "UserInfoResponse");
+
+
+#[get("/me")]
+pub async fn get_current_user_info(
+    request: HttpRequest,
+    user_auth: UserAuth,
+    state: web::Data<AppState>,
+) -> impl Responder {
+    let Some(token) = user_auth.auth_token() else {
+        return HttpResponse::Forbidden().finish();
+    };
+
+    let optional_user =
+        match users::Query::get_user_by_username(&state.database, &token.username).await {
+            Ok(optional_user) => optional_user,
+            Err(error) => {
+                error!(
+                    error = error.to_string(),
+                    username = token.username,
+                    "Errored while looking up user by username."
+                );
+
+                return HttpResponse::InternalServerError().finish();
+            }
+        };
+
+    match optional_user {
+        Some(user) => UserInfoResponse::new(user).respond_to(&request),
+        None => HttpResponse::Gone().finish(),
+    }
+}
+
 pub fn users_router() -> Scope {
-    web::scope("users").service(register_user)
+    web::scope("users")
+        .service(register_user)
+        .service(get_current_user_info)
 }

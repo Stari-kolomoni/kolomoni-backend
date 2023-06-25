@@ -31,3 +31,4 @@ tokio = { version = "1.28.2", features = ["full"] }
 chrono = "0.4.26"
 jsonwebtoken = "8.3.0"
 serde_with = { version = "3.0.0", features = ["chrono"] }
+actix-utils = "3.0.1"

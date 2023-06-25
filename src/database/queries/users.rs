@@ -12,7 +12,18 @@ impl Query {
         User::find_by_id(id)
             .one(database)
             .await
-            .with_context(|| "Failed to search database for user.")
+            .with_context(|| "Failed to search database for user (by ID).")
+    }
+
+    pub async fn get_user_by_username(
+        database: &DbConn,
+        username: &str,
+    ) -> Result<Option<users::Model>> {
+        User::find()
+            .filter(users::Column::Username.eq(username))
+            .one(database)
+            .await
+            .with_context(|| "Failed to search database for user (by username).")
     }
 
     pub async fn validate_user_credentials(

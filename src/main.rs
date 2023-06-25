@@ -79,6 +79,8 @@ async fn main() -> Result<()> {
         jwt_manager: json_web_token_manager,
     });
 
+    // TODO CORS protection
+
     #[rustfmt::skip]
     let server = HttpServer::new(
         move || {

@@ -1,5 +1,6 @@
 use actix_web::{web, Scope};
 
+pub mod auth;
 pub mod macros;
 pub mod v1;
 
