@@ -29,3 +29,5 @@ sea-orm = { version = "^0", features = [ "sqlx-postgres", "runtime-tokio-rustls"
 utoipa = { version = "3.3.0", features = ["actix_extras"] }
 tokio = { version = "1.28.2", features = ["full"] }
 chrono = "0.4.26"
+jsonwebtoken = "8.3.0"
+serde_with = { version = "3.0.0", features = ["chrono"] }

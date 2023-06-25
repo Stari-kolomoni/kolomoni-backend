@@ -14,7 +14,7 @@ pub struct ArgonHasher {
 
 impl ArgonHasher {
     pub fn new(config: &Config) -> Result<Self> {
-        let salt_string = SaltString::from_b64(&config.passwords.hash_salt)
+        let salt_string = SaltString::from_b64(&config.password.hash_salt)
             .map_err(|err| anyhow!("Errored while initializing salt: {err}"))?;
 
         let argon_hasher = Argon2::new(
@@ -64,6 +64,8 @@ impl Mutation {
         hasher: &ArgonHasher,
         registration_info: UserRegistrationInfo,
     ) -> Result<users::ActiveModel> {
+        // TODO Default permissions?
+
         let hashed_password = hasher
             .hash_password(&registration_info.password)
             .with_context(|| "Failed to hash password.")?;

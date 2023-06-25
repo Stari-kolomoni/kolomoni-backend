@@ -25,6 +25,13 @@ database_name = "starikolomoni"
 ###
 # Password-related configuration.
 ###
-[passwords]
+[password]
 # Salt for the Argon2id hasher. 32 characters is probably fine.
 hash_salt = "32 base64 characters"
+
+###
+# JWT authentication token-related configuration.
+###
+[jsonwebtoken]
+# JWT secret used to
+secret = "your secret here"

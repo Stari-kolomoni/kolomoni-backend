@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 mod api;
 mod configuration;
 mod database;
+pub mod jwt;
 pub mod state;
 
 use actix_web::{web, App, HttpServer};
@@ -16,6 +17,7 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use crate::configuration::Config;
 use crate::database::mutation::users::ArgonHasher;
+use crate::jwt::JsonWebTokenManager;
 use crate::state::AppState;
 
 pub async fn connect_and_set_up_database(config: &Config) -> Result<DatabaseConnection> {
@@ -68,11 +70,13 @@ async fn main() -> Result<()> {
 
     let database = connect_and_set_up_database(&configuration).await?;
     let hasher = ArgonHasher::new(&configuration)?;
+    let json_web_token_manager = JsonWebTokenManager::new(&configuration);
 
     let state = web::Data::new(AppState {
         configuration: configuration.clone(),
         hasher,
         database,
+        jwt_manager: json_web_token_manager,
     });
 
     #[rustfmt::skip]

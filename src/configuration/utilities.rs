@@ -40,7 +40,7 @@ pub fn get_running_executable_directory() -> Result<PathBuf> {
         .to_string();
 
     // Attempt to detect if we're in "debug/target" and the parent directory contains Cargo.toml".
-    if executable_directory_name.eq("debug") {
+    if executable_directory_name.eq("debug") || executable_directory_name.eq("release") {
         let executable_parent_dir = executable_directory
             .parent()
             .with_context(|| "Could not get the parent directory.")?;

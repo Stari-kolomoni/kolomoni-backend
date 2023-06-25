@@ -17,7 +17,10 @@ pub struct Config {
     pub database: ConfigDatabase,
 
     /// Password-related configuration.
-    pub passwords: ConfigPasswords,
+    pub password: ConfigPasswords,
+
+    /// Json Web Token-related configuration.
+    pub jsonwebtoken: ConfigJsonWebToken,
 
     /// This is the real path this `Config` was loaded from.
     #[serde(skip)]
@@ -76,4 +79,9 @@ pub struct ConfigDatabase {
 #[derive(Deserialize, Debug, Clone)]
 pub struct ConfigPasswords {
     pub hash_salt: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ConfigJsonWebToken {
+    pub secret: String,
 }

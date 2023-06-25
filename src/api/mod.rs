@@ -1,5 +1,6 @@
 use actix_web::{web, Scope};
 
+pub mod macros;
 pub mod v1;
 
 pub fn api_router() -> Scope {
