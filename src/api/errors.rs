@@ -107,4 +107,6 @@ impl ResponseError for APIError {
     }
 }
 
+/// Short for `Result<HttpResponse, APIError>`, intended to be used in most
+/// places in handlers of the Stari Kolomoni API.
 pub type EndpointResult = Result<HttpResponse, APIError>;

@@ -117,26 +117,59 @@ impl Mutation {
         database: &C,
         username: &str,
         last_active_at: Option<DateTime<Utc>>,
-    ) -> Result<()> {
+    ) -> Result<users::Model> {
+        // TODO This can be further optimized by using a lower-level query.
+
+        let user = queries::users::Query::get_user_by_username(database, username)
+            .await?
+            .ok_or_else(|| anyhow!("Invalid username, no such user."))?;
+
         let user_with_updated_last_activity = users::ActiveModel {
-            last_active_at: ActiveValue::Set(last_active_at.unwrap_or_else(|| Utc::now())),
+            id: ActiveValue::Unchanged(user.id),
+            last_active_at: ActiveValue::Set(last_active_at.unwrap_or_else(Utc::now)),
             ..Default::default()
         };
 
-        let result = users::Entity::update_many()
-            .set(user_with_updated_last_activity)
-            .filter(users::Column::Username.eq(username))
-            .exec(database)
-            .await?;
+        let updated_user = user_with_updated_last_activity.update(database).await?;
 
-        if result.rows_affected != 1 {
-            return Err(anyhow!(
-                "BUG: Updated {} rows instead of 1!",
-                result.rows_affected
-            ));
-        }
+        Ok(updated_user)
+    }
 
-        Ok(())
+    pub async fn update_last_active_at_by_user_id<C: ConnectionTrait>(
+        database: &C,
+        user_id: i32,
+        last_active_at: Option<DateTime<Utc>>,
+    ) -> Result<users::Model> {
+        let user_with_updated_last_activity = users::ActiveModel {
+            id: ActiveValue::Unchanged(user_id),
+            last_active_at: ActiveValue::Set(last_active_at.unwrap_or_else(Utc::now)),
+            ..Default::default()
+        };
+
+        let updated_user = user_with_updated_last_activity.update(database).await?;
+
+        Ok(updated_user)
+    }
+
+    pub async fn update_display_name_by_user_id<C: ConnectionTrait>(
+        database: &C,
+        user_id: i32,
+        new_display_name: String,
+    ) -> Result<users::Model> {
+        let user_with_updated_display_name = users::ActiveModel {
+            id: ActiveValue::Unchanged(user_id),
+            display_name: ActiveValue::Set(new_display_name),
+            last_modified_at: ActiveValue::Set(Utc::now()),
+            ..Default::default()
+        };
+
+        user_with_updated_display_name.update(database).await?;
+
+        let updated_user = queries::users::Query::get_user_by_id(database, user_id)
+            .await?
+            .ok_or_else(|| anyhow!("BUG: No such user ID: {user_id}"))?;
+
+        Ok(updated_user)
     }
 
     pub async fn update_display_name_by_username<C: ConnectionTrait>(

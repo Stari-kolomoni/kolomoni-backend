@@ -30,11 +30,11 @@ pub enum UserPermission {
 
     /// Allows the user to view public account information of any other user.
     #[serde(rename = "user.any:read")]
-    UserRead,
+    UserAnyRead,
 
     /// Allows the user to update public account information of any other user.
     #[serde(rename = "user.any:write")]
-    UserWrite,
+    UserAnyWrite,
 }
 
 impl UserPermission {
@@ -42,8 +42,8 @@ impl UserPermission {
         match name {
             "user.self:read" => Some(Self::UserSelfRead),
             "user.self:write" => Some(Self::UserSelfWrite),
-            "user.any:read" => Some(Self::UserRead),
-            "user.any:write" => Some(Self::UserWrite),
+            "user.any:read" => Some(Self::UserAnyRead),
+            "user.any:write" => Some(Self::UserAnyWrite),
             _ => None,
         }
     }
@@ -52,8 +52,8 @@ impl UserPermission {
         match self {
             UserPermission::UserSelfRead => "user.self:read",
             UserPermission::UserSelfWrite => "user.self:write",
-            UserPermission::UserRead => "user.any:read",
-            UserPermission::UserWrite => "user.any:write",
+            UserPermission::UserAnyRead => "user.any:read",
+            UserPermission::UserAnyWrite => "user.any:write",
         }
     }
 
@@ -61,8 +61,8 @@ impl UserPermission {
         match self {
             UserPermission::UserSelfRead => 1,
             UserPermission::UserSelfWrite => 2,
-            UserPermission::UserRead => 3,
-            UserPermission::UserWrite => 4,
+            UserPermission::UserAnyRead => 3,
+            UserPermission::UserAnyWrite => 4,
         }
     }
 }
@@ -71,7 +71,7 @@ impl UserPermission {
 pub const DEFAULT_USER_PERMISSIONS: [UserPermission; 3] = [
     UserPermission::UserSelfRead,
     UserPermission::UserSelfWrite,
-    UserPermission::UserRead,
+    UserPermission::UserAnyRead,
 ];
 
 
@@ -114,14 +114,17 @@ pub enum UserAuth {
 // TODO additional info, including permissions
 impl UserAuth {
     #[inline]
-    pub fn auth_token(&self) -> Option<&JWTClaims> {
+    pub fn token_if_authenticated(&self) -> Option<&JWTClaims> {
         match self {
             UserAuth::Unauthenticated => None,
             UserAuth::Authenticated { token } => Some(token),
         }
     }
 
-    pub async fn permissions(&self, database: &DbConn) -> Result<Option<UserPermissions>> {
+    pub async fn permissions_if_authenticated(
+        &self,
+        database: &DbConn,
+    ) -> Result<Option<UserPermissions>> {
         match self {
             UserAuth::Unauthenticated => Ok(None),
             UserAuth::Authenticated { token } => {

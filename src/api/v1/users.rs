@@ -43,6 +43,8 @@ impl PublicUserModel {
     }
 }
 
+
+
 #[derive(Serialize, Debug)]
 pub struct UserInfoResponse {
     pub user: PublicUserModel,
@@ -57,6 +59,21 @@ impl UserInfoResponse {
 }
 
 impl_json_responder!(UserInfoResponse);
+
+
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct UserDisplayNameChangeRequest {
+    pub new_display_name: String,
+}
+
+
+#[derive(Serialize, Debug)]
+pub struct UserDisplayNameChangeResponse {
+    pub user: PublicUserModel,
+}
+
+impl_json_responder!(UserDisplayNameChangeResponse);
 
 
 /*
@@ -133,7 +150,7 @@ pub async fn get_current_user_info(
     state: web::Data<AppState>,
 ) -> EndpointResult {
     let token = user_auth
-        .auth_token()
+        .token_if_authenticated()
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
     let optional_user =
@@ -166,7 +183,7 @@ async fn get_current_user_permissions(
     state: web::Data<AppState>,
 ) -> EndpointResult {
     let token = user_auth
-        .auth_token()
+        .token_if_authenticated()
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
     let user_permissions = queries::user_permissions::Query::get_user_permission_names_by_username(
@@ -191,22 +208,9 @@ async fn get_current_user_permissions(
  * PATCH /me/display_name
  */
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct UserDisplayNameChangeRequest {
-    pub new_display_name: String,
-}
-
-
-#[derive(Serialize, Debug)]
-pub struct UserDisplayNameChangeResponse {
-    pub user: PublicUserModel,
-}
-
-impl_json_responder!(UserDisplayNameChangeResponse);
-
 
 #[patch("/me/display_name")]
-async fn update_username(
+async fn update_current_user_display_name(
     user_auth: UserAuth,
     state: web::Data<AppState>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
@@ -214,7 +218,7 @@ async fn update_username(
     // TODO Rate-limiting.
 
     let token = user_auth
-        .auth_token()
+        .token_if_authenticated()
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
     let json_data = json_data.into_inner();
@@ -225,7 +229,7 @@ async fn update_username(
         .await
         .map_err(APIError::InternalDatabaseError)?;
 
-    let updated_user = mutation::users::Mutation::update_display_name_by_username(
+    mutation::users::Mutation::update_display_name_by_username(
         &database_transaction,
         &token.username,
         json_data.new_display_name.clone(),
@@ -233,19 +237,27 @@ async fn update_username(
     .await
     .map_err(APIError::InternalError)?;
 
-    info!(
-        username = token.username,
-        new_display_name = json_data.new_display_name,
-        "User has updated their display name."
-    );
-
-    mutation::users::Mutation::update_last_active_at_by_username(
+    // TODO Consider merging this update into all mutation methods where it makes sense.
+    //      Otherwise we're wasting a round-trip to the database for no real reason.
+    let updated_user = mutation::users::Mutation::update_last_active_at_by_username(
         &database_transaction,
         &token.username,
         None,
     )
     .await
     .map_err(APIError::InternalError)?;
+
+    database_transaction
+        .commit()
+        .await
+        .map_err(APIError::InternalDatabaseError)?;
+
+
+    info!(
+        username = token.username,
+        new_display_name = json_data.new_display_name,
+        "User has updated their display name."
+    );
 
     Ok(UserDisplayNameChangeResponse {
         user: PublicUserModel::from_user_model(updated_user),
@@ -268,12 +280,12 @@ async fn get_specific_user_info(
 
     // Only authenticated users with the `user.any:read` permission to access this endpoint.
     let permissions = user_auth
-        .permissions(&state.database)
+        .permissions_if_authenticated(&state.database)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    if !permissions.has_permission(UserPermission::UserRead) {
+    if !permissions.has_permission(UserPermission::UserAnyRead) {
         return Err(APIError::NotEnoughPermissions);
     }
 
@@ -290,6 +302,79 @@ async fn get_specific_user_info(
 }
 
 /*
+ * PATCH /{user_id}/display_name
+ */
+
+
+#[patch("/{user_id}/display_name")]
+async fn update_specific_user_display_name(
+    user_auth: UserAuth,
+    path_info: web::Path<(i32,)>,
+    state: web::Data<AppState>,
+    json_data: web::Json<UserDisplayNameChangeRequest>,
+) -> EndpointResult {
+    let requested_user_id = path_info.into_inner().0;
+
+    // Only authenticated users with the `user.any:write` permission can modify
+    // others' display names. Intended for moderation tooling.
+    let token = user_auth
+        .token_if_authenticated()
+        .ok_or_else(|| APIError::NotAuthenticated)?;
+
+    let permissions = user_auth
+        .permissions_if_authenticated(&state.database)
+        .await
+        .map_err(APIError::InternalError)?
+        .ok_or_else(|| APIError::NotAuthenticated)?;
+
+    if !permissions.has_permission(UserPermission::UserAnyWrite) {
+        return Err(APIError::NotEnoughPermissions);
+    }
+
+    let json_data = json_data.into_inner();
+
+    let database_transaction = state
+        .database
+        .begin()
+        .await
+        .map_err(APIError::InternalDatabaseError)?;
+
+    mutation::users::Mutation::update_display_name_by_user_id(
+        &database_transaction,
+        requested_user_id,
+        json_data.new_display_name.clone(),
+    )
+    .await
+    .map_err(APIError::InternalError)?;
+
+    let updated_user = mutation::users::Mutation::update_last_active_at_by_user_id(
+        &database_transaction,
+        requested_user_id,
+        None,
+    )
+    .await
+    .map_err(APIError::InternalError)?;
+
+    database_transaction
+        .commit()
+        .await
+        .map_err(APIError::InternalDatabaseError)?;
+
+
+    info!(
+        operator = token.username,
+        target_user_id = requested_user_id,
+        new_display_name = json_data.new_display_name,
+        "User has updated another user's display name."
+    );
+
+    Ok(UserDisplayNameChangeResponse {
+        user: PublicUserModel::from_user_model(updated_user),
+    }
+    .into_response())
+}
+
+/*
  * Router
  */
 
@@ -298,6 +383,7 @@ pub fn users_router() -> Scope {
         .service(register_user)
         .service(get_current_user_info)
         .service(get_current_user_permissions)
-        .service(update_username)
+        .service(update_current_user_display_name)
         .service(get_specific_user_info)
+        .service(update_specific_user_display_name)
 }
