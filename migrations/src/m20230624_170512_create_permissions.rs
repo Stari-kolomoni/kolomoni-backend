@@ -24,7 +24,12 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Permission::Name).string().not_null())
+                    .col(
+                        ColumnDef::new(Permission::Name)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
                     .col(ColumnDef::new(Permission::Description).string().not_null())
                     .to_owned(),
             )

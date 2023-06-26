@@ -1,11 +1,22 @@
 use anyhow::{anyhow, Context, Result};
 use argon2::password_hash::SaltString;
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
-use chrono::Utc;
-use sea_orm::{ActiveModelTrait, ActiveValue, DbConn};
+use chrono::{DateTime, Utc};
+use sea_orm::{
+    ActiveModelTrait,
+    ActiveValue,
+    ColumnTrait,
+    ConnectionTrait,
+    DbConn,
+    EntityTrait,
+    QueryFilter,
+    TransactionTrait,
+};
 
 use super::super::entities::users;
+use crate::api::auth::DEFAULT_USER_PERMISSIONS;
 use crate::configuration::Config;
+use crate::database::{entities, queries};
 
 pub struct ArgonHasher {
     salt_string: SaltString,
@@ -63,16 +74,17 @@ impl Mutation {
         database: &DbConn,
         hasher: &ArgonHasher,
         registration_info: UserRegistrationInfo,
-    ) -> Result<users::ActiveModel> {
-        // TODO Default permissions?
+    ) -> Result<users::Model> {
+        let transaction = database.begin().await?;
 
+        // Hash password and register user into database.
         let hashed_password = hasher
             .hash_password(&registration_info.password)
             .with_context(|| "Failed to hash password.")?;
 
         let registration_time = Utc::now();
 
-        users::ActiveModel {
+        let user = users::ActiveModel {
             username: ActiveValue::Set(registration_info.username),
             display_name: ActiveValue::Set(registration_info.display_name),
             hashed_password: ActiveValue::Set(hashed_password.to_string()),
@@ -81,13 +93,80 @@ impl Mutation {
             last_active_at: ActiveValue::Set(registration_time),
             ..Default::default()
         }
-        .save(database)
+        .insert(&transaction)
         .await
-        .map_err(|err| {
-            anyhow!(
-                "Failed to save user into database: {}",
-                err.to_string()
-            )
-        })
+        .map_err(|err| anyhow!("Failed to save user into database: {err}"))?;
+
+        // Give the default permissions to the new user.
+        for permission in DEFAULT_USER_PERMISSIONS {
+            entities::user_permissions::ActiveModel {
+                user_id: ActiveValue::Set(user.id),
+                permission_id: ActiveValue::Set(permission.to_id()),
+            }
+            .insert(&transaction)
+            .await
+            .map_err(|err| anyhow!("Failed to add default permission to user: {err}"))?;
+        }
+
+        transaction.commit().await?;
+
+        Ok(user)
+    }
+
+    pub async fn update_last_active_at_by_username<C: ConnectionTrait>(
+        database: &C,
+        username: &str,
+        last_active_at: Option<DateTime<Utc>>,
+    ) -> Result<()> {
+        let user_with_updated_last_activity = users::ActiveModel {
+            last_active_at: ActiveValue::Set(last_active_at.unwrap_or_else(|| Utc::now())),
+            ..Default::default()
+        };
+
+        let result = users::Entity::update_many()
+            .set(user_with_updated_last_activity)
+            .filter(users::Column::Username.eq(username))
+            .exec(database)
+            .await?;
+
+        if result.rows_affected != 1 {
+            return Err(anyhow!(
+                "BUG: Updated {} rows instead of 1!",
+                result.rows_affected
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub async fn update_display_name_by_username<C: ConnectionTrait>(
+        database: &C,
+        username: &str,
+        new_display_name: String,
+    ) -> Result<users::Model> {
+        let user_with_updated_display_name = users::ActiveModel {
+            display_name: ActiveValue::Set(new_display_name),
+            last_modified_at: ActiveValue::Set(Utc::now()),
+            ..Default::default()
+        };
+
+        let result = users::Entity::update_many()
+            .set(user_with_updated_display_name)
+            .filter(users::Column::Username.eq(username))
+            .exec(database)
+            .await?;
+
+        if result.rows_affected != 1 {
+            return Err(anyhow!(
+                "BUG: Updated {} rows instead of 1!",
+                result.rows_affected
+            ));
+        }
+
+        let updated_user = queries::users::Query::get_user_by_username(database, username)
+            .await?
+            .ok_or_else(|| anyhow!("BUG: No such user: {username}"))?;
+
+        Ok(updated_user)
     }
 }

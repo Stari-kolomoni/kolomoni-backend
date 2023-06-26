@@ -8,7 +8,7 @@ pub struct Query {}
 
 impl Query {
     // TODO
-    pub async fn get_user_permissions_by_username(
+    pub async fn get_user_permission_names_by_username(
         database: &DbConn,
         username: &str,
     ) -> Result<Option<Vec<String>>> {

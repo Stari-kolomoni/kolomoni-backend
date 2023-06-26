@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use sea_orm::{ColumnTrait, DbConn, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, ConnectionTrait, DbConn, EntityTrait, QueryFilter};
 
 use super::super::entities::{users, users::Entity as User};
 use crate::database::mutation::users::ArgonHasher;
@@ -7,15 +7,18 @@ use crate::database::mutation::users::ArgonHasher;
 pub struct Query {}
 
 impl Query {
-    pub async fn get_user_by_id(database: &DbConn, id: i32) -> Result<Option<users::Model>> {
+    pub async fn get_user_by_id<C: ConnectionTrait>(
+        database: &C,
+        id: i32,
+    ) -> Result<Option<users::Model>> {
         User::find_by_id(id)
             .one(database)
             .await
             .with_context(|| "Failed to search database for user (by ID).")
     }
 
-    pub async fn get_user_by_username(
-        database: &DbConn,
+    pub async fn get_user_by_username<C: ConnectionTrait>(
+        database: &C,
         username: &str,
     ) -> Result<Option<users::Model>> {
         User::find()
@@ -25,8 +28,8 @@ impl Query {
             .with_context(|| "Failed to search database for user (by username).")
     }
 
-    pub async fn validate_user_credentials(
-        database: &DbConn,
+    pub async fn validate_user_credentials<C: ConnectionTrait>(
+        database: &C,
         hasher: &ArgonHasher,
         username: &str,
         password: &str,

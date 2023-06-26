@@ -1,5 +1,4 @@
-// TODO JWT Bearer token extractor (not middleware!), see
-//      https://actix.rs/docs/extractors
+use std::collections::HashSet;
 
 use actix_utils::future;
 use actix_utils::future::Ready;
@@ -7,15 +6,87 @@ use actix_web::dev::Payload;
 use actix_web::http::{header, StatusCode};
 use actix_web::web::Data;
 use actix_web::{error, FromRequest, HttpRequest};
+use anyhow::{anyhow, Context, Result};
+use sea_orm::DbConn;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
 
+use crate::database::queries;
 use crate::jwt::{JWTClaims, JWTValidationError};
 use crate::state::AppState;
 
-// TODO impl getting this on UserAuth
-pub struct UserPermissions {
-    permissions: Vec<String>,
+// User permissions that we have (inspired by the scope system in OAuth).
+// The defined permissions must match with the `*_seed_permissions.rs` file in `migrations`!
+#[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone)]
+pub enum UserPermission {
+    /// Allows the user to log in and view their account information.
+    #[serde(rename = "user.self:read")]
+    UserSelfRead,
+
+    /// Allows the user to update their account information.
+    #[serde(rename = "user.self:write")]
+    UserSelfWrite,
 }
+
+impl UserPermission {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "user.self:read" => Some(Self::UserSelfRead),
+            "user.self:write" => Some(Self::UserSelfWrite),
+            _ => None,
+        }
+    }
+
+    pub fn to_name(&self) -> &'static str {
+        match self {
+            UserPermission::UserSelfRead => "user.self:read",
+            UserPermission::UserSelfWrite => "user.self:write",
+        }
+    }
+
+    pub fn to_id(&self) -> i32 {
+        match self {
+            UserPermission::UserSelfRead => 1,
+            UserPermission::UserSelfWrite => 2,
+        }
+    }
+}
+
+// List of user permissions given to newly-registered users.
+pub const DEFAULT_USER_PERMISSIONS: [UserPermission; 2] =
+    [UserPermission::UserSelfRead, UserPermission::UserSelfWrite];
+
+
+pub struct UserPermissions {
+    permissions: HashSet<UserPermission>,
+}
+
+impl UserPermissions {
+    pub async fn get_from_database(database: &DbConn, username: &str) -> Result<Self> {
+        let permission_names =
+            queries::user_permissions::Query::get_user_permission_names_by_username(
+                database, username,
+            )
+            .await
+            .with_context(|| "Failed to get user permissions from database.")?
+            .ok_or_else(|| anyhow!("Failed to get user permissions: no such user."))?;
+
+        let permissions = permission_names
+            .into_iter()
+            .map(|permission_name| {
+                UserPermission::from_name(&permission_name)
+                    .ok_or_else(|| anyhow!("BUG: No such permission: {permission_name}!"))
+            })
+            .collect::<Result<HashSet<UserPermission>>>()?;
+
+        Ok(Self { permissions })
+    }
+
+    pub fn has_permission(&self, permission: UserPermission) -> bool {
+        self.permissions.contains(&permission)
+    }
+}
+
 
 pub enum UserAuth {
     Unauthenticated,
@@ -29,6 +100,18 @@ impl UserAuth {
         match self {
             UserAuth::Unauthenticated => None,
             UserAuth::Authenticated { token } => Some(token),
+        }
+    }
+
+    pub async fn permissions(&self, database: &DbConn) -> Result<Option<UserPermissions>> {
+        match self {
+            UserAuth::Unauthenticated => Ok(None),
+            UserAuth::Authenticated { token } => {
+                let user_permissions =
+                    UserPermissions::get_from_database(database, &token.username).await?;
+
+                Ok(Some(user_permissions))
+            }
         }
     }
 }
