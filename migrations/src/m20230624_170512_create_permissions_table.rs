@@ -1,6 +1,6 @@
 use sea_orm_migration::prelude::*;
 
-use crate::m20230624_133941_create_users::User;
+use crate::m20230624_133941_create_users_table::User;
 
 const FOREIGN_KEY_USER_ID: &str = "fk_user-permission_user-id";
 const FOREIGN_KEY_PERMISSION_ID: &str = "fk_user-permission_permission-id";

@@ -18,6 +18,7 @@ use crate::state::AppState;
 // User permissions that we have (inspired by the scope system in OAuth).
 // The defined permissions must match with the `*_seed_permissions.rs` file in `migrations`!
 #[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone)]
+#[allow(clippy::enum_variant_names)]
 pub enum UserPermission {
     /// Allows the user to log in and view their account information.
     #[serde(rename = "user.self:read")]
@@ -26,6 +27,14 @@ pub enum UserPermission {
     /// Allows the user to update their account information.
     #[serde(rename = "user.self:write")]
     UserSelfWrite,
+
+    /// Allows the user to view public account information of any other user.
+    #[serde(rename = "user.any:read")]
+    UserRead,
+
+    /// Allows the user to update public account information of any other user.
+    #[serde(rename = "user.any:write")]
+    UserWrite,
 }
 
 impl UserPermission {
@@ -33,28 +42,37 @@ impl UserPermission {
         match name {
             "user.self:read" => Some(Self::UserSelfRead),
             "user.self:write" => Some(Self::UserSelfWrite),
+            "user.any:read" => Some(Self::UserRead),
+            "user.any:write" => Some(Self::UserWrite),
             _ => None,
         }
     }
 
-    pub fn to_name(&self) -> &'static str {
+    pub fn to_name(self) -> &'static str {
         match self {
             UserPermission::UserSelfRead => "user.self:read",
             UserPermission::UserSelfWrite => "user.self:write",
+            UserPermission::UserRead => "user.any:read",
+            UserPermission::UserWrite => "user.any:write",
         }
     }
 
-    pub fn to_id(&self) -> i32 {
+    pub fn to_id(self) -> i32 {
         match self {
             UserPermission::UserSelfRead => 1,
             UserPermission::UserSelfWrite => 2,
+            UserPermission::UserRead => 3,
+            UserPermission::UserWrite => 4,
         }
     }
 }
 
 // List of user permissions given to newly-registered users.
-pub const DEFAULT_USER_PERMISSIONS: [UserPermission; 2] =
-    [UserPermission::UserSelfRead, UserPermission::UserSelfWrite];
+pub const DEFAULT_USER_PERMISSIONS: [UserPermission; 3] = [
+    UserPermission::UserSelfRead,
+    UserPermission::UserSelfWrite,
+    UserPermission::UserRead,
+];
 
 
 pub struct UserPermissions {

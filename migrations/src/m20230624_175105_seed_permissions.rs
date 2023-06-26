@@ -1,13 +1,13 @@
 use sea_orm_migration::prelude::*;
 
-use crate::m20230624_170512_create_permissions::Permission;
+use crate::m20230624_170512_create_permissions_table::Permission;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
 // See `auth.rs` for the source of these permissions.
 #[rustfmt::skip]
-const STANDARD_PERMISSIONS: [(i32, &str, &str); 2] = [
+const STANDARD_PERMISSIONS: [(i32, &str, &str); 4] = [
     (
         1,
         "user.self:read",
@@ -17,6 +17,16 @@ const STANDARD_PERMISSIONS: [(i32, &str, &str); 2] = [
         2,
         "user.self:write",
         "Allows the user to update their account information."
+    ),
+    (
+        3,
+        "user.any:read",
+        "Allows the user to view public account information of any other user."
+    ),
+    (
+        4,
+        "user.any:write",
+        "Allows the user to update public account information of any other user."
     ),
     // TODO Add other permissions.
 ];

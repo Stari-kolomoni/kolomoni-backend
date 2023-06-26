@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use sea_orm::{ColumnTrait, ConnectionTrait, DbConn, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
 use super::super::entities::{users, users::Entity as User};
 use crate::database::mutation::users::ArgonHasher;
@@ -26,6 +26,15 @@ impl Query {
             .one(database)
             .await
             .with_context(|| "Failed to search database for user (by username).")
+    }
+
+    pub async fn user_exists_by_username<C: ConnectionTrait>(
+        database: &C,
+        username: &str,
+    ) -> Result<bool> {
+        Ok(Self::get_user_by_username(database, username)
+            .await?
+            .is_some())
     }
 
     pub async fn validate_user_credentials<C: ConnectionTrait>(

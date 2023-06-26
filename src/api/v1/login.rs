@@ -1,12 +1,13 @@
 use actix_web::body::BoxBody;
-use actix_web::http::header::ContentType;
 use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
+use anyhow::Context;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
-use crate::database::queries::users;
-use crate::impl_json_responder_on_serializable;
+use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
+use crate::database::queries;
+use crate::impl_json_responder;
 use crate::jwt::{JWTClaims, JWTTokenType, JWTValidationError};
 use crate::state::AppState;
 
@@ -26,7 +27,7 @@ pub struct UserLoginResponse {
     pub refresh_token: String,
 }
 
-impl_json_responder_on_serializable!(UserLoginResponse, "UserLoginResponse");
+impl_json_responder!(UserLoginResponse, "UserLoginResponse");
 
 
 #[post("/login")]
@@ -34,29 +35,24 @@ pub async fn login(
     request: HttpRequest,
     state: web::Data<AppState>,
     login_info: web::Json<UserLoginInfo>,
-) -> impl Responder {
-    let is_valid_login_result = users::Query::validate_user_credentials(
+) -> EndpointResult {
+    let is_valid_login = queries::users::Query::validate_user_credentials(
         &state.database,
         &state.hasher,
         &login_info.username,
         &login_info.password,
     )
-    .await;
-
-    let Ok(is_valid_login) = is_valid_login_result else {
-        error!(
-            error = is_valid_login_result.unwrap_err().to_string(),
-            username = login_info.username,
-            "Errored while validating login credentials."
-        );
-
-        return HttpResponse::InternalServerError()
-            .finish();
-    };
+    .await
+    .map_err(APIError::InternalError)?;
 
     if !is_valid_login {
-        return HttpResponse::Forbidden().finish();
+        return Ok(
+            HttpResponse::Forbidden().json(ErrorReasonResponse::custom_reason(
+                "Invalid login credentials.",
+            )),
+        );
     }
+
 
     let access_token_claims = JWTClaims::create(
         login_info.username.clone(),
@@ -64,6 +60,7 @@ pub async fn login(
         Duration::days(1),
         JWTTokenType::Access,
     );
+
     let refresh_token_claims = JWTClaims::create(
         login_info.username.clone(),
         Utc::now(),
@@ -71,40 +68,29 @@ pub async fn login(
         JWTTokenType::Refresh,
     );
 
-    let access_token = match state.jwt_manager.create_token(access_token_claims) {
-        Ok(token) => token,
-        Err(error) => {
-            error!(
-                error = error.to_string(),
-                username = login_info.username,
-                "Errored while creating JWT access token."
-            );
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
 
-    let refresh_token = match state.jwt_manager.create_token(refresh_token_claims) {
-        Ok(token) => token,
-        Err(error) => {
-            error!(
-                error = error.to_string(),
-                username = login_info.username,
-                "Errored while creating JWT refresh token."
-            );
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
+    let access_token = state
+        .jwt_manager
+        .create_token(access_token_claims)
+        .with_context(|| "Errored while creating JWT access token.")
+        .map_err(APIError::InternalError)?;
+
+    let refresh_token = state
+        .jwt_manager
+        .create_token(refresh_token_claims)
+        .with_context(|| "Errored while creating JWT refresh token.")
+        .map_err(APIError::InternalError)?;
 
     debug!(
         username = login_info.username,
         "User has successfully logged in."
     );
 
-    UserLoginResponse {
+    Ok(UserLoginResponse {
         access_token,
         refresh_token,
     }
-    .respond_to(&request)
+    .respond_to(&request))
 }
 
 
@@ -123,7 +109,7 @@ pub struct UserLoginRefreshResponse {
     pub access_token: String,
 }
 
-impl_json_responder_on_serializable!(
+impl_json_responder!(
     UserLoginRefreshResponse,
     "UserLoginRefreshResponse"
 );
@@ -135,7 +121,7 @@ pub async fn refresh_login(
     request: HttpRequest,
     state: web::Data<AppState>,
     refresh_info: web::Json<UserLoginRefreshInfo>,
-) -> impl Responder {
+) -> EndpointResult {
     let refresh_token_claims = match state.jwt_manager.decode_token(&refresh_info.refresh_token) {
         Ok(token_claims) => token_claims,
         Err(error) => {
@@ -146,19 +132,31 @@ pub async fn refresh_login(
                         "Refusing to refresh expired token.",
                     );
 
-                    HttpResponse::Forbidden().finish()
+                    Ok(
+                        HttpResponse::Forbidden().json(ErrorReasonResponse::custom_reason(
+                            "Refresh token has expired.",
+                        )),
+                    )
                 }
                 JWTValidationError::InvalidToken(error) => {
-                    warn!(error = error, "Failed to parse refresh token.",);
+                    warn!(error = error, "Failed to parse refresh token.");
 
-                    HttpResponse::BadRequest().finish()
+                    Ok(
+                        HttpResponse::BadRequest().json(ErrorReasonResponse::custom_reason(
+                            "Invalid token, could not parse.",
+                        )),
+                    )
                 }
             }
         }
     };
 
     if refresh_token_claims.token_type != JWTTokenType::Refresh {
-        return HttpResponse::BadRequest().finish();
+        return Ok(
+            HttpResponse::BadRequest().json(ErrorReasonResponse::custom_reason(
+                "The provided token is not a refresh token.",
+            )),
+        );
     }
 
     // Refresh token is valid, create new access token.
@@ -168,22 +166,15 @@ pub async fn refresh_login(
         Duration::days(1),
         JWTTokenType::Access,
     );
-    let access_token = match state.jwt_manager.create_token(access_token_claims) {
-        Ok(token) => token,
-        Err(error) => {
-            error!(
-                error = error.to_string(),
-                username = refresh_token_claims.username,
-                "Errored while creating refreshed JWT access token."
-            );
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
+    let access_token = state
+        .jwt_manager
+        .create_token(access_token_claims)
+        .map_err(APIError::InternalError)?;
 
     debug!(
         username = refresh_token_claims.username,
         "User has successfully refreshed access token."
     );
 
-    UserLoginRefreshResponse { access_token }.respond_to(&request)
+    Ok(UserLoginRefreshResponse { access_token }.respond_to(&request))
 }

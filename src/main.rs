@@ -13,6 +13,7 @@ use actix_web::{web, App, HttpServer};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{Database, DatabaseConnection};
 use tracing::info;
+use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use crate::configuration::Config;
@@ -88,6 +89,7 @@ async fn main() -> Result<()> {
             let json_extractor_config = web::JsonConfig::default().limit(1048576);
             
             App::new()
+                .wrap(TracingLogger::default())
                 .service(api::api_router())
                 .app_data(json_extractor_config)
                 .app_data(state.clone())
@@ -98,10 +100,11 @@ async fn main() -> Result<()> {
             configuration.http.port as u16,
         ))
         .with_context(|| "Failed to set up actix HTTP server.")?;
+
     info!(
         host = configuration.http.host.as_str(),
         port = configuration.http.port as u16,
-        "HTTP server initialized, running."
+        "HTTP server initialized and running."
     );
 
     server

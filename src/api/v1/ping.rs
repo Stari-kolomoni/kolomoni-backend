@@ -1,20 +1,19 @@
 use actix_web::body::BoxBody;
-use actix_web::http::header::ContentType;
 use actix_web::{get, HttpRequest, HttpResponse, Responder};
 use serde::Serialize;
-use tracing::error;
 
-use crate::impl_json_responder_on_serializable;
+use crate::api::errors::EndpointResult;
+use crate::impl_json_responder;
 
 #[derive(Serialize)]
 pub struct PingJSONResponse {
     ok: bool,
 }
 
-impl_json_responder_on_serializable!(PingJSONResponse, "PingJSONResponse");
+impl_json_responder!(PingJSONResponse, "PingJSONResponse");
 
 
 #[get("/ping")]
-pub async fn ping() -> impl Responder {
-    PingJSONResponse { ok: true }
+pub async fn ping(request: HttpRequest) -> EndpointResult {
+    Ok(PingJSONResponse { ok: true }.respond_to(&request))
 }

@@ -1,16 +1,15 @@
 use actix_web::body::BoxBody;
-use actix_web::http::header::ContentType;
 use actix_web::{get, patch, post, web, HttpRequest, HttpResponse, Responder, Scope};
 use chrono::{DateTime, Utc};
-use sea_orm::{DatabaseTransaction, DbErr, TransactionTrait};
+use sea_orm::TransactionTrait;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info};
+use tracing::info;
 
-use crate::api::auth::UserAuth;
-use crate::database::mutation::users::{Mutation, UserRegistrationInfo};
-use crate::database::queries::users;
-use crate::database::{entities, queries};
-use crate::impl_json_responder_on_serializable;
+use crate::api::auth::{UserAuth, UserPermission};
+use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
+use crate::database::mutation::users::UserRegistrationInfo;
+use crate::database::{entities, mutation, queries};
+use crate::impl_json_responder;
 use crate::state::AppState;
 
 /*
@@ -19,6 +18,7 @@ use crate::state::AppState;
 
 #[derive(Serialize, Debug)]
 pub struct PublicUserModel {
+    pub id: i32,
     pub username: String,
     pub display_name: String,
     pub joined_at: DateTime<Utc>,
@@ -28,8 +28,9 @@ pub struct PublicUserModel {
 
 impl PublicUserModel {
     #[inline]
-    pub fn from_seaorm_model(model: entities::users::Model) -> Self {
+    pub fn from_user_model(model: entities::users::Model) -> Self {
         Self {
+            id: model.id,
             username: model.username,
             display_name: model.display_name,
             joined_at: model.joined_at,
@@ -38,6 +39,22 @@ impl PublicUserModel {
         }
     }
 }
+
+#[derive(Serialize, Debug)]
+pub struct UserInfoResponse {
+    pub user: PublicUserModel,
+}
+
+impl UserInfoResponse {
+    pub fn new(model: entities::users::Model) -> Self {
+        Self {
+            user: PublicUserModel::from_user_model(model),
+        }
+    }
+}
+
+impl_json_responder!(UserInfoResponse, "UserInfoResponse");
+
 
 /*
  * POST /
@@ -66,7 +83,7 @@ pub struct UserRegistrationResponse {
     pub user: PublicUserModel,
 }
 
-impl_json_responder_on_serializable!(
+impl_json_responder!(
     UserRegistrationResponse,
     "UserRegistrationResponse"
 );
@@ -77,38 +94,33 @@ pub async fn register_user(
     request: HttpRequest,
     state: web::Data<AppState>,
     json_data: web::Json<UserRegistrationData>,
-) -> impl Responder {
-    let user_creation_result = Mutation::create_user(
+) -> EndpointResult {
+    let username_already_exists =
+        queries::users::Query::user_exists_by_username(&state.database, &json_data.username)
+            .await
+            .map_err(APIError::InternalError)?;
+
+    if username_already_exists {
+        return Ok(
+            HttpResponse::Conflict().json(ErrorReasonResponse::custom_reason(
+                "User with provided username already exists.",
+            )),
+        );
+    }
+
+
+    let new_user = mutation::users::Mutation::create_user(
         &state.database,
         &state.hasher,
         json_data.clone().into(),
     )
-    .await;
+    .await
+    .map_err(APIError::InternalError)?;
 
-    match user_creation_result {
-        Ok(user_model) => {
-            debug!(
-                username = json_data.username,
-                "User has registered."
-            );
-
-            UserRegistrationResponse {
-                user: PublicUserModel::from_seaorm_model(user_model),
-            }
-            .respond_to(&request)
-        }
-        Err(error) => {
-            error!(
-                error = error.to_string(),
-                username = json_data.username,
-                "Failed to register user!"
-            );
-
-            HttpResponse::InternalServerError()
-                .content_type(ContentType::json())
-                .finish()
-        }
+    Ok(UserRegistrationResponse {
+        user: PublicUserModel::from_user_model(new_user),
     }
+    .respond_to(&request))
 }
 
 
@@ -116,50 +128,27 @@ pub async fn register_user(
  * GET /me
  */
 
-#[derive(Serialize, Debug)]
-pub struct UserInfoResponse {
-    pub user: PublicUserModel,
-}
-
-impl UserInfoResponse {
-    pub fn new(model: entities::users::Model) -> Self {
-        Self {
-            user: PublicUserModel::from_seaorm_model(model),
-        }
-    }
-}
-
-impl_json_responder_on_serializable!(UserInfoResponse, "UserInfoResponse");
-
 
 #[get("/me")]
 pub async fn get_current_user_info(
     request: HttpRequest,
     user_auth: UserAuth,
     state: web::Data<AppState>,
-) -> impl Responder {
-    let Some(token) = user_auth.auth_token() else {
-        return HttpResponse::Forbidden().finish();
-    };
+) -> EndpointResult {
+    let token = user_auth
+        .auth_token()
+        .ok_or_else(|| APIError::NotAuthenticated)?;
 
     let optional_user =
-        match users::Query::get_user_by_username(&state.database, &token.username).await {
-            Ok(optional_user) => optional_user,
-            Err(error) => {
-                error!(
-                    error = error.to_string(),
-                    username = token.username,
-                    "Errored while looking up user by username."
-                );
+        queries::users::Query::get_user_by_username(&state.database, &token.username)
+            .await
+            .map_err(APIError::InternalError)?;
 
-                return HttpResponse::InternalServerError().finish();
-            }
-        };
+    let Some(user) = optional_user else {
+        return Ok(HttpResponse::NotFound().finish());
+    };
 
-    match optional_user {
-        Some(user) => UserInfoResponse::new(user).respond_to(&request),
-        None => HttpResponse::Gone().finish(),
-    }
+    Ok(UserInfoResponse::new(user).respond_to(&request))
 }
 
 /*
@@ -171,7 +160,7 @@ pub struct UserPermissionsResponse {
     pub permissions: Vec<String>,
 }
 
-impl_json_responder_on_serializable!(UserPermissionsResponse, "UserPermissionsResponse");
+impl_json_responder!(UserPermissionsResponse, "UserPermissionsResponse");
 
 
 #[get("/me/permissions")]
@@ -179,40 +168,27 @@ async fn get_current_user_permissions(
     request: HttpRequest,
     user_auth: UserAuth,
     state: web::Data<AppState>,
-) -> impl Responder {
-    let Some(token) = user_auth.auth_token() else {
-        return HttpResponse::Forbidden().finish();
-    };
+) -> EndpointResult {
+    let token = user_auth
+        .auth_token()
+        .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    let permissions = match queries::user_permissions::Query::get_user_permission_names_by_username(
+    let user_permissions = queries::user_permissions::Query::get_user_permission_names_by_username(
         &state.database,
         &token.username,
     )
     .await
-    {
-        Ok(optional_permissions) => match optional_permissions {
-            Some(permissions) => permissions,
-            None => {
-                error!(
-                    username = token.username,
-                    "Failed to get user permissions - user with this token doesn't exist!"
-                );
+    .map_err(APIError::InternalError)?
+    .ok_or_else(|| {
+        APIError::internal_reason(
+            "Failed to get user permissions, user with this token doesn't exist!",
+        )
+    })?;
 
-                return HttpResponse::InternalServerError().finish();
-            }
-        },
-        Err(error) => {
-            error!(
-                error = error.to_string(),
-                username = token.username,
-                "Errored while getting user permissions."
-            );
-
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    UserPermissionsResponse { permissions }.respond_to(&request)
+    Ok(UserPermissionsResponse {
+        permissions: user_permissions,
+    }
+    .respond_to(&request))
 }
 
 /*
@@ -230,7 +206,7 @@ pub struct UserDisplayNameChangeResponse {
     pub user: PublicUserModel,
 }
 
-impl_json_responder_on_serializable!(
+impl_json_responder!(
     UserDisplayNameChangeResponse,
     "UserDisplayNameChangeResponse"
 );
@@ -242,73 +218,89 @@ async fn update_username(
     user_auth: UserAuth,
     state: web::Data<AppState>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
-) -> impl Responder {
+) -> EndpointResult {
     // TODO Rate-limiting.
 
-    let Some(token) = user_auth.auth_token() else {
-        return HttpResponse::Unauthorized().finish();
-    };
+    let token = user_auth
+        .auth_token()
+        .ok_or_else(|| APIError::NotAuthenticated)?;
 
     let json_data = json_data.into_inner();
 
-    let transaction = match state.database.begin().await {
-        Ok(transaction) => transaction,
-        Err(error) => {
-            error!(
-                error = error.to_string(),
-                "Database errored while creating transaction."
-            );
+    let database_transaction = state
+        .database
+        .begin()
+        .await
+        .map_err(APIError::InternalDatabaseError)?;
 
-            return HttpResponse::InternalServerError().finish();
-        }
-    };
-
-    match Mutation::update_display_name_by_username(
-        &transaction,
+    let updated_user = mutation::users::Mutation::update_display_name_by_username(
+        &database_transaction,
         &token.username,
         json_data.new_display_name.clone(),
     )
     .await
-    {
-        Ok(updated_user) => {
-            info!(
-                username = token.username,
-                new_display_name = json_data.new_display_name,
-                "User has updated their display name."
-            );
+    .map_err(APIError::InternalError)?;
 
-            match Mutation::update_last_active_at_by_username(&transaction, &token.username, None)
-                .await
-            {
-                Err(error) => {
-                    error!(
-                        error = error.to_string(),
-                        username = token.username,
-                        "Failed to update last_active_at."
-                    );
+    info!(
+        username = token.username,
+        new_display_name = json_data.new_display_name,
+        "User has updated their display name."
+    );
 
-                    return HttpResponse::InternalServerError().finish();
-                }
-                _ => {}
-            }
+    mutation::users::Mutation::update_last_active_at_by_username(
+        &database_transaction,
+        &token.username,
+        None,
+    )
+    .await
+    .map_err(APIError::InternalError)?;
 
-            UserDisplayNameChangeResponse {
-                user: PublicUserModel::from_seaorm_model(updated_user),
-            }
-            .respond_to(&request)
-        }
-        Err(error) => {
-            error!(
-                username = token.username,
-                new_display_name = json_data.new_display_name,
-                error = error.to_string(),
-                "Failed to update user's display name."
-            );
-
-            HttpResponse::InternalServerError().finish()
-        }
+    Ok(UserDisplayNameChangeResponse {
+        user: PublicUserModel::from_user_model(updated_user),
     }
+    .respond_to(&request))
 }
+
+
+/*
+ * GET /{id}
+ */
+
+#[get("/{user_id}")]
+async fn get_specific_user_info(
+    request: HttpRequest,
+    user_auth: UserAuth,
+    path_info: web::Path<(i32,)>,
+    state: web::Data<AppState>,
+) -> EndpointResult {
+    let requested_user_id = path_info.into_inner().0;
+
+    // Only authenticated users with the `user.any:read` permission to access this endpoint.
+    let permissions = user_auth
+        .permissions(&state.database)
+        .await
+        .map_err(APIError::InternalError)?
+        .ok_or_else(|| APIError::NotAuthenticated)?;
+
+    if !permissions.has_permission(UserPermission::UserRead) {
+        return Err(APIError::NotEnoughPermissions);
+    }
+
+    // Return information about the requested user.
+    let optional_user = queries::users::Query::get_user_by_id(&state.database, requested_user_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    let Some(user) = optional_user else {
+        return Ok(HttpResponse::NotFound().finish());
+    };
+
+    Ok(UserInfoResponse::new(user).respond_to(&request))
+}
+
+/*
+ * Router
+ */
 
 pub fn users_router() -> Scope {
     web::scope("users")
@@ -316,4 +308,5 @@ pub fn users_router() -> Scope {
         .service(get_current_user_info)
         .service(get_current_user_permissions)
         .service(update_username)
+        .service(get_specific_user_info)
 }
