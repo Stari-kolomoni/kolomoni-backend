@@ -1,6 +1,23 @@
+use actix_web::body::MessageBody;
+use actix_web::HttpResponse;
+
+pub trait DumbResponder {
+    type Body: MessageBody + 'static;
+
+    /// Serialize self as JSON and return a `HTTP 200 OK` response with JSON-encoded body.  
+    fn into_response(self) -> HttpResponse<Self::Body>;
+}
+
+/// Macro that implements two traits:
+/// - `actix_web::Responder` that allows you to return this struct in an endpoint handler, and
+/// - `DumbResponder`, which is a simpler internal trait that has the `into_response` method that
+///   does basically the same as `actix_web::Responder::respond_to`, but without having to provide
+///   a reference to `HttpRequest`, making code cleaner.
+///
+/// The provided struct must already implement `Serialize`.
 #[macro_export]
 macro_rules! impl_json_responder {
-    ($struct:ty, $name:literal) => {
+    ($struct:ty) => {
         impl Responder for $struct {
             type Body = BoxBody;
 
@@ -8,68 +25,25 @@ macro_rules! impl_json_responder {
                 HttpResponse::Ok().json(&self)
             }
         }
+
+        impl DumbResponder for $struct {
+            type Body = BoxBody;
+
+            fn into_response(self) -> HttpResponse<Self::Body> {
+                HttpResponse::Ok().json(&self)
+            }
+        }
     };
 }
 
-/// Result unwrapping macro that can be used to handle `Result`s
-/// at the endpoint-level.
+/// A shorthand for responding with a given status code and a JSON
+/// body containing the `reason` String field.
 ///
-/// This macro can have one, two or three parameters.
-/// The first parameter
+/// First argument is the `actix_web::StatusCode` status code and
+/// the second argument is the reason to respond with (must implement `Into<String>`).
 #[macro_export]
-macro_rules! unwrap_result_with_log_and_http_500 {
-    ($result:expr) => {
-        match $result {
-            Ok(inner) => inner,
-            Err(error) => {
-                error!(
-                    error = error.to_string(),
-                    "Errored at root of endpoint."
-                );
-
-                return HttpResponse::InternalServerError().finish();
-            }
-        }
-    };
-
-    ($result:expr, $username:expr) => {
-        match $result {
-            Ok(inner) => inner,
-            Err(error) => {
-                error!(
-                    error = error.to_string(),
-                    username = $username,
-                    $error_message,
-                );
-
-                return HttpResponse::InternalServerError().finish();
-            }
-        }
-    };
-
-    ($result:expr, $error_message:literal) => {
-        match $result {
-            Ok(inner) => inner,
-            Err(error) => {
-                error!(error = error.to_string(), $error_message,);
-
-                return HttpResponse::InternalServerError().finish();
-            }
-        }
-    };
-
-    ($result:expr, $username:expr, $error_message:literal) => {
-        match $result {
-            Ok(inner) => inner,
-            Err(error) => {
-                error!(
-                    error = error.to_string(),
-                    username = $username,
-                    $error_message,
-                );
-
-                return HttpResponse::InternalServerError().finish();
-            }
-        }
+macro_rules! response_with_reason {
+    ($status_code:expr, $reason:expr) => {
+        HttpResponseBuilder::new($status_code).json(ErrorReasonResponse::custom_reason($reason))
     };
 }

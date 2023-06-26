@@ -1,4 +1,6 @@
 use actix_web::body::BoxBody;
+use actix_web::http::StatusCode;
+use actix_web::HttpResponseBuilder;
 use actix_web::{get, patch, post, web, HttpRequest, HttpResponse, Responder, Scope};
 use chrono::{DateTime, Utc};
 use sea_orm::TransactionTrait;
@@ -7,10 +9,11 @@ use tracing::info;
 
 use crate::api::auth::{UserAuth, UserPermission};
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
+use crate::api::macros::DumbResponder;
 use crate::database::mutation::users::UserRegistrationInfo;
 use crate::database::{entities, mutation, queries};
-use crate::impl_json_responder;
 use crate::state::AppState;
+use crate::{impl_json_responder, response_with_reason};
 
 /*
  * Shared
@@ -53,7 +56,7 @@ impl UserInfoResponse {
     }
 }
 
-impl_json_responder!(UserInfoResponse, "UserInfoResponse");
+impl_json_responder!(UserInfoResponse);
 
 
 /*
@@ -83,15 +86,11 @@ pub struct UserRegistrationResponse {
     pub user: PublicUserModel,
 }
 
-impl_json_responder!(
-    UserRegistrationResponse,
-    "UserRegistrationResponse"
-);
+impl_json_responder!(UserRegistrationResponse);
 
 
 #[post("/")]
 pub async fn register_user(
-    request: HttpRequest,
     state: web::Data<AppState>,
     json_data: web::Json<UserRegistrationData>,
 ) -> EndpointResult {
@@ -101,11 +100,10 @@ pub async fn register_user(
             .map_err(APIError::InternalError)?;
 
     if username_already_exists {
-        return Ok(
-            HttpResponse::Conflict().json(ErrorReasonResponse::custom_reason(
-                "User with provided username already exists.",
-            )),
-        );
+        return Ok(response_with_reason!(
+            StatusCode::CONFLICT,
+            "User with provided username already exists."
+        ));
     }
 
 
@@ -120,7 +118,7 @@ pub async fn register_user(
     Ok(UserRegistrationResponse {
         user: PublicUserModel::from_user_model(new_user),
     }
-    .respond_to(&request))
+    .into_response())
 }
 
 
@@ -131,7 +129,6 @@ pub async fn register_user(
 
 #[get("/me")]
 pub async fn get_current_user_info(
-    request: HttpRequest,
     user_auth: UserAuth,
     state: web::Data<AppState>,
 ) -> EndpointResult {
@@ -148,7 +145,7 @@ pub async fn get_current_user_info(
         return Ok(HttpResponse::NotFound().finish());
     };
 
-    Ok(UserInfoResponse::new(user).respond_to(&request))
+    Ok(UserInfoResponse::new(user).into_response())
 }
 
 /*
@@ -160,12 +157,11 @@ pub struct UserPermissionsResponse {
     pub permissions: Vec<String>,
 }
 
-impl_json_responder!(UserPermissionsResponse, "UserPermissionsResponse");
+impl_json_responder!(UserPermissionsResponse);
 
 
 #[get("/me/permissions")]
 async fn get_current_user_permissions(
-    request: HttpRequest,
     user_auth: UserAuth,
     state: web::Data<AppState>,
 ) -> EndpointResult {
@@ -188,7 +184,7 @@ async fn get_current_user_permissions(
     Ok(UserPermissionsResponse {
         permissions: user_permissions,
     }
-    .respond_to(&request))
+    .into_response())
 }
 
 /*
@@ -206,15 +202,11 @@ pub struct UserDisplayNameChangeResponse {
     pub user: PublicUserModel,
 }
 
-impl_json_responder!(
-    UserDisplayNameChangeResponse,
-    "UserDisplayNameChangeResponse"
-);
+impl_json_responder!(UserDisplayNameChangeResponse);
 
 
 #[patch("/me/display_name")]
 async fn update_username(
-    request: HttpRequest,
     user_auth: UserAuth,
     state: web::Data<AppState>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
@@ -258,7 +250,7 @@ async fn update_username(
     Ok(UserDisplayNameChangeResponse {
         user: PublicUserModel::from_user_model(updated_user),
     }
-    .respond_to(&request))
+    .into_response())
 }
 
 
@@ -268,7 +260,6 @@ async fn update_username(
 
 #[get("/{user_id}")]
 async fn get_specific_user_info(
-    request: HttpRequest,
     user_auth: UserAuth,
     path_info: web::Path<(i32,)>,
     state: web::Data<AppState>,
@@ -295,7 +286,7 @@ async fn get_specific_user_info(
         return Ok(HttpResponse::NotFound().finish());
     };
 
-    Ok(UserInfoResponse::new(user).respond_to(&request))
+    Ok(UserInfoResponse::new(user).into_response())
 }
 
 /*

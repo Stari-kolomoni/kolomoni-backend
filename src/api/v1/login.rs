@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
+use crate::api::macros::DumbResponder;
 use crate::database::queries;
 use crate::impl_json_responder;
 use crate::jwt::{JWTClaims, JWTTokenType, JWTValidationError};
@@ -27,12 +28,11 @@ pub struct UserLoginResponse {
     pub refresh_token: String,
 }
 
-impl_json_responder!(UserLoginResponse, "UserLoginResponse");
+impl_json_responder!(UserLoginResponse);
 
 
 #[post("/login")]
 pub async fn login(
-    request: HttpRequest,
     state: web::Data<AppState>,
     login_info: web::Json<UserLoginInfo>,
 ) -> EndpointResult {
@@ -90,7 +90,7 @@ pub async fn login(
         access_token,
         refresh_token,
     }
-    .respond_to(&request))
+    .into_response())
 }
 
 
@@ -109,16 +109,12 @@ pub struct UserLoginRefreshResponse {
     pub access_token: String,
 }
 
-impl_json_responder!(
-    UserLoginRefreshResponse,
-    "UserLoginRefreshResponse"
-);
+impl_json_responder!(UserLoginRefreshResponse);
 
 
 
 #[post("/login/refresh")]
 pub async fn refresh_login(
-    request: HttpRequest,
     state: web::Data<AppState>,
     refresh_info: web::Json<UserLoginRefreshInfo>,
 ) -> EndpointResult {
@@ -176,5 +172,5 @@ pub async fn refresh_login(
         "User has successfully refreshed access token."
     );
 
-    Ok(UserLoginRefreshResponse { access_token }.respond_to(&request))
+    Ok(UserLoginRefreshResponse { access_token }.into_response())
 }
