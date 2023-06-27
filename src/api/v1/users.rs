@@ -370,6 +370,21 @@ async fn update_specific_user_display_name(
 
     require_permission!(permissions, UserPermission::UserAnyWrite);
 
+
+    // Disallow modifying your own account on these `/{user_id}/*` endpoints.
+    let current_user = queries::users::Query::get_user_by_username(&state.database, &token.username)
+        .await
+        .map_err(APIError::InternalError)?
+        .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
+
+    if current_user.id == requested_user_id {
+        return Ok(response_with_reason!(
+            StatusCode::FORBIDDEN,
+            "Can't modify your own account on this endpoint."
+        ));
+    }
+
+
     let json_data = json_data.into_inner();
 
 
@@ -438,8 +453,8 @@ async fn add_permissions_to_specific_user(
     // Only authenticated users with the `user.any:write` permission can add permissions
     // to other users, but only if they also have the requested permission.
     // Intended for moderation tooling.
-    let current_user_permissions = user_auth
-        .permissions_if_authenticated(&state.database)
+    let (current_user_token, current_user_permissions) = user_auth
+        .token_and_permissions_if_authenticated(&state.database)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
@@ -450,14 +465,28 @@ async fn add_permissions_to_specific_user(
     );
 
 
+    // Disallow modifying your own account on these `/{user_id}/*` endpoints.
+    let current_user =
+        queries::users::Query::get_user_by_username(&state.database, &current_user_token.username)
+            .await
+            .map_err(APIError::InternalError)?
+            .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
+
+    if current_user.id == requested_user_id {
+        return Ok(response_with_reason!(
+            StatusCode::FORBIDDEN,
+            "Can't modify your own account on this endpoint."
+        ));
+    }
+
+
     let json_data = json_data.into_inner();
 
     let permissions_to_add_result: Result<Vec<UserPermission>, &str> = json_data
         .permissions_to_add
         .iter()
         .map(|permission_name| {
-            UserPermission::from_name(permission_name.as_str())
-                .ok_or_else(|| permission_name.as_str())
+            UserPermission::from_name(permission_name.as_str()).ok_or(permission_name.as_str())
         })
         .collect::<Result<Vec<UserPermission>, &str>>();
 
@@ -537,8 +566,8 @@ async fn remove_permissions_from_specific_user(
     // Only authenticated users with the `user.any:write` permission can remove permissions
     // from other users, but not those that they themselves don't have.
     // Intended for moderation tooling.
-    let current_user_permissions = user_auth
-        .permissions_if_authenticated(&state.database)
+    let (current_user_token, current_user_permissions) = user_auth
+        .token_and_permissions_if_authenticated(&state.database)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
@@ -547,6 +576,21 @@ async fn remove_permissions_from_specific_user(
         current_user_permissions,
         UserPermission::UserAnyWrite
     );
+
+
+    // Disallow modifying your own account on these `/{user_id}/*` endpoints.
+    let current_user =
+        queries::users::Query::get_user_by_username(&state.database, &current_user_token.username)
+            .await
+            .map_err(APIError::InternalError)?
+            .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
+
+    if current_user.id == requested_user_id {
+        return Ok(response_with_reason!(
+            StatusCode::FORBIDDEN,
+            "Can't modify your own account on this endpoint."
+        ));
+    }
 
 
     let json_data = json_data.into_inner();
