@@ -76,6 +76,14 @@ pub struct UserDisplayNameChangeResponse {
 impl_json_responder!(UserDisplayNameChangeResponse);
 
 
+#[derive(Serialize, Debug)]
+pub struct UserPermissionsResponse {
+    pub permissions: Vec<String>,
+}
+
+impl_json_responder!(UserPermissionsResponse);
+
+
 /*
  * POST /
  */
@@ -168,13 +176,6 @@ pub async fn get_current_user_info(
 /*
  * GET /me/permissions
  */
-
-#[derive(Serialize, Debug)]
-pub struct UserPermissionsResponse {
-    pub permissions: Vec<String>,
-}
-
-impl_json_responder!(UserPermissionsResponse);
 
 
 #[get("/me/permissions")]
@@ -302,6 +303,45 @@ async fn get_specific_user_info(
 }
 
 /*
+ * GET /{id}/permissions
+ */
+
+#[get("/{user_id}/permissions")]
+async fn get_specific_user_permissions(
+    user_auth: UserAuth,
+    path_info: web::Path<(i32,)>,
+    state: web::Data<AppState>,
+) -> EndpointResult {
+    let requested_user_id = path_info.into_inner().0;
+
+    // Only authenticated users with the `user.any:read` permission to access this endpoint.
+    let permissions = user_auth
+        .permissions_if_authenticated(&state.database)
+        .await
+        .map_err(APIError::InternalError)?
+        .ok_or_else(|| APIError::NotAuthenticated)?;
+
+    if !permissions.has_permission(UserPermission::UserAnyRead) {
+        return Err(APIError::NotEnoughPermissions);
+    }
+
+    // Get user permissions.
+    let optional_user_permissions =
+        queries::user_permissions::Query::get_user_permission_names_by_user_id(
+            &state.database,
+            requested_user_id,
+        )
+        .await
+        .map_err(APIError::InternalError)?;
+
+    let Some(permissions) = optional_user_permissions else {
+        return Ok(HttpResponse::NotFound().finish());
+    };
+
+    Ok(UserPermissionsResponse { permissions }.into_response())
+}
+
+/*
  * PATCH /{user_id}/display_name
  */
 
@@ -385,5 +425,6 @@ pub fn users_router() -> Scope {
         .service(get_current_user_permissions)
         .service(update_current_user_display_name)
         .service(get_specific_user_info)
+        .service(get_specific_user_permissions)
         .service(update_specific_user_display_name)
 }
