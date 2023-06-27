@@ -17,7 +17,7 @@ use crate::state::AppState;
 
 // User permissions that we have (inspired by the scope system in OAuth).
 // The defined permissions must match with the `*_seed_permissions.rs` file in `migrations`!
-#[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum UserPermission {
     /// Allows the user to log in and view their account information.
@@ -80,15 +80,7 @@ pub struct UserPermissions {
 }
 
 impl UserPermissions {
-    pub async fn get_from_database(database: &DbConn, username: &str) -> Result<Self> {
-        let permission_names =
-            queries::user_permissions::Query::get_user_permission_names_by_username(
-                database, username,
-            )
-            .await
-            .with_context(|| "Failed to get user permissions from database.")?
-            .ok_or_else(|| anyhow!("Failed to get user permissions: no such user."))?;
-
+    pub fn from_permission_names(permission_names: Vec<String>) -> Result<Self> {
         let permissions = permission_names
             .into_iter()
             .map(|permission_name| {
@@ -98,6 +90,49 @@ impl UserPermissions {
             .collect::<Result<HashSet<UserPermission>>>()?;
 
         Ok(Self { permissions })
+    }
+
+    pub fn to_vec_of_permission_names(&self) -> Vec<String> {
+        self.permissions
+            .iter()
+            .map(|permission| permission.to_name().to_string())
+            .collect()
+    }
+
+    pub async fn get_from_database_by_username(
+        database: &DbConn,
+        username: &str,
+    ) -> Result<Option<Self>> {
+        let permission_names =
+            queries::user_permissions::Query::get_user_permission_names_by_username(
+                database, username,
+            )
+            .await
+            .with_context(|| "Failed to get user permissions from database.")?;
+
+        let Some(names) = permission_names else {
+            return Ok(None);
+        };
+
+        Ok(Some(Self::from_permission_names(names)?))
+    }
+
+    pub async fn get_from_database_by_user_id(
+        database: &DbConn,
+        user_id: i32,
+    ) -> Result<Option<Self>> {
+        let permission_names =
+            queries::user_permissions::Query::get_user_permission_names_by_user_id(
+                database, user_id,
+            )
+            .await
+            .with_context(|| "Failed to get user permissions from database.")?;
+
+        let Some(names) = permission_names else {
+            return Ok(None);
+        };
+
+        Ok(Some(Self::from_permission_names(names)?))
     }
 
     pub fn has_permission(&self, permission: UserPermission) -> bool {
@@ -129,9 +164,27 @@ impl UserAuth {
             UserAuth::Unauthenticated => Ok(None),
             UserAuth::Authenticated { token } => {
                 let user_permissions =
-                    UserPermissions::get_from_database(database, &token.username).await?;
+                    UserPermissions::get_from_database_by_username(database, &token.username)
+                        .await?;
 
-                Ok(Some(user_permissions))
+                Ok(user_permissions)
+            }
+        }
+    }
+
+    pub async fn token_and_permissions_if_authenticated(
+        &self,
+        database: &DbConn,
+    ) -> Result<Option<(&JWTClaims, UserPermissions)>> {
+        match self {
+            UserAuth::Unauthenticated => Ok(None),
+            UserAuth::Authenticated { token } => {
+                let user_permissions =
+                    UserPermissions::get_from_database_by_username(database, &token.username)
+                        .await?
+                        .ok_or_else(|| anyhow!("User missing from database."))?;
+
+                Ok(Some((token, user_permissions)))
             }
         }
     }

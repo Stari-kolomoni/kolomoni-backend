@@ -47,3 +47,23 @@ macro_rules! response_with_reason {
         HttpResponseBuilder::new($status_code).json(ErrorReasonResponse::custom_reason($reason))
     };
 }
+
+#[macro_export]
+macro_rules! not_found_error_with_reason {
+    ($reason:expr) => {
+        APIError::NotFound {
+            response: ErrorReasonResponse::custom_reason($reason),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! require_permission {
+    ($user_permissions:expr, $required_permission:expr) => {
+        if !$user_permissions.has_permission($required_permission) {
+            return Err(APIError::missing_specific_permission(
+                $required_permission,
+            ));
+        }
+    };
+}

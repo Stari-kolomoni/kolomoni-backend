@@ -8,9 +8,11 @@ use serde::Serialize;
 use thiserror::Error;
 use tracing::error;
 
+use crate::api::auth::UserPermission;
+
 #[derive(Serialize, Debug)]
 pub struct ErrorReasonResponse {
-    reason: String,
+    pub reason: String,
 }
 
 impl ErrorReasonResponse {
@@ -26,9 +28,15 @@ impl ErrorReasonResponse {
         }
     }
 
-    pub fn not_enough_permissions() -> Self {
+    pub fn missing_permissions() -> Self {
         Self {
             reason: "Missing permissions.".to_string(),
+        }
+    }
+
+    pub fn missing_specific_permission(permission: UserPermission) -> Self {
+        Self {
+            reason: format!("Missing permission: {}", permission.to_name()),
         }
     }
 }
@@ -39,7 +47,13 @@ impl ErrorReasonResponse {
 pub enum APIError {
     NotAuthenticated,
 
-    NotEnoughPermissions,
+    NotEnoughPermissions {
+        missing_permission: Option<UserPermission>,
+    },
+
+    NotFound {
+        reason_response: Option<ErrorReasonResponse>,
+    },
 
     InternalReason(String),
 
@@ -49,6 +63,30 @@ pub enum APIError {
 }
 
 impl APIError {
+    pub fn not_found() -> Self {
+        Self::NotFound {
+            reason_response: None,
+        }
+    }
+
+    pub fn not_found_with_reason<M: Into<String>>(reason: M) -> Self {
+        Self::NotFound {
+            reason_response: Some(ErrorReasonResponse::custom_reason(reason)),
+        }
+    }
+
+    pub fn not_enough_permissions() -> Self {
+        Self::NotEnoughPermissions {
+            missing_permission: None,
+        }
+    }
+
+    pub fn missing_specific_permission(permission: UserPermission) -> Self {
+        Self::NotEnoughPermissions {
+            missing_permission: Some(permission),
+        }
+    }
+
     pub fn internal_reason(reason: &str) -> Self {
         Self::InternalReason(reason.to_string())
     }
@@ -58,7 +96,22 @@ impl Display for APIError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             APIError::NotAuthenticated => write!(f, "No authentication."),
-            APIError::NotEnoughPermissions => write!(f, "User doesn't have enough permissions."),
+            APIError::NotEnoughPermissions { missing_permission } => match missing_permission {
+                Some(missing_permission) => write!(
+                    f,
+                    "User doesn't have the required permission: {}",
+                    missing_permission.to_name()
+                ),
+                None => write!(f, "User doesn't have enough permissions."),
+            },
+            APIError::NotFound { reason_response } => match reason_response {
+                Some(reason) => {
+                    write!(f, "Resource not found: {}", reason.reason)
+                }
+                None => {
+                    write!(f, "Resource not found.")
+                }
+            },
             APIError::InternalReason(reason) => write!(f, "Internal error: {reason}."),
             APIError::InternalError(error) => write!(f, "Internal error: {error}."),
             APIError::InternalDatabaseError(error) => write!(f, "Internal database error: {error}."),
@@ -69,8 +122,9 @@ impl Display for APIError {
 impl ResponseError for APIError {
     fn status_code(&self) -> StatusCode {
         match self {
-            APIError::NotAuthenticated => StatusCode::FORBIDDEN,
-            APIError::NotEnoughPermissions => StatusCode::FORBIDDEN,
+            APIError::NotAuthenticated => StatusCode::UNAUTHORIZED,
+            APIError::NotEnoughPermissions { .. } => StatusCode::FORBIDDEN,
+            APIError::NotFound { .. } => StatusCode::NOT_FOUND,
             APIError::InternalReason(_) => StatusCode::INTERNAL_SERVER_ERROR,
             APIError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             APIError::InternalDatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -80,11 +134,18 @@ impl ResponseError for APIError {
     fn error_response(&self) -> HttpResponse<BoxBody> {
         match self {
             APIError::NotAuthenticated => {
-                HttpResponse::Forbidden().json(ErrorReasonResponse::not_authenticated())
+                HttpResponse::Unauthorized().json(ErrorReasonResponse::not_authenticated())
             }
-            APIError::NotEnoughPermissions => {
-                HttpResponse::Forbidden().json(ErrorReasonResponse::not_enough_permissions())
-            }
+            APIError::NotEnoughPermissions { missing_permission } => match missing_permission {
+                Some(missing_permission) => HttpResponse::Forbidden().json(
+                    ErrorReasonResponse::missing_specific_permission(*missing_permission),
+                ),
+                None => HttpResponse::Forbidden().json(ErrorReasonResponse::missing_permissions()),
+            },
+            APIError::NotFound { reason_response } => match reason_response {
+                Some(reason_response) => HttpResponse::NotFound().json(reason_response),
+                None => HttpResponse::NotFound().finish(),
+            },
             APIError::InternalReason(error) => {
                 error!(error = error, "Internal error.");
 
