@@ -18,7 +18,7 @@ use crate::state::AppState;
  */
 
 /// User login information.
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, Debug, ToSchema)]
 pub struct UserLoginRequest {
     /// Username to log in as.
     pub username: String,
@@ -47,23 +47,27 @@ pub struct UserLoginResponse {
 impl_json_responder!(UserLoginResponse);
 
 
-/// Validates provided user credentials
-/// and gives the user an access token they can use in future requests to authenticate themselves.
+/// Validate provided user credentials and generate access token
+///
+/// This endpoint validates the credentials (username and password) and gives the user
+/// an access token they can use in future requests to authenticate themselves.
+///
 /// A refresh token is also provided to the user can request a new access token (the refresh
-/// token is valid for longer).
+/// token is valid for longer than the access token, but only the access token can be added
+/// in the *Authorization* header).
 #[utoipa::path(
     post,
-    path = "/api/v1/users/login",
-    tag = "users",
+    path = "/login",
+    tag = "login",
     request_body(
-        content = UserLoginRequest,
+        content = inline(UserLoginRequest),
         example = json!({ "username": "sample_user", "password": "verysecurepassword" })
     ),
     responses(
         (
             status = 200,
             description = "Login successful.",
-            body = UserLoginResponse,
+            body = inline(UserLoginResponse),
             example = json!({
                 "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.ZnuhEVacQD_pYzkW9h6aX3eoRNOAs2-y3EngGBglxkk",
                 "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCJ9.Ze6DI5EZ-swXRQrMW3NIppYejclGbyI9D6zmYBWJMLk"
@@ -149,24 +153,78 @@ pub async fn login(
  * POST /login/refresh
  */
 
-#[derive(Deserialize)]
-pub struct UserLoginRefreshInfo {
+/// Information with which to refresh a user's login, generating a new access token.
+#[derive(Deserialize, ToSchema)]
+pub struct UserLoginRefreshRequest {
+    /// Refresh token to use to generate an access token.
+    ///
+    /// Token must not have expired to work.
     pub refresh_token: String,
 }
 
-#[derive(Serialize, Debug)]
+/// Response on successful login refresh.
+#[derive(Serialize, Debug, ToSchema)]
 pub struct UserLoginRefreshResponse {
+    /// Newly-generated access token to use in future requests.
     pub access_token: String,
 }
 
 impl_json_responder!(UserLoginRefreshResponse);
 
 
-
+/// Refresh a user's access
+///
+/// The user must provide a refresh token given to them on an initial call to `/users/login`.
+/// "Refreshing a login" does not invalidate the refresh token.
+///
+/// The result of this is essentially a new JWT access token. Use when your initial access token
+/// from `/users/login` expires.
+#[utoipa::path(
+    post,
+    path = "/login/refresh",
+    tag = "login",
+    request_body(
+        content = inline(UserLoginRefreshRequest),
+        example = json!({ "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCJ9.Ze6DI5EZ-swXRQrMW3NIppYejclGbyI9D6zmYBWJMLk" })
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Login refresh successful.",
+            body = inline(UserLoginRefreshResponse),
+            example = json!({ "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.ZnuhEVacQD_pYzkW9h6aX3eoRNOAs2-y3EngGBglxkk" })
+        ),
+        (
+            status = 403,
+            description = "Refresh token has expired.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Refresh token has expired." })
+        ),
+        (
+            status = 400,
+            description = "Invalid refresh token.",
+            body = ErrorReasonResponse,
+            examples(
+                ("Invalid JWT token" = (
+                    summary = "The provided JWT refresh token is not a valid token at all.",
+                    value = json!({ "reason": "Invalid refresh token." })
+                )),
+                ("Not a refresh token" = (
+                    summary = "The provided JWT token is not a refresh token.",
+                    value = json!({ "reason": "The provided token is not a refresh token." })
+                ))
+            )
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    )
+)]
 #[post("/login/refresh")]
 pub async fn refresh_login(
     state: web::Data<AppState>,
-    refresh_info: web::Json<UserLoginRefreshInfo>,
+    refresh_info: web::Json<UserLoginRefreshRequest>,
 ) -> EndpointResult {
     let refresh_token_claims = match state.jwt_manager.decode_token(&refresh_info.refresh_token) {
         Ok(token_claims) => token_claims,
@@ -189,7 +247,7 @@ pub async fn refresh_login(
 
                     Ok(
                         HttpResponse::BadRequest().json(ErrorReasonResponse::custom_reason(
-                            "Invalid token, could not parse.",
+                            "Invalid refresh token.",
                         )),
                     )
                 }

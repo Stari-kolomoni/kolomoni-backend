@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use sea_orm::TransactionTrait;
 use serde::{Deserialize, Serialize};
 use tracing::info;
+use utoipa::ToSchema;
 
 use crate::api::auth::{UserAuth, UserPermission, UserPermissions};
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
@@ -20,17 +21,29 @@ use crate::{impl_json_responder, require_permission, response_with_reason};
  * Shared
  */
 
-#[derive(Serialize, Debug)]
-pub struct PublicUserModel {
+/// Information about a single user.
+#[derive(Serialize, Debug, ToSchema)]
+pub struct UserInformation {
+    /// Internal user ID.
     pub id: i32,
+
+    /// Unique username for login.
     pub username: String,
+
+    /// Unique display name.
     pub display_name: String,
+
+    /// Registration date and time.
     pub joined_at: DateTime<Utc>,
+
+    /// Last modification date and time.
     pub last_modified_at: DateTime<Utc>,
+
+    /// Last activity date and time.
     pub last_active_at: DateTime<Utc>,
 }
 
-impl PublicUserModel {
+impl UserInformation {
     #[inline]
     pub fn from_user_model(model: entities::users::Model) -> Self {
         Self {
@@ -46,15 +59,15 @@ impl PublicUserModel {
 
 
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct UserInfoResponse {
-    pub user: PublicUserModel,
+    pub user: UserInformation,
 }
 
 impl UserInfoResponse {
     pub fn new(model: entities::users::Model) -> Self {
         Self {
-            user: PublicUserModel::from_user_model(model),
+            user: UserInformation::from_user_model(model),
         }
     }
 }
@@ -63,21 +76,21 @@ impl_json_responder!(UserInfoResponse);
 
 
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, ToSchema)]
 pub struct UserDisplayNameChangeRequest {
     pub new_display_name: String,
 }
 
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct UserDisplayNameChangeResponse {
-    pub user: PublicUserModel,
+    pub user: UserInformation,
 }
 
 impl_json_responder!(UserDisplayNameChangeResponse);
 
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct UserPermissionsResponse {
     pub permissions: Vec<String>,
 }
@@ -90,18 +103,64 @@ impl_json_responder!(UserPermissionsResponse);
  * GET /
  */
 
-#[derive(Serialize, Debug)]
+/// List of registered users.
+#[derive(Serialize, Debug, ToSchema)]
 pub struct RegisteredUsersListResponse {
-    pub users: Vec<PublicUserModel>,
+    pub users: Vec<UserInformation>,
 }
 
 impl_json_responder!(RegisteredUsersListResponse);
 
 
-/// We use "" instead of "/" here because this allows the user to
-/// request `GET /api/v1/users` OR `GET /api/v1/users/` and get the correct endpoint.
+// Development note: we use "" instead of "/" below (in `#[get("")`) and in other places
+// because this allows the user to request `GET /api/v1/users` OR `GET /api/v1/users/` and
+// get the correct endpoint both times.
+//
+// For more information, see `actix_web::middleware::NormalizePath` (trim mode).
+
+/// List users
 ///
-/// See `actix_web::middleware::NormalizePath` (trim mode).
+/// This endpoint returns a list of all registered users.
+///
+/// *This endpoint requires the `users.any:read` permission.*
+#[utoipa::path(
+    get,
+    path = "/users",
+    tag = "users",
+    responses(
+        (
+            status = 200,
+            description = "List of registered users.",
+            body = inline(RegisteredUsersListResponse),
+            example = json!({
+                "users": [
+                    {
+                        "id": 1,
+                        "username": "janeznovak",
+                        "display_name": "Janez Novak",
+                        "joined_at": "2023-06-27T20:33:53.078789Z",
+                        "last_modified_at": "2023-06-27T20:34:27.217273Z",
+                        "last_active_at": "2023-06-27T20:34:27.253746Z"
+                    },
+                ]
+            }),
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Missing `user.any:read` permission.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Missing permission: user.any:read." })
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    )
+)]
 #[get("")]
 async fn get_all_registered_users(
     user_auth: UserAuth,
@@ -121,9 +180,9 @@ async fn get_all_registered_users(
         .await
         .map_err(APIError::InternalError)?;
 
-    let all_users_as_public_struct: Vec<PublicUserModel> = all_users
+    let all_users_as_public_struct: Vec<UserInformation> = all_users
         .into_iter()
-        .map(PublicUserModel::from_user_model)
+        .map(UserInformation::from_user_model)
         .collect();
 
 
@@ -139,15 +198,23 @@ async fn get_all_registered_users(
  * POST /
  */
 
-#[derive(Deserialize, Clone, Debug)]
-pub struct UserRegistrationData {
+// TODO Continue with OpenAPI documentation.
+
+/// User registration information.
+#[derive(Deserialize, Clone, Debug, ToSchema)]
+pub struct UserRegistrationRequest {
+    /// Username to register as (not the same as the display name).
     pub username: String,
+
+    /// Name to display in the UI as.
     pub display_name: String,
+
+    /// Password for this user account.
     pub password: String,
 }
 
-impl From<UserRegistrationData> for UserRegistrationInfo {
-    fn from(value: UserRegistrationData) -> Self {
+impl From<UserRegistrationRequest> for UserRegistrationInfo {
+    fn from(value: UserRegistrationRequest) -> Self {
         Self {
             username: value.username,
             display_name: value.display_name,
@@ -157,18 +224,64 @@ impl From<UserRegistrationData> for UserRegistrationInfo {
 }
 
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct UserRegistrationResponse {
-    pub user: PublicUserModel,
+    pub user: UserInformation,
 }
 
 impl_json_responder!(UserRegistrationResponse);
 
 
+/// Register a new user
+///
+/// This endpoint registers a new user with the provided username, display name and password.
+/// Only one user with the given username or display name can exist (both fields are required to be unique).
+///
+/// No authentication is required.
+#[utoipa::path(
+    post,
+    path = "/users",
+    tag = "users",
+    request_body(
+        content = inline(UserRegistrationRequest),
+        example = json!({
+            "username": "janeznovak",
+            "display_name": "Janez Novak",
+            "password": "perica_raci_reže_rep"
+        })
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Registration successful.",
+            body = inline(UserRegistrationResponse),
+            example = json!({
+                "user": {
+                    "id": 1,
+                    "username": "janeznovak",
+                    "display_name": "Janez Novak",
+                    "joined_at": "2023-06-27T20:33:53.078789Z",
+                    "last_modified_at": "2023-06-27T20:34:27.217273Z",
+                    "last_active_at": "2023-06-27T20:34:27.253746Z"
+                }
+            })
+        ),
+        (
+            status = 409,
+            description = "User with given username already exists.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "User with provided username already exists." })
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    )
+)]
 #[post("")]
 pub async fn register_user(
     state: web::Data<AppState>,
-    json_data: web::Json<UserRegistrationData>,
+    json_data: web::Json<UserRegistrationRequest>,
 ) -> EndpointResult {
     let username_already_exists =
         query::UsersQuery::user_exists_by_username(&state.database, &json_data.username)
@@ -192,7 +305,7 @@ pub async fn register_user(
     .map_err(APIError::InternalError)?;
 
     Ok(UserRegistrationResponse {
-        user: PublicUserModel::from_user_model(new_user),
+        user: UserInformation::from_user_model(new_user),
     }
     .into_response())
 }
@@ -315,7 +428,7 @@ async fn update_current_user_display_name(
     );
 
     Ok(UserDisplayNameChangeResponse {
-        user: PublicUserModel::from_user_model(updated_user),
+        user: UserInformation::from_user_model(updated_user),
     }
     .into_response())
 }
@@ -473,7 +586,7 @@ async fn update_specific_user_display_name(
     );
 
     Ok(UserDisplayNameChangeResponse {
-        user: PublicUserModel::from_user_model(updated_user),
+        user: UserInformation::from_user_model(updated_user),
     }
     .into_response())
 }
