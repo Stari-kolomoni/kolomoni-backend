@@ -87,6 +87,55 @@ impl_json_responder!(UserPermissionsResponse);
 
 
 /*
+ * GET /
+ */
+
+#[derive(Serialize, Debug)]
+pub struct RegisteredUsersListResponse {
+    pub users: Vec<PublicUserModel>,
+}
+
+impl_json_responder!(RegisteredUsersListResponse);
+
+
+/// We use "" instead of "/" here because this allows the user to
+/// request `GET /api/v1/users` OR `GET /api/v1/users/` and get the correct endpoint.
+///
+/// See `actix_web::middleware::NormalizePath` (trim mode).
+#[get("")]
+async fn get_all_registered_users(
+    user_auth: UserAuth,
+    state: web::Data<AppState>,
+) -> EndpointResult {
+    let (_, permissions) = user_auth
+        .token_and_permissions_if_authenticated(&state.database)
+        .await
+        .map_err(APIError::InternalError)?
+        .ok_or_else(|| APIError::NotAuthenticated)?;
+
+    // User must have the `user.any:read` permission to access this endpoint.
+    require_permission!(permissions, UserPermission::UserAnyRead);
+
+
+    let all_users = queries::users::Query::get_all_users(&state.database)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    let all_users_as_public_struct: Vec<PublicUserModel> = all_users
+        .into_iter()
+        .map(PublicUserModel::from_user_model)
+        .collect();
+
+
+    Ok(RegisteredUsersListResponse {
+        users: all_users_as_public_struct,
+    }
+    .into_response())
+}
+
+
+
+/*
  * POST /
  */
 
@@ -172,7 +221,7 @@ pub async fn get_current_user_info(
     let user = queries::users::Query::get_user_by_username(&state.database, &token.username)
         .await
         .map_err(APIError::InternalError)?
-        .ok_or_else(|| APIError::not_found())?;
+        .ok_or_else(APIError::not_found)?;
 
 
     Ok(UserInfoResponse::new(user).into_response())
@@ -274,7 +323,7 @@ async fn update_current_user_display_name(
 
 
 /*
- * GET /{id}
+ * GET /{user_id}
  */
 
 #[get("/{user_id}")]
@@ -664,6 +713,7 @@ async fn remove_permissions_from_specific_user(
 
 pub fn users_router() -> Scope {
     web::scope("users")
+        .service(get_all_registered_users)
         .service(register_user)
         .service(get_current_user_info)
         .service(get_current_user_permissions)

@@ -9,7 +9,7 @@ mod database;
 pub mod jwt;
 pub mod state;
 
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer};
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{Database, DatabaseConnection};
 use tracing::info;
@@ -89,6 +89,7 @@ async fn main() -> Result<()> {
             let json_extractor_config = web::JsonConfig::default().limit(1048576);
             
             App::new()
+                .wrap(middleware::NormalizePath::trim())
                 .wrap(TracingLogger::default())
                 .service(api::api_router())
                 .app_data(json_extractor_config)

@@ -146,8 +146,8 @@ pub enum UserAuth {
     Authenticated { token: JWTClaims },
 }
 
-// TODO additional info, including permissions
 impl UserAuth {
+    #[allow(dead_code)]
     #[inline]
     pub fn token_if_authenticated(&self) -> Option<&JWTClaims> {
         match self {

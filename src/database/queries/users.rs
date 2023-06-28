@@ -58,4 +58,10 @@ impl Query {
             Ok(false)
         }
     }
+
+    pub async fn get_all_users<C: ConnectionTrait>(database: &C) -> Result<Vec<users::Model>> {
+        let users = User::find().all(database).await?;
+
+        Ok(users)
+    }
 }

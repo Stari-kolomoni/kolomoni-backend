@@ -69,12 +69,14 @@ impl APIError {
         }
     }
 
+    #[allow(dead_code)]
     pub fn not_found_with_reason<M: Into<String>>(reason: M) -> Self {
         Self::NotFound {
             reason_response: Some(ErrorReasonResponse::custom_reason(reason)),
         }
     }
 
+    #[allow(dead_code)]
     pub fn not_enough_permissions() -> Self {
         Self::NotEnoughPermissions {
             missing_permission: None,
