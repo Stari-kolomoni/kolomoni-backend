@@ -165,7 +165,7 @@ pub struct UserRegistrationResponse {
 impl_json_responder!(UserRegistrationResponse);
 
 
-#[post("/")]
+#[post("")]
 pub async fn register_user(
     state: web::Data<AppState>,
     json_data: web::Json<UserRegistrationData>,

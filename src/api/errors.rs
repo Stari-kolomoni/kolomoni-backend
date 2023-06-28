@@ -7,11 +7,13 @@ use sea_orm::DbErr;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::error;
+use utoipa::ToSchema;
 
 use crate::api::auth::UserPermission;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct ErrorReasonResponse {
+    /// Error reason.
     pub reason: String,
 }
 
@@ -154,7 +156,10 @@ impl ResponseError for APIError {
                 HttpResponse::InternalServerError().finish()
             }
             APIError::InternalError(error) => {
-                error!(error = error.to_string(), "Internal error.");
+                error!(
+                    error = error.to_string(),
+                    "Internal server error."
+                );
 
                 HttpResponse::InternalServerError().finish()
             }

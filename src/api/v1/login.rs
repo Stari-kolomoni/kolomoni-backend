@@ -4,6 +4,7 @@ use anyhow::Context;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
+use utoipa::ToSchema;
 
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
 use crate::api::macros::DumbResponder;
@@ -16,25 +17,74 @@ use crate::state::AppState;
  * POST /login
  */
 
-#[derive(Deserialize)]
-pub struct UserLoginInfo {
+/// User login information.
+#[derive(Deserialize, ToSchema)]
+pub struct UserLoginRequest {
+    /// Username to log in as.
     pub username: String,
+
+    /// Password.
     pub password: String,
 }
 
-#[derive(Serialize, Debug)]
+/// Response on successful user login.
+///
+/// Contains two tokens:
+/// - the `access_token` that should be appended to future requests and
+/// - the `refresh_token` that can be used on `POST /api/v1/users/login/refresh` to
+///   receive a new (fresh) request token.
+///
+/// This works because the `refresh_token` has a longer expiration time.
+#[derive(Serialize, Debug, ToSchema)]
 pub struct UserLoginResponse {
+    /// JWT access token.
     pub access_token: String,
+
+    /// JWT refresh token.
     pub refresh_token: String,
 }
 
 impl_json_responder!(UserLoginResponse);
 
 
+/// Validates provided user credentials
+/// and gives the user an access token they can use in future requests to authenticate themselves.
+/// A refresh token is also provided to the user can request a new access token (the refresh
+/// token is valid for longer).
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/login",
+    tag = "users",
+    request_body(
+        content = UserLoginRequest,
+        example = json!({ "username": "sample_user", "password": "verysecurepassword" })
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Login successful.",
+            body = UserLoginResponse,
+            example = json!({
+                "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.ZnuhEVacQD_pYzkW9h6aX3eoRNOAs2-y3EngGBglxkk",
+                "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCJ9.Ze6DI5EZ-swXRQrMW3NIppYejclGbyI9D6zmYBWJMLk"
+            })
+        ),
+        (
+            status = 403,
+            description = "Invalid login information.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Invalid login credentials." })
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    )
+)]
 #[post("/login")]
 pub async fn login(
     state: web::Data<AppState>,
-    login_info: web::Json<UserLoginInfo>,
+    login_info: web::Json<UserLoginRequest>,
 ) -> EndpointResult {
     let is_valid_login = query::UsersQuery::validate_user_credentials(
         &state.database,

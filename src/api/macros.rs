@@ -1,6 +1,11 @@
 use actix_web::body::MessageBody;
 use actix_web::HttpResponse;
 
+/// Simple responder trait similar to `Responder` from `actix_web`.
+/// The main difference is that the `into_response` method does not require
+/// a reference to `HttpRequest` (i.e. the response must be built without a request).
+///
+/// See documentation for `impl_json_responder` for reasoning.
 pub trait DumbResponder {
     type Body: MessageBody + 'static;
 
@@ -36,8 +41,8 @@ macro_rules! impl_json_responder {
     };
 }
 
-/// A shorthand for responding with a given status code and a JSON
-/// body containing the `reason` String field.
+/// A macro for generating a `HttpResponse` with a given status code and
+/// a JSON body containing the `reason` field.
 ///
 /// First argument is the `actix_web::StatusCode` status code and
 /// the second argument is the reason to respond with (must implement `Into<String>`).
@@ -48,6 +53,9 @@ macro_rules! response_with_reason {
     };
 }
 
+/// A macro for more cleanly generating an `APIError::NotFound` error with the given reason.
+///
+/// There is only one argument: the reason (must implement `Into<String>`).
 #[macro_export]
 macro_rules! not_found_error_with_reason {
     ($reason:expr) => {
@@ -57,6 +65,12 @@ macro_rules! not_found_error_with_reason {
     };
 }
 
+/// A macro that early-returns an `APIError::missing_specific_permission` if the given permissions
+/// struct doesn't have the required permission. This generates a `403 Forbidden` with JSON-encoded
+/// details in the body of the response (see `APIError` for more information).
+///
+/// The first argument is the `UserPermissions` struct.
+/// The second argument is the permission you require (`UserPermission` variant).
 #[macro_export]
 macro_rules! require_permission {
     ($user_permissions:expr, $required_permission:expr) => {

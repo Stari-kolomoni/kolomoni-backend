@@ -8,7 +8,7 @@ authors = ["Grimpy101 <gorupgorazd@gmail.com>", "Simon Goričar <simon.peter.gor
 rust-version = "1.65.0"
 
 [workspace]
-members = [".", "migrations"]
+members = [".", "migrations", "openapi"]
 
 [[bin]]
 name = "stari-kolomoni-backend"
