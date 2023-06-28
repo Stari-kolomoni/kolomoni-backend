@@ -37,6 +37,19 @@ impl UsersQuery {
             .is_some())
     }
 
+    pub async fn user_exists_by_display_name<C: ConnectionTrait>(
+        database: &C,
+        display_name: &str,
+    ) -> Result<bool> {
+        let user = User::find()
+            .filter(users::Column::DisplayName.eq(display_name))
+            .one(database)
+            .await
+            .with_context(|| "Failed to search for user by display name.")?;
+
+        Ok(user.is_some())
+    }
+
     pub async fn validate_user_credentials<C: ConnectionTrait>(
         database: &C,
         hasher: &ArgonHasher,

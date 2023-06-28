@@ -270,7 +270,16 @@ impl_json_responder!(UserRegistrationResponse);
             status = 409,
             description = "User with given username already exists.",
             body = ErrorReasonResponse,
-            example = json!({ "reason": "User with provided username already exists." })
+            examples(
+                ("User with same username exists" = (
+                    summary = "The username is taken.",
+                    value = json!({ "reason": "User with provided username already exists." })
+                )),
+                ("User with same display name exists" = (
+                    summary = "The display name is taken.",
+                    value = json!({ "reason": "User with provided display name already exists." })
+                )),
+            )
         ),
         (
             status = 500,
@@ -292,6 +301,19 @@ pub async fn register_user(
         return Ok(response_with_reason!(
             StatusCode::CONFLICT,
             "User with provided username already exists."
+        ));
+    }
+
+
+    let display_name_already_exists =
+        query::UsersQuery::user_exists_by_display_name(&state.database, &json_data.display_name)
+            .await
+            .map_err(APIError::InternalError)?;
+
+    if display_name_already_exists {
+        return Ok(response_with_reason!(
+            StatusCode::CONFLICT,
+            "User with provided display name already exists."
         ));
     }
 
