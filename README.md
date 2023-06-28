@@ -26,7 +26,7 @@ Before proceeding, verify that you have the following:
 - Initialize the PostgreSQL database:  
   - on *Windows*: you may use the `scripts/database/init-database.ps1` and `scripts/database/run-database.ps1` scripts for easy setup and running. *This should only be used for development as it uses `--auth=trust`.* The generated user is `kolomon` (password `kolomon`) and the database name is `kolomondb`. The database will run on `127.0.0.1` on default port `5432`.
 - Copy `data/configuration.TEMPLATE.toml` to `data/configuration.toml` and fill out the configuration fields (see comments in the template for explanations).
-- Build the project by running `cargo build`. This will be a fresh build, so it might take a few minutes (around 2 minutes on 16 cores at 3.6 GHz). Subsequent builds will be much faster.
+- Build the project by running `cargo build`. This will be a fresh build, so it might take a few minutes (around 2 minutes on a hard drive with a 16-core CPU at 3.6 GHz). Subsequent builds will be much faster.
 
 ### 2.3 Starting the backend server
 To start the backend server, run `cargo run` (or `./target/debug/stari-kolomoni-backend`).

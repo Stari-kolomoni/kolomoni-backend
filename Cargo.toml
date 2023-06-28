@@ -34,3 +34,4 @@ chrono = "0.4.26"
 jsonwebtoken = "8.3.0"
 serde_with = { version = "3.0.0", features = ["chrono"] }
 actix-utils = "3.0.1"
+clap = { version = "4.3.8", features = ["derive"] }

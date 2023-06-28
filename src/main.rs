@@ -1,21 +1,25 @@
 use std::env;
 use std::env::VarError;
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
 mod api;
+mod cli;
 mod configuration;
 mod database;
 pub mod jwt;
 pub mod state;
 
 use actix_web::{middleware, web, App, HttpServer};
+use clap::Parser;
 use migration::{Migrator, MigratorTrait};
 use sea_orm::{Database, DatabaseConnection};
 use tracing::info;
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
+use crate::cli::CLIArgs;
 use crate::configuration::Config;
 use crate::database::mutation::ArgonHasher;
 use crate::jwt::JsonWebTokenManager;
@@ -48,6 +52,7 @@ pub async fn connect_and_set_up_database(config: &Config) -> Result<DatabaseConn
 async fn main() -> Result<()> {
     // TODO Integrate utoipa for OpenAPI documentation
 
+    // Initialize logging and tracing.
     if let Err(error) = env::var("RUST_LOG") {
         if error == VarError::NotPresent {
             env::set_var("RUST_LOG", "INFO");
@@ -61,14 +66,22 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(tracing_subscriber)
         .with_context(|| "Failed to set up tracing formatter.")?;
 
-    // Load configuration
-    let configuration =
-        Config::load_from_default_path().with_context(|| "Failed to load configuration.")?;
+    // Parse CLI arguments.
+    let arguments = CLIArgs::parse();
+
+    // Load configuration.
+    let configuration = match arguments.configuration_file_path.as_ref() {
+        Some(path) => Config::load_from_path(path),
+        None => Config::load_from_default_path(),
+    }
+    .with_context(|| "Failed to load configuration file.")?;
+
     info!(
         file_path = configuration.file_path.to_string_lossy().as_ref(),
         "Configuration loaded."
     );
 
+    // Initialize database connection and other static structs.
     let database = connect_and_set_up_database(&configuration).await?;
     let hasher = ArgonHasher::new(&configuration)?;
     let json_web_token_manager = JsonWebTokenManager::new(&configuration);
@@ -82,6 +95,7 @@ async fn main() -> Result<()> {
 
     // TODO CORS protection
 
+    // Initialize and start the actix HTTP server.
     #[rustfmt::skip]
     let server = HttpServer::new(
         move || {
