@@ -16,7 +16,7 @@ use sea_orm::{
 use super::super::entities::users;
 use crate::api::auth::DEFAULT_USER_PERMISSIONS;
 use crate::configuration::Config;
-use crate::database::{entities, queries};
+use crate::database::{entities, query};
 
 pub struct ArgonHasher {
     salt_string: SaltString,
@@ -67,9 +67,9 @@ pub struct UserRegistrationInfo {
     pub password: String,
 }
 
-pub struct Mutation {}
+pub struct UsersMutation {}
 
-impl Mutation {
+impl UsersMutation {
     pub async fn create_user(
         database: &DbConn,
         hasher: &ArgonHasher,
@@ -120,7 +120,7 @@ impl Mutation {
     ) -> Result<users::Model> {
         // TODO This can be further optimized by using a lower-level query.
 
-        let user = queries::users::Query::get_user_by_username(database, username)
+        let user = query::UsersQuery::get_user_by_username(database, username)
             .await?
             .ok_or_else(|| anyhow!("Invalid username, no such user."))?;
 
@@ -165,7 +165,7 @@ impl Mutation {
 
         user_with_updated_display_name.update(database).await?;
 
-        let updated_user = queries::users::Query::get_user_by_id(database, user_id)
+        let updated_user = query::UsersQuery::get_user_by_id(database, user_id)
             .await?
             .ok_or_else(|| anyhow!("BUG: No such user ID: {user_id}"))?;
 
@@ -196,7 +196,7 @@ impl Mutation {
             ));
         }
 
-        let updated_user = queries::users::Query::get_user_by_username(database, username)
+        let updated_user = query::UsersQuery::get_user_by_username(database, username)
             .await?
             .ok_or_else(|| anyhow!("BUG: No such user: {username}"))?;
 

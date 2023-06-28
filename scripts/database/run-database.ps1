@@ -3,11 +3,12 @@ Import-Module "$PSScriptRoot/PostgreSQL-Utilities.psm1"
 
 Write-Header -Title "PostgreSQL runner (non-interactive)"
 
-$BaseDatabasePath = Resolve-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath "..")
-$LogFilePath = Join-Path -Path $BaseDatabasePath -ChildPath "database.log"
-$DatabaseDataDirectory = Join-Path -Path $BaseDatabasePath -ChildPath "data"
-Write-Log -Name "Runner" -Content "Log file path: $LogFilePath"
-Write-Log -Name "Runner" -Content "Data path: $DatabaseDataDirectory"
+$BaseSourcePath = Resolve-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath "../..")
+$BaseDataDirectory = Join-Path -Path $BaseSourcePath -ChildPath "data"
+$DatabaseDataDirectory = Join-Path -Path $BaseDataDirectory -ChildPath "database"
+$LogFilePath = Join-Path -Path $BaseDataDirectory -ChildPath "database.log"
+Write-Log -Name "Initialization" -Content "Log file path: $LogFilePath"
+Write-Log -Name "Initialization" -Content "Database directory: $DatabaseDataDirectory"
 
 $PostgresPgCtlBinary = Get-PostgresBinary -BaseDirectory $PSScriptRoot -Binary "pg_ctl.exe"
 Write-Log -Name "Runner" -Content "Using pg_ctrl at $PostgresPgCtlBinary"

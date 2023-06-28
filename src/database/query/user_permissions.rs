@@ -4,9 +4,9 @@ use sea_orm::{ColumnTrait, DbConn, EntityTrait, QueryFilter};
 use crate::database::entities;
 
 #[allow(dead_code)]
-pub struct Query {}
+pub struct UserPermissionsQuery {}
 
-impl Query {
+impl UserPermissionsQuery {
     pub async fn get_user_permission_names_by_username(
         database: &DbConn,
         username: &str,

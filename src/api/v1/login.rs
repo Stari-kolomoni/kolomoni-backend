@@ -7,7 +7,7 @@ use tracing::{debug, warn};
 
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
 use crate::api::macros::DumbResponder;
-use crate::database::queries;
+use crate::database::query;
 use crate::impl_json_responder;
 use crate::jwt::{JWTClaims, JWTTokenType, JWTValidationError};
 use crate::state::AppState;
@@ -36,7 +36,7 @@ pub async fn login(
     state: web::Data<AppState>,
     login_info: web::Json<UserLoginInfo>,
 ) -> EndpointResult {
-    let is_valid_login = queries::users::Query::validate_user_credentials(
+    let is_valid_login = query::UsersQuery::validate_user_credentials(
         &state.database,
         &state.hasher,
         &login_info.username,

@@ -3,11 +3,12 @@ Import-Module "$PSScriptRoot/PostgreSQL-Utilities.psm1"
 
 Write-Header -Title "PostgreSQL database initialization"
 
-$BaseDatabasePath = Resolve-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath "..")
-$LogFilePath = Join-Path -Path $BaseDatabasePath -ChildPath "database.log"
-$DatabaseDataDirectory = Join-Path -Path $BaseDatabasePath -ChildPath "data"
+$BaseSourcePath = Resolve-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath "../..")
+$BaseDataDirectory = Join-Path -Path $BaseSourcePath -ChildPath "data"
+$DatabaseDataDirectory = Join-Path -Path $BaseDataDirectory -ChildPath "database"
+$LogFilePath = Join-Path -Path $BaseDataDirectory -ChildPath "database.log"
 Write-Log -Name "Initialization" -Content "Log file path: $LogFilePath"
-Write-Log -Name "Initialization" -Content "Data path: $DatabaseDataDirectory"
+Write-Log -Name "Initialization" -Content "Database directory: $DatabaseDataDirectory"
 
 $PostgresPgCtlBinary = Get-PostgresBinary -BaseDirectory $PSScriptRoot -Binary "pg_ctl.exe"
 $PostgresPsqlBinary = Get-PostgresBinary -BaseDirectory $PSScriptRoot -Binary "psql.exe"

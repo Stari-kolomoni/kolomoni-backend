@@ -11,7 +11,7 @@ use sea_orm::DbConn;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
 
-use crate::database::queries;
+use crate::database::query;
 use crate::jwt::{JWTClaims, JWTValidationError};
 use crate::state::AppState;
 
@@ -104,11 +104,9 @@ impl UserPermissions {
         username: &str,
     ) -> Result<Option<Self>> {
         let permission_names =
-            queries::user_permissions::Query::get_user_permission_names_by_username(
-                database, username,
-            )
-            .await
-            .with_context(|| "Failed to get user permissions from database.")?;
+            query::UserPermissionsQuery::get_user_permission_names_by_username(database, username)
+                .await
+                .with_context(|| "Failed to get user permissions from database.")?;
 
         let Some(names) = permission_names else {
             return Ok(None);
@@ -122,11 +120,9 @@ impl UserPermissions {
         user_id: i32,
     ) -> Result<Option<Self>> {
         let permission_names =
-            queries::user_permissions::Query::get_user_permission_names_by_user_id(
-                database, user_id,
-            )
-            .await
-            .with_context(|| "Failed to get user permissions from database.")?;
+            query::UserPermissionsQuery::get_user_permission_names_by_user_id(database, user_id)
+                .await
+                .with_context(|| "Failed to get user permissions from database.")?;
 
         let Some(names) = permission_names else {
             return Ok(None);

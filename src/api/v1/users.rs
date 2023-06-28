@@ -11,8 +11,8 @@ use tracing::info;
 use crate::api::auth::{UserAuth, UserPermission, UserPermissions};
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
 use crate::api::macros::DumbResponder;
-use crate::database::mutation::users::UserRegistrationInfo;
-use crate::database::{entities, mutation, queries};
+use crate::database::mutation::UserRegistrationInfo;
+use crate::database::{entities, mutation, query};
 use crate::state::AppState;
 use crate::{impl_json_responder, require_permission, response_with_reason};
 
@@ -117,7 +117,7 @@ async fn get_all_registered_users(
     require_permission!(permissions, UserPermission::UserAnyRead);
 
 
-    let all_users = queries::users::Query::get_all_users(&state.database)
+    let all_users = query::UsersQuery::get_all_users(&state.database)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -171,7 +171,7 @@ pub async fn register_user(
     json_data: web::Json<UserRegistrationData>,
 ) -> EndpointResult {
     let username_already_exists =
-        queries::users::Query::user_exists_by_username(&state.database, &json_data.username)
+        query::UsersQuery::user_exists_by_username(&state.database, &json_data.username)
             .await
             .map_err(APIError::InternalError)?;
 
@@ -183,7 +183,7 @@ pub async fn register_user(
     }
 
 
-    let new_user = mutation::users::Mutation::create_user(
+    let new_user = mutation::UsersMutation::create_user(
         &state.database,
         &state.hasher,
         json_data.clone().into(),
@@ -218,7 +218,7 @@ pub async fn get_current_user_info(
     require_permission!(permissions, UserPermission::UserSelfRead);
 
 
-    let user = queries::users::Query::get_user_by_username(&state.database, &token.username)
+    let user = query::UsersQuery::get_user_by_username(&state.database, &token.username)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(APIError::not_found)?;
@@ -284,7 +284,7 @@ async fn update_current_user_display_name(
         .await
         .map_err(APIError::InternalDatabaseError)?;
 
-    mutation::users::Mutation::update_display_name_by_username(
+    mutation::UsersMutation::update_display_name_by_username(
         &database_transaction,
         &token.username,
         json_data.new_display_name.clone(),
@@ -294,7 +294,7 @@ async fn update_current_user_display_name(
 
     // TODO Consider merging this update into all mutation methods where it makes sense.
     //      Otherwise we're wasting a round-trip to the database for no real reason.
-    let updated_user = mutation::users::Mutation::update_last_active_at_by_username(
+    let updated_user = mutation::UsersMutation::update_last_active_at_by_username(
         &database_transaction,
         &token.username,
         None,
@@ -344,7 +344,7 @@ async fn get_specific_user_info(
     require_permission!(permissions, UserPermission::UserAnyRead);
 
     // Return information about the requested user.
-    let optional_user = queries::users::Query::get_user_by_id(&state.database, requested_user_id)
+    let optional_user = query::UsersQuery::get_user_by_id(&state.database, requested_user_id)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -380,7 +380,7 @@ async fn get_specific_user_permissions(
 
     // Get user permissions.
     let optional_user_permissions =
-        queries::user_permissions::Query::get_user_permission_names_by_user_id(
+        query::UserPermissionsQuery::get_user_permission_names_by_user_id(
             &state.database,
             requested_user_id,
         )
@@ -421,7 +421,7 @@ async fn update_specific_user_display_name(
 
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
-    let current_user = queries::users::Query::get_user_by_username(&state.database, &token.username)
+    let current_user = query::UsersQuery::get_user_by_username(&state.database, &token.username)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
@@ -443,7 +443,7 @@ async fn update_specific_user_display_name(
         .await
         .map_err(APIError::InternalDatabaseError)?;
 
-    mutation::users::Mutation::update_display_name_by_user_id(
+    mutation::UsersMutation::update_display_name_by_user_id(
         &database_transaction,
         requested_user_id,
         json_data.new_display_name.clone(),
@@ -451,7 +451,7 @@ async fn update_specific_user_display_name(
     .await
     .map_err(APIError::InternalError)?;
 
-    let updated_user = mutation::users::Mutation::update_last_active_at_by_user_id(
+    let updated_user = mutation::UsersMutation::update_last_active_at_by_user_id(
         &database_transaction,
         requested_user_id,
         None,
@@ -516,7 +516,7 @@ async fn add_permissions_to_specific_user(
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
     let current_user =
-        queries::users::Query::get_user_by_username(&state.database, &current_user_token.username)
+        query::UsersQuery::get_user_by_username(&state.database, &current_user_token.username)
             .await
             .map_err(APIError::InternalError)?
             .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
@@ -566,7 +566,7 @@ async fn add_permissions_to_specific_user(
 
 
     // Add the permissions to the specified user.
-    mutation::user_permissions::Mutation::add_permissions_to_user_by_user_id(
+    mutation::UserPermissionsMutation::add_permissions_to_user_by_user_id(
         &state.database,
         requested_user_id,
         permissions_to_add,
@@ -629,7 +629,7 @@ async fn remove_permissions_from_specific_user(
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
     let current_user =
-        queries::users::Query::get_user_by_username(&state.database, &current_user_token.username)
+        query::UsersQuery::get_user_by_username(&state.database, &current_user_token.username)
             .await
             .map_err(APIError::InternalError)?
             .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
@@ -679,7 +679,7 @@ async fn remove_permissions_from_specific_user(
 
 
     // Remove the permission from the specified user.
-    mutation::user_permissions::Mutation::remove_permissions_from_user_by_user_id(
+    mutation::UserPermissionsMutation::remove_permissions_from_user_by_user_id(
         &state.database,
         requested_user_id,
         permissions_to_remove,

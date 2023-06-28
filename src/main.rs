@@ -17,7 +17,7 @@ use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 use crate::configuration::Config;
-use crate::database::mutation::users::ArgonHasher;
+use crate::database::mutation::ArgonHasher;
 use crate::jwt::JsonWebTokenManager;
 use crate::state::AppState;
 

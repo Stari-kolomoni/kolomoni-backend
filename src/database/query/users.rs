@@ -2,11 +2,11 @@ use anyhow::{Context, Result};
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
 use super::super::entities::{users, users::Entity as User};
-use crate::database::mutation::users::ArgonHasher;
+use crate::database::mutation::ArgonHasher;
 
-pub struct Query {}
+pub struct UsersQuery {}
 
-impl Query {
+impl UsersQuery {
     pub async fn get_user_by_id<C: ConnectionTrait>(
         database: &C,
         id: i32,

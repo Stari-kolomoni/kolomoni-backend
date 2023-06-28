@@ -1,7 +1,7 @@
 use sea_orm::DatabaseConnection;
 
 use crate::configuration::Config;
-use crate::database::mutation::users::ArgonHasher;
+use crate::database::mutation::ArgonHasher;
 use crate::jwt::JsonWebTokenManager;
 
 pub struct AppState {

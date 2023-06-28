@@ -5,9 +5,9 @@ use crate::api::auth::UserPermission;
 use crate::database::entities;
 
 #[allow(dead_code)]
-pub struct Mutation {}
+pub struct UserPermissionsMutation {}
 
-impl Mutation {
+impl UserPermissionsMutation {
     pub async fn add_permissions_to_user_by_user_id<C: ConnectionTrait>(
         database: &C,
         user_id: i32,

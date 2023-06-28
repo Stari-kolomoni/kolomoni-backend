@@ -19,12 +19,9 @@ Cargo.lock
 .idea
 
 
-## Database-related
-database/data
-
-
 ## Sensitive files
-database.log
-*.toml
-!*.TEMPLATE.toml
+data/database
+data/*.log
 
+data/*.toml
+data/!*.TEMPLATE.toml
