@@ -1,6 +1,5 @@
 use std::env;
 use std::env::VarError;
-use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 

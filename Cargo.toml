@@ -16,22 +16,22 @@ path = "./src/main.rs"
 
 [dependencies]
 migration = { path = "migrations" }
-serde = { version = "1.0.164", features = ["derive"] }
-serde_json = "1.0.97"
-actix-web = "4.3.1"
-tracing-actix-web = "0.7.5"
+clap = { version = "4.3.8", features = ["derive"] }
 thiserror = "1.0.40"
 anyhow = "1.0.71"
+serde = { version = "1.0.164", features = ["derive"] }
+serde_json = "1.0.97"
+serde_with = { version = "3.0.0", features = ["chrono"] }
+tokio = { version = "1.28.2", features = ["full"] }
+actix-web = "4.3.1"
+actix-utils = "3.0.1"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
+tracing-actix-web = "0.7.5"
+sea-orm = { version = "0.11.3", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros", "with-chrono" ] }
 argon2 = "0.5.0"
 dunce = "1.0.4"
 toml = "0.7.4"
-tracing = "0.1.37"
-tracing-subscriber = "0.3.17"
-sea-orm = { version = "^0", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros", "with-chrono" ] }
-utoipa = { version = "3.3.0", features = ["actix_extras"] }
-tokio = { version = "1.28.2", features = ["full"] }
 chrono = "0.4.26"
 jsonwebtoken = "8.3.0"
-serde_with = { version = "3.0.0", features = ["chrono"] }
-actix-utils = "3.0.1"
-clap = { version = "4.3.8", features = ["derive"] }
+utoipa = { version = "3.3.0", features = ["actix_extras"] }
