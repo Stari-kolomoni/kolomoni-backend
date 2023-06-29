@@ -81,7 +81,7 @@ is available on [docs.rs - sea_orm_migration::manager::SchemaManager](https://do
 > ```
 
 
-### 2.5.2 Define the entity
+#### 2.5.2 Define the entity
 Define the entity that matches your newly-created migration by creating a new file in `src/database/entities`. Look at existing entities for examples.
 
 > **It is important that each entity has its own file and that names like `Model`, `Relation` and `ActiveModel` stay as is** - this 
@@ -90,7 +90,7 @@ Define the entity that matches your newly-created migration by creating a new fi
 > if you're curious for what that expands to, [SeaORM - Expanded Entity Structure](https://www.sea-ql.org/SeaORM/docs/generate-entity/expanded-entity-structure/).
 
 
-### 2.4.2 Define relevant `Query` and `Mutation` methods
+#### 2.5.3 Define relevant `Query` and `Mutation` methods
 This is not enforced by SeaORM, but **actix routes and most other things aren't supposed to touch the defined entities in `database::entities` directly**.
 
 Instead, here is a pattern for accessing and modifying anything in the database (names are examples):
@@ -101,3 +101,8 @@ Instead, here is a pattern for accessing and modifying anything in the database 
 Familiarize yourself with examples on existing mutation and query structs. As a general rule, it probably makes sense to write query and mutation methods as we grow the application to need them, and *not* every operation up front after defining the entity.
 
 As for the SeaORM documentation related to fetching and updating database data, the [SeaORM - Basic CRUD](https://www.sea-ql.org/SeaORM/docs/basic-crud/basic-schema/) chapter might be of much help.
+
+
+### 2.6 `actix-web` and `EndpointResult`/`APIError` examples
+We've introduced a few new types to easily `?`-return common `Result` errors,
+see documentation for `api::v1::errors::APIError` for more information.

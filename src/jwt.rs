@@ -113,7 +113,7 @@ impl JsonWebTokenManager {
 
         let mut validation = Validation::new(Algorithm::HS256);
 
-        /// Validate issuer and subject automatically when decoding.
+        // Validate issuer and subject automatically when decoding.
         validation.set_issuer(&[JWT_ISSUER]);
         validation.sub = Some(JWT_SUBJECT.to_string());
 
