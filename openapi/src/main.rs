@@ -23,11 +23,23 @@ use utoipa_swagger_ui::SwaggerUi;
         login::login,
         login::refresh_login,
         users::get_all_registered_users,
-        users::register_user
+        users::register_user,
+        users::get_current_user_info,
+        users::get_current_user_permissions,
+        users::update_current_user_display_name,
+        users::get_specific_user_info,
+        users::get_specific_user_permissions,
+        users::update_specific_user_display_name,
+        users::add_permissions_to_specific_user,
+        users::remove_permissions_from_specific_user,
     ),
     components(
         schemas(
             users::UserInformation,
+            users::UserInfoResponse,
+            users::UserPermissionsResponse,
+            users::UserDisplayNameChangeRequest,
+            users::UserDisplayNameChangeResponse,
             errors::ErrorReasonResponse
         ),
     ),

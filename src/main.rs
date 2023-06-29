@@ -1,6 +1,7 @@
 use std::env;
 use std::env::VarError;
 
+use actix_cors::Cors;
 use anyhow::{Context, Result};
 
 mod api;
@@ -49,8 +50,6 @@ pub async fn connect_and_set_up_database(config: &Config) -> Result<DatabaseConn
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // TODO Integrate utoipa for OpenAPI documentation
-
     // Initialize logging and tracing.
     if let Err(error) = env::var("RUST_LOG") {
         if error == VarError::NotPresent {
@@ -80,6 +79,8 @@ async fn main() -> Result<()> {
         "Configuration loaded."
     );
 
+    // TODO Introduce request rate-limiting.
+
     // Initialize database connection and other static structs.
     let database = connect_and_set_up_database(&configuration).await?;
     let hasher = ArgonHasher::new(&configuration)?;
@@ -92,17 +93,19 @@ async fn main() -> Result<()> {
         jwt_manager: json_web_token_manager,
     });
 
-    // TODO CORS protection
-
     // Initialize and start the actix HTTP server.
     #[rustfmt::skip]
     let server = HttpServer::new(
         move || {
             // Maximum configured JSON payload size is 1 MB.
             let json_extractor_config = web::JsonConfig::default().limit(1048576);
+
+            // FIXME Modify permissive CORS to something more safe in production.
+            let cors = Cors::permissive();
             
             App::new()
                 .wrap(middleware::NormalizePath::trim())
+                .wrap(cors)
                 .wrap(TracingLogger::default())
                 .service(api::api_router())
                 .app_data(json_extractor_config)

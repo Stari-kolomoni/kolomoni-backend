@@ -159,6 +159,9 @@ impl_json_responder!(RegisteredUsersListResponse);
             status = 500,
             description = "Internal server error."
         )
+    ),
+    security(
+        ("access_token" = [])
     )
 )]
 #[get("")]
@@ -197,8 +200,6 @@ async fn get_all_registered_users(
 /*
  * POST /
  */
-
-// TODO Continue with OpenAPI documentation.
 
 /// User registration information.
 #[derive(Deserialize, Clone, Debug, ToSchema)]
@@ -247,7 +248,7 @@ impl_json_responder!(UserRegistrationResponse);
         example = json!({
             "username": "janeznovak",
             "display_name": "Janez Novak",
-            "password": "perica_raci_reže_rep"
+            "password": "perica_reže_raci_rep"
         })
     ),
     responses(
@@ -338,6 +339,52 @@ pub async fn register_user(
  * GET /me
  */
 
+/// Get current user's information
+///
+/// *This endpoint requires the `users.self:read` permission.*
+#[utoipa::path(
+    get,
+    path = "/users/me",
+    tag = "self",
+    responses(
+        (
+            status = 200,
+            description = "Information about current user.",
+            body = UserInfoResponse,
+            example = json!({
+                "user": {
+                    "id": 1,
+                    "username": "janeznovak",
+                    "display_name": "Janez Novak",
+                    "joined_at": "2023-06-27T20:33:53.078789Z",
+                    "last_modified_at": "2023-06-27T20:34:27.217273Z",
+                    "last_active_at": "2023-06-27T20:34:27.253746Z"
+                }
+            })
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Missing `user.self:read` permission.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Missing permission: user.self:read." })
+        ),
+        (
+            status = 404,
+            description = "The user no longer exists."
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
 #[get("/me")]
 pub async fn get_current_user_info(
     user_auth: UserAuth,
@@ -368,6 +415,45 @@ pub async fn get_current_user_info(
  * GET /me/permissions
  */
 
+/// Get current user's permissions
+///
+/// *This endpoint requires the `users.self:read` permission.*
+#[utoipa::path(
+    get,
+    path = "/users/me/permissions",
+    tag = "self",
+    responses(
+        (
+            status = 200,
+            description = "A list of your permissions.",
+            body = UserPermissionsResponse,
+            example = json!({
+                "permissions": [
+                    "user.self:read",
+                    "user.self:write",
+                    "user.any:read"
+                ]
+            })
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Missing `user.self:read` permission.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Missing permission: user.self:read." })
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
 #[get("/me/permissions")]
 async fn get_current_user_permissions(
     user_auth: UserAuth,
@@ -394,14 +480,69 @@ async fn get_current_user_permissions(
  * PATCH /me/display_name
  */
 
+/// Change current user's display name
+///
+/// This endpoint allows you to change your display name. Note that the display name
+/// must be unique across all of the users, so your request may be denied with a `409 Conflict`.
+///
+/// *This endpoint requires the `users.self:write` permission.*
+#[utoipa::path(
+    patch,
+    path = "/users/me/display_name",
+    tag = "self",
+    request_body(
+        content = UserDisplayNameChangeRequest,
+        example = json!({
+            "new_display_name": "Janez Novak Veliki"
+        })
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Your display name has been changed.",
+            body = UserDisplayNameChangeResponse,
+            example = json!({
+                "user": {
+                "id": 1,
+                "username": "janeznovak",
+                "display_name": "Janez Novak Veliki",
+                "joined_at": "2023-06-27T20:33:53.078789Z",
+                "last_modified_at": "2023-06-27T20:44:27.217273Z",
+                "last_active_at": "2023-06-27T20:34:27.253746Z"
+                }
+            })
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Missing `user.self:write` permission.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Missing permission: user.self:write." })
+        ),
+        (
+            status = 409,
+            description = "User with given display name already exists.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "User with given display name already exists." })
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
 #[patch("/me/display_name")]
 async fn update_current_user_display_name(
     user_auth: UserAuth,
     state: web::Data<AppState>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
-    // TODO Rate-limiting.
-
     let (token, permissions) = user_auth
         .token_and_permissions_if_authenticated(&state.database)
         .await
@@ -418,6 +559,22 @@ async fn update_current_user_display_name(
         .begin()
         .await
         .map_err(APIError::InternalDatabaseError)?;
+
+
+    let display_name_already_exists = query::UsersQuery::user_exists_by_display_name(
+        &database_transaction,
+        &json_data.new_display_name,
+    )
+    .await
+    .map_err(APIError::InternalError)?;
+
+    if display_name_already_exists {
+        return Ok(response_with_reason!(
+            StatusCode::CONFLICT,
+            "User with given display name already exists."
+        ));
+    }
+
 
     mutation::UsersMutation::update_display_name_by_username(
         &database_transaction,
@@ -461,6 +618,58 @@ async fn update_current_user_display_name(
  * GET /{user_id}
  */
 
+/// Get a specific user's information
+///
+/// This is a generic version of the `GET /users/me` endpoint, allowing you to see information
+/// about users other than yourself.
+///
+/// *This endpoint requires the `users.any:read` permission.*
+#[utoipa::path(
+    get,
+    path = "/users/{user_id}",
+    tag = "users",
+    params(
+        ("user_id" = i32, Path, description = "ID of the user to get information about.")
+    ),
+    responses(
+        (
+            status = 200,
+            description = "User information.",
+            body = UserInfoResponse,
+            example = json!({
+                "user": {
+                    "id": 1,
+                    "username": "janeznovak",
+                    "display_name": "Janez Novak",
+                    "joined_at": "2023-06-27T20:33:53.078789Z",
+                    "last_modified_at": "2023-06-27T20:34:27.217273Z",
+                    "last_active_at": "2023-06-27T20:34:27.253746Z"
+                }
+            })
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Missing `user.any:read` permission.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Missing permission: user.any:read." })
+        ),
+        (
+            status = 404,
+            description = "Requested user does not exist."
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
 #[get("/{user_id}")]
 async fn get_specific_user_info(
     user_auth: UserAuth,
@@ -493,9 +702,58 @@ async fn get_specific_user_info(
 
 
 /*
- * GET /{id}/permissions
+ * GET /{user_id}/permissions
  */
 
+/// Get a specific user's permissions
+///
+/// This is a generic version of the `GET /users/me/permissions` endpoint, allowing you
+/// to see others' permissions.
+///
+/// *This endpoint requires the `users.any:read` permission.*
+#[utoipa::path(
+    get,
+    path = "/users/{user_id}/permissions",
+    tag = "users",
+    params(
+        ("user_id" = i32, Path, description = "ID of the user to get permissions for.")
+    ),
+    responses(
+        (
+            status = 200,
+            description = "User permissions.",
+            body = UserPermissionsResponse,
+            example = json!({
+                "permissions": [
+                    "user.self:read",
+                    "user.self:write",
+                    "user.any:read"
+                ]
+            })
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Missing `user.any:read` permission.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Missing permission: user.any:read." })
+        ),
+        (
+            status = 404,
+            description = "Requested user does not exist."
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
 #[get("/{user_id}/permissions")]
 async fn get_specific_user_permissions(
     user_auth: UserAuth,
@@ -535,6 +793,66 @@ async fn get_specific_user_permissions(
  * PATCH /{user_id}/display_name
  */
 
+/// Update a specific user's display name
+///
+/// This is generic version of the `PATCH /users/me/display_name` endpoint, allowing a user
+/// with enough permissions to modify another user's display name.
+///
+/// *This endpoint requires the `users.any:write` permission.*
+#[utoipa::path(
+    patch,
+    path = "/users/{user_id}/display_name",
+    tag = "users",
+    params(
+        ("user_id" = i32, Path, description = "User ID.")
+    ),
+    request_body(
+        content = UserDisplayNameChangeRequest,
+        example = json!({
+            "new_display_name": "Janez Novak Veliki"
+        })
+    ),
+    responses(
+        (
+            status = 200,
+            description = "User's display name changed.",
+            body = UserDisplayNameChangeResponse,
+            example = json!({
+                "user": {
+                    "id": 1,
+                    "username": "janeznovak",
+                    "display_name": "Janez Novak Veliki",
+                    "joined_at": "2023-06-27T20:33:53.078789Z",
+                    "last_modified_at": "2023-06-27T20:44:27.217273Z",
+                    "last_active_at": "2023-06-27T20:34:27.253746Z"
+                }
+            })
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Missing `user.any:write` permission.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Missing permission: user.any:write." })
+        ),
+        (
+            status = 409,
+            description = "User with given display name already exists.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "User with given display name already exists." })
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
 #[patch("/{user_id}/display_name")]
 async fn update_specific_user_display_name(
     user_auth: UserAuth,
@@ -578,6 +896,22 @@ async fn update_specific_user_display_name(
         .await
         .map_err(APIError::InternalDatabaseError)?;
 
+
+    let display_name_already_exists = query::UsersQuery::user_exists_by_display_name(
+        &database_transaction,
+        &json_data.new_display_name,
+    )
+    .await
+    .map_err(APIError::InternalError)?;
+
+    if display_name_already_exists {
+        return Ok(response_with_reason!(
+            StatusCode::CONFLICT,
+            "User with given display name already exists."
+        ));
+    }
+
+
     mutation::UsersMutation::update_display_name_by_user_id(
         &database_transaction,
         requested_user_id,
@@ -619,18 +953,88 @@ async fn update_specific_user_display_name(
  * POST /{user_id}/permissions
  */
 
-#[derive(Deserialize)]
-pub struct UserPermissionAddRequest {
+#[derive(Deserialize, ToSchema)]
+pub struct UserPermissionsAddRequest {
     pub permissions_to_add: Vec<String>,
 }
 
 
+/// Add permissions to user
+///
+/// This endpoint allows users with enough permissions to add specific permissions to others.
+/// You can add a specific permission to the requested user *only if you have that permission*.
+/// If you do not, your request will be denied with a `403 Forbidden`.
+///
+/// *This endpoint requires the `users.any:write` permission.*
+#[utoipa::path(
+    post,
+    path = "/users/{user_id}/permissions",
+    params(
+        ("user_id" = i32, Path, description = "ID of the user to add permissions to.")
+    ),
+    request_body(
+        content = inline(UserPermissionsAddRequest),
+        example = json!({
+            "permissions_to_add": ["user.any:read", "user.any:write"]
+        })
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Updated user permission list.",
+            body = UserPermissionsResponse,
+            example = json!({
+                "permissions": [
+                    "user.self:read",
+                    "user.self:write",
+                    "user.any:read"
+                ]
+            })
+        ),
+        (
+            status = 400,
+            description = "Invalid permission name.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "No such permission: \"non.existent:permission\"." })
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Not allowed to modify.",
+            body = ErrorReasonResponse,
+            examples(
+                ("Missing user.any:write permission" = (
+                    summary = "Missing user.any:write permission.",
+                    value = json!({ "reason": "Missing permission: user.any:write." })
+                )),
+                ("Can't give permission you don't have" = (
+                    summary = "Can't give permission you don't have.",
+                    value = json!({ "reason": "You are not allowed to add the user.any:read permission to other users." })
+                )),
+                ("Can't modify yourself" = (
+                    summary = "You're not allowed to modify your own account.",
+                    value = json!({ "reason": "Can't modify your own account on this endpoint." })
+                ))
+            )
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
 #[post("/{user_id}/permissions")]
 async fn add_permissions_to_specific_user(
     user_auth: UserAuth,
     path_info: web::Path<(i32,)>,
     state: web::Data<AppState>,
-    json_data: web::Json<UserPermissionAddRequest>,
+    json_data: web::Json<UserPermissionsAddRequest>,
 ) -> EndpointResult {
     let requested_user_id = path_info.into_inner().0;
 
@@ -679,7 +1083,7 @@ async fn add_permissions_to_specific_user(
         Err(non_existent_permission_name) => {
             return Ok(response_with_reason!(
                 StatusCode::BAD_REQUEST,
-                format!("No such permission: {non_existent_permission_name}")
+                format!("No such permission: \"{non_existent_permission_name}\".")
             ))
         }
     };
@@ -733,17 +1137,87 @@ async fn add_permissions_to_specific_user(
  * DELETE /{user_id}/permissions
  */
 
-#[derive(Deserialize)]
-pub struct UserPermissionRemoveRequest {
+#[derive(Deserialize, ToSchema)]
+pub struct UserPermissionsRemoveRequest {
     pub permissions_to_remove: Vec<String>,
 }
 
+/// Remove permissions from user
+///
+/// This endpoint allows user with enough permissions to remove specific permissions from others.
+/// You can remove a specific permission from the requested user *only if you also have that permission*.
+/// If you do not, your request will be denied with a `403 Forbidden`.
+///
+/// *This endpoint requires the `users.any:write` permission.*
+#[utoipa::path(
+    delete,
+    path = "/users/{user_id}/permissions",
+    params(
+        ("user_id" = i32, Path, description = "ID of the user to remove permissions from.")
+    ),
+    request_body(
+        content = inline(UserPermissionsRemoveRequest),
+        example = json!({
+            "permissions_to_remove": ["user.any:write"], 
+        })
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Updated user permission list.",
+            body = UserPermissionsResponse,
+            example = json!({
+                "permissions": [
+                    "user.self:read",
+                    "user.self:write",
+                    "user.any:read"
+                ]
+            })
+        ),
+        (
+            status = 400,
+            description = "Invalid permission name.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "No such permission: \"non.existent:permission\"." })
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Not allowed to modify.",
+            body = ErrorReasonResponse,
+            examples(
+                ("Missing user.any:write permission" = (
+                    summary = "Missing user.any:write permission.",
+                    value = json!({ "reason": "Missing permission: user.any:write." })
+                )),
+                ("Can't remove permission you don't have" = (
+                    summary = "Can't remove permission you don't have.",
+                    value = json!({ "reason": "You are not allowed to remove the user.any:read permission from other users." })
+                )),
+                ("Can't modify yourself" = (
+                    summary = "You're not allowed to modify your own account.",
+                    value = json!({ "reason": "Can't modify your own account on this endpoint." })
+                ))
+            )
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
 #[delete("/{user_id}/permissions")]
 async fn remove_permissions_from_specific_user(
     user_auth: UserAuth,
     path_info: web::Path<(i32,)>,
     state: web::Data<AppState>,
-    json_data: web::Json<UserPermissionRemoveRequest>,
+    json_data: web::Json<UserPermissionsRemoveRequest>,
 ) -> EndpointResult {
     let requested_user_id = path_info.into_inner().0;
 

@@ -65,9 +65,9 @@ macro_rules! not_found_error_with_reason {
     };
 }
 
-/// A macro that early-returns an `APIError::missing_specific_permission` if the given permissions
-/// struct doesn't have the required permission. This generates a `403 Forbidden` with JSON-encoded
-/// details in the body of the response (see `APIError` for more information).
+/// A macro that early-returns an `Err(APIError::missing_specific_permission)` if the given permissions
+/// struct doesn't have the required permission. This essentially generates a `403 Forbidden`
+/// with JSON-encoded reasons in the body of the response (see `APIError` for more information).
 ///
 /// The first argument is the `UserPermissions` struct.
 /// The second argument is the permission you require (`UserPermission` variant).
