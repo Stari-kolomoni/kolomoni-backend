@@ -58,7 +58,7 @@ impl UserInformation {
 }
 
 
-
+/// Information about a single user.
 #[derive(Serialize, Debug, ToSchema)]
 pub struct UserInfoResponse {
     pub user: UserInformation,
@@ -76,12 +76,15 @@ impl_json_responder!(UserInfoResponse);
 
 
 
+/// Request to change a user's display name.
 #[derive(Deserialize, Clone, Debug, ToSchema)]
 pub struct UserDisplayNameChangeRequest {
     pub new_display_name: String,
 }
 
 
+/// Response indicating successful change of a display name.
+/// Contains the updated user information.
 #[derive(Serialize, Debug, ToSchema)]
 pub struct UserDisplayNameChangeResponse {
     pub user: UserInformation,
@@ -90,6 +93,7 @@ pub struct UserDisplayNameChangeResponse {
 impl_json_responder!(UserDisplayNameChangeResponse);
 
 
+/// Response containing a list of active permissions.
 #[derive(Serialize, Debug, ToSchema)]
 pub struct UserPermissionsResponse {
     pub permissions: Vec<String>,
@@ -100,7 +104,7 @@ impl_json_responder!(UserPermissionsResponse);
 
 
 /*
- * GET /
+ * GET /users
  */
 
 /// List of registered users.
@@ -111,8 +115,9 @@ pub struct RegisteredUsersListResponse {
 
 impl_json_responder!(RegisteredUsersListResponse);
 
-
-// Development note: we use "" instead of "/" below (in `#[get("")`) and in other places
+// # Development note
+//
+// We use "" instead of "/" below (in `#[get("")`) and in other places
 // because this allows the user to request `GET /api/v1/users` OR `GET /api/v1/users/` and
 // get the correct endpoint both times.
 //
@@ -169,16 +174,18 @@ async fn get_all_registered_users(
     user_auth: UserAuth,
     state: web::Data<AppState>,
 ) -> EndpointResult {
+    // User must provide the authentication token and
+    // have the `user.any:read` permission to access this endpoint.
     let (_, permissions) = user_auth
         .token_and_permissions_if_authenticated(&state.database)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    // User must have the `user.any:read` permission to access this endpoint.
     require_permission!(permissions, UserPermission::UserAnyRead);
 
 
+    // Load all users from the database and parse them info `UserInformation` instances.
     let all_users = query::UsersQuery::get_all_users(&state.database)
         .await
         .map_err(APIError::InternalError)?;
@@ -198,10 +205,10 @@ async fn get_all_registered_users(
 
 
 /*
- * POST /
+ * POST /users
  */
 
-/// User registration information.
+/// User registration request.
 #[derive(Deserialize, Clone, Debug, ToSchema)]
 pub struct UserRegistrationRequest {
     /// Username to register as (not the same as the display name).
@@ -214,6 +221,8 @@ pub struct UserRegistrationRequest {
     pub password: String,
 }
 
+/// Conversion into the backend-specific struct for registration
+/// (`database::mutation::users::UserRegistrationInfo`).
 impl From<UserRegistrationRequest> for UserRegistrationInfo {
     fn from(value: UserRegistrationRequest) -> Self {
         Self {
@@ -224,7 +233,8 @@ impl From<UserRegistrationRequest> for UserRegistrationInfo {
     }
 }
 
-
+/// Response on successful user registration.
+/// Contains the newly-created user information.
 #[derive(Serialize, Debug, ToSchema)]
 pub struct UserRegistrationResponse {
     pub user: UserInformation,
@@ -293,6 +303,7 @@ pub async fn register_user(
     state: web::Data<AppState>,
     json_data: web::Json<UserRegistrationRequest>,
 ) -> EndpointResult {
+    // Ensure the provided username is unique.
     let username_already_exists =
         query::UsersQuery::user_exists_by_username(&state.database, &json_data.username)
             .await
@@ -306,6 +317,7 @@ pub async fn register_user(
     }
 
 
+    // Ensure the provided display name is unique.
     let display_name_already_exists =
         query::UsersQuery::user_exists_by_display_name(&state.database, &json_data.display_name)
             .await
@@ -319,6 +331,7 @@ pub async fn register_user(
     }
 
 
+    // Create new user.
     let new_user = mutation::UsersMutation::create_user(
         &state.database,
         &state.hasher,
@@ -336,7 +349,7 @@ pub async fn register_user(
 
 
 /*
- * GET /me
+ * GET /users/me
  */
 
 /// Get current user's information
@@ -390,16 +403,18 @@ pub async fn get_current_user_info(
     user_auth: UserAuth,
     state: web::Data<AppState>,
 ) -> EndpointResult {
+    // User must provide an authentication token and
+    // have the `user.self:read` permission to access this endpoint.
     let (token, permissions) = user_auth
         .token_and_permissions_if_authenticated(&state.database)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    // User must have the `user.self:read` permission to access this endpoint.
     require_permission!(permissions, UserPermission::UserSelfRead);
 
 
+    // Load user from database.
     let user = query::UsersQuery::get_user_by_username(&state.database, &token.username)
         .await
         .map_err(APIError::InternalError)?
@@ -412,7 +427,7 @@ pub async fn get_current_user_info(
 
 
 /*
- * GET /me/permissions
+ * GET /users/me/permissions
  */
 
 /// Get current user's permissions
@@ -459,17 +474,19 @@ async fn get_current_user_permissions(
     user_auth: UserAuth,
     state: web::Data<AppState>,
 ) -> EndpointResult {
+    // User must be authenticated and
+    // have the `user.self:read` permission to access this endpoint.
     let permissions = user_auth
         .permissions_if_authenticated(&state.database)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    // User must have the `user.self:read` permission to access this endpoint.
     require_permission!(permissions, UserPermission::UserSelfRead);
 
+
     Ok(UserPermissionsResponse {
-        permissions: permissions.to_vec_of_permission_names(),
+        permissions: permissions.to_permission_names(),
     }
     .into_response())
 }
@@ -477,7 +494,7 @@ async fn get_current_user_permissions(
 
 
 /*
- * PATCH /me/display_name
+ * PATCH /users/me/display_name
  */
 
 /// Change current user's display name
@@ -543,17 +560,18 @@ async fn update_current_user_display_name(
     state: web::Data<AppState>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
+    // User must be authenticated and
+    // have the `user.self:write` permission to access this endpoint.
     let (token, permissions) = user_auth
         .token_and_permissions_if_authenticated(&state.database)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    // Users must have the `user.self:write` permission to access this endpoint.
     require_permission!(permissions, UserPermission::UserSelfWrite);
 
-    let json_data = json_data.into_inner();
 
+    let json_data = json_data.into_inner();
     let database_transaction = state
         .database
         .begin()
@@ -561,6 +579,7 @@ async fn update_current_user_display_name(
         .map_err(APIError::InternalDatabaseError)?;
 
 
+    // Ensure the display name is unique.
     let display_name_already_exists = query::UsersQuery::user_exists_by_display_name(
         &database_transaction,
         &json_data.new_display_name,
@@ -576,6 +595,7 @@ async fn update_current_user_display_name(
     }
 
 
+    // Update user in the database.
     mutation::UsersMutation::update_display_name_by_username(
         &database_transaction,
         &token.username,
@@ -615,7 +635,7 @@ async fn update_current_user_display_name(
 
 
 /*
- * GET /{user_id}
+ * GET /users/{user_id}
  */
 
 /// Get a specific user's information
@@ -676,9 +696,7 @@ async fn get_specific_user_info(
     path_info: web::Path<(i32,)>,
     state: web::Data<AppState>,
 ) -> EndpointResult {
-    let requested_user_id = path_info.into_inner().0;
-
-    // Only authenticated users with the `user.any:read` permission to access this endpoint.
+    // Only authenticated users with the `user.any:read` permission can access this endpoint.
     let permissions = user_auth
         .permissions_if_authenticated(&state.database)
         .await
@@ -687,12 +705,16 @@ async fn get_specific_user_info(
 
     require_permission!(permissions, UserPermission::UserAnyRead);
 
-    // Return information about the requested user.
-    let optional_user = query::UsersQuery::get_user_by_id(&state.database, requested_user_id)
-        .await
-        .map_err(APIError::InternalError)?;
 
-    let Some(user) = optional_user else {
+    // Return information about the requested user.
+    let requested_user_id = path_info.into_inner().0;
+
+    let optional_requested_user =
+        query::UsersQuery::get_user_by_id(&state.database, requested_user_id)
+            .await
+            .map_err(APIError::InternalError)?;
+
+    let Some(user) = optional_requested_user else {
         return Ok(HttpResponse::NotFound().finish());
     };
 
@@ -702,7 +724,7 @@ async fn get_specific_user_info(
 
 
 /*
- * GET /{user_id}/permissions
+ * GET /users/{user_id}/permissions
  */
 
 /// Get a specific user's permissions
@@ -760,9 +782,7 @@ async fn get_specific_user_permissions(
     path_info: web::Path<(i32,)>,
     state: web::Data<AppState>,
 ) -> EndpointResult {
-    let requested_user_id = path_info.into_inner().0;
-
-    // Only authenticated users with the `user.any:read` permission to access this endpoint.
+    // Only authenticated users with the `user.any:read` permission can access this endpoint.
     let permissions = user_auth
         .permissions_if_authenticated(&state.database)
         .await
@@ -771,7 +791,10 @@ async fn get_specific_user_permissions(
 
     require_permission!(permissions, UserPermission::UserAnyRead);
 
-    // Get user permissions.
+
+    // Get requested user's permissions.
+    let requested_user_id = path_info.into_inner().0;
+
     let optional_user_permissions =
         query::UserPermissionsQuery::get_user_permission_names_by_user_id(
             &state.database,
@@ -860,8 +883,6 @@ async fn update_specific_user_display_name(
     state: web::Data<AppState>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
-    let requested_user_id = path_info.into_inner().0;
-
     // Only authenticated users with the `user.any:write` permission can modify
     // others' display names. Intended for moderation tooling.
     let (token, permissions) = user_auth
@@ -874,6 +895,8 @@ async fn update_specific_user_display_name(
 
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
+    let requested_user_id = path_info.into_inner().0;
+
     let current_user = query::UsersQuery::get_user_by_username(&state.database, &token.username)
         .await
         .map_err(APIError::InternalError)?
@@ -888,8 +911,6 @@ async fn update_specific_user_display_name(
 
 
     let json_data = json_data.into_inner();
-
-
     let database_transaction = state
         .database
         .begin()
@@ -897,6 +918,7 @@ async fn update_specific_user_display_name(
         .map_err(APIError::InternalDatabaseError)?;
 
 
+    // Modify requested user's display name.
     let display_name_already_exists = query::UsersQuery::user_exists_by_display_name(
         &database_transaction,
         &json_data.new_display_name,
@@ -912,6 +934,7 @@ async fn update_specific_user_display_name(
     }
 
 
+    // Update requested user's display name.
     mutation::UsersMutation::update_display_name_by_user_id(
         &database_transaction,
         requested_user_id,
@@ -950,9 +973,10 @@ async fn update_specific_user_display_name(
 
 
 /*
- * POST /{user_id}/permissions
+ * POST /users/{user_id}/permissions
  */
 
+/// Request containing list of permissions to add.
 #[derive(Deserialize, ToSchema)]
 pub struct UserPermissionsAddRequest {
     pub permissions_to_add: Vec<String>,
@@ -1036,8 +1060,6 @@ async fn add_permissions_to_specific_user(
     state: web::Data<AppState>,
     json_data: web::Json<UserPermissionsAddRequest>,
 ) -> EndpointResult {
-    let requested_user_id = path_info.into_inner().0;
-
     // Only authenticated users with the `user.any:write` permission can add permissions
     // to other users, but only if they also have the requested permission.
     // Intended for moderation tooling.
@@ -1051,6 +1073,10 @@ async fn add_permissions_to_specific_user(
         current_user_permissions,
         UserPermission::UserAnyWrite
     );
+
+
+    let requested_user_id = path_info.into_inner().0;
+    let json_data = json_data.into_inner();
 
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
@@ -1067,8 +1093,6 @@ async fn add_permissions_to_specific_user(
         ));
     }
 
-
-    let json_data = json_data.into_inner();
 
     let permissions_to_add_result: Result<Vec<UserPermission>, &str> = json_data
         .permissions_to_add
@@ -1126,7 +1150,7 @@ async fn add_permissions_to_specific_user(
 
 
     Ok(UserPermissionsResponse {
-        permissions: updated_permission_list.to_vec_of_permission_names(),
+        permissions: updated_permission_list.to_permission_names(),
     }
     .into_response())
 }
@@ -1134,9 +1158,10 @@ async fn add_permissions_to_specific_user(
 
 
 /*
- * DELETE /{user_id}/permissions
+ * DELETE /users/{user_id}/permissions
  */
 
+/// Request to remove a list of permissions.
 #[derive(Deserialize, ToSchema)]
 pub struct UserPermissionsRemoveRequest {
     pub permissions_to_remove: Vec<String>,
@@ -1219,8 +1244,6 @@ async fn remove_permissions_from_specific_user(
     state: web::Data<AppState>,
     json_data: web::Json<UserPermissionsRemoveRequest>,
 ) -> EndpointResult {
-    let requested_user_id = path_info.into_inner().0;
-
     // Only authenticated users with the `user.any:write` permission can remove permissions
     // from other users, but not those that they themselves don't have.
     // Intended for moderation tooling.
@@ -1234,6 +1257,10 @@ async fn remove_permissions_from_specific_user(
         current_user_permissions,
         UserPermission::UserAnyWrite
     );
+
+
+    let requested_user_id = path_info.into_inner().0;
+    let json_data = json_data.into_inner();
 
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
@@ -1250,8 +1277,6 @@ async fn remove_permissions_from_specific_user(
         ));
     }
 
-
-    let json_data = json_data.into_inner();
 
     let permissions_to_remove_result: Result<Vec<UserPermission>, &str> = json_data
         .permissions_to_remove
@@ -1309,7 +1334,7 @@ async fn remove_permissions_from_specific_user(
 
 
     Ok(UserPermissionsResponse {
-        permissions: updated_permission_list.to_vec_of_permission_names(),
+        permissions: updated_permission_list.to_permission_names(),
     }
     .into_response())
 }

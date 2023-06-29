@@ -15,8 +15,9 @@ use crate::database::query;
 use crate::jwt::{JWTClaims, JWTValidationError};
 use crate::state::AppState;
 
-// User permissions that we have (inspired by the scope system in OAuth).
-// The defined permissions must match with the `*_seed_permissions.rs` file in `migrations`!
+/// User permissions that we have (inspired by the scope system in OAuth).
+///
+/// **The defined permissions must match with the `*_seed_permissions.rs` file in `migrations`!**
 #[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum UserPermission {
@@ -32,7 +33,8 @@ pub enum UserPermission {
     #[serde(rename = "user.any:read")]
     UserAnyRead,
 
-    /// Allows the user to update public account information of any other user.
+    /// Allows the user to update public account information of any other user and
+    /// give or remove their permissions.
     #[serde(rename = "user.any:write")]
     UserAnyWrite,
 }
@@ -75,11 +77,15 @@ pub const DEFAULT_USER_PERMISSIONS: [UserPermission; 3] = [
 ];
 
 
+
+/// Set of permissions for a specific user.
 pub struct UserPermissions {
     permissions: HashSet<UserPermission>,
 }
 
 impl UserPermissions {
+    /// Initialize `UserPermissions` given a `Vec` of permission names.
+    /// Returns `Err` if a permission name doesn't resolve to a `UserPermission`.
     pub fn from_permission_names(permission_names: Vec<String>) -> Result<Self> {
         let permissions = permission_names
             .into_iter()
@@ -92,13 +98,8 @@ impl UserPermissions {
         Ok(Self { permissions })
     }
 
-    pub fn to_vec_of_permission_names(&self) -> Vec<String> {
-        self.permissions
-            .iter()
-            .map(|permission| permission.to_name().to_string())
-            .collect()
-    }
-
+    /// Initialize `UserPermissions` by loading permissions from
+    /// the database.
     pub async fn get_from_database_by_username(
         database: &DbConn,
         username: &str,
@@ -115,6 +116,8 @@ impl UserPermissions {
         Ok(Some(Self::from_permission_names(names)?))
     }
 
+    /// Initialize `UserPermissions` by loading permissions from
+    /// the database.
     pub async fn get_from_database_by_user_id(
         database: &DbConn,
         user_id: i32,
@@ -131,18 +134,41 @@ impl UserPermissions {
         Ok(Some(Self::from_permission_names(names)?))
     }
 
+    /// Returns `true` if the user has the specified permission.
     pub fn has_permission(&self, permission: UserPermission) -> bool {
         self.permissions.contains(&permission)
+    }
+
+    /// Returns a `Vec` of permission names (inverse of `from_permission_names`).
+    pub fn to_permission_names(&self) -> Vec<String> {
+        self.permissions
+            .iter()
+            .map(|permission| permission.to_name().to_string())
+            .collect()
     }
 }
 
 
+/// User authentication state. Holding this struct doesn't automatically mean
+/// the user is authenticated (see the enum variants).
+///
+/// ## Use in actix-web
+/// To easily extract authentication and permission data on an endpoint handler,
+/// `UserAuth` can be an extractor (https://actix.rs/docs/extractors). Simply
+/// add a `user_auth: UserAuth` parameter to your endpoint handler and that's it.
+///
+/// Inside the handler body, you can call any of `token_if_authenticated`, `permissions_if_authenticated`
+/// or `token_and_permissions_if_authenticated` that all return `Option`s and the requested
+/// information, depending on your use-case.
+///
+/// Note that getting permissions requires a database lookup.
 pub enum UserAuth {
     Unauthenticated,
     Authenticated { token: JWTClaims },
 }
 
 impl UserAuth {
+    /// If authenticated, return `Some` containing a reference to the token contents.
     #[allow(dead_code)]
     #[inline]
     pub fn token_if_authenticated(&self) -> Option<&JWTClaims> {
@@ -152,6 +178,9 @@ impl UserAuth {
         }
     }
 
+    /// If authenticated, lookup permissions for the user and return `Some`
+    /// containing `UserPermissions`.
+    #[inline]
     pub async fn permissions_if_authenticated(
         &self,
         database: &DbConn,
@@ -168,6 +197,12 @@ impl UserAuth {
         }
     }
 
+    /// If authenticated, return `Some` containing a tuple of:
+    /// - a reference to the token contents (`&JWTClaims`) and
+    /// - `UserPermissions`, which is the permission list of the user.
+    ///
+    /// This requires a database lookup (if authenticated).
+    #[inline]
     pub async fn token_and_permissions_if_authenticated(
         &self,
         database: &DbConn,

@@ -90,6 +90,7 @@ pub async fn login(
     state: web::Data<AppState>,
     login_info: web::Json<UserLoginRequest>,
 ) -> EndpointResult {
+    // Validate user login credentials.
     let is_valid_login = query::UsersQuery::validate_user_credentials(
         &state.database,
         &state.hasher,
@@ -108,6 +109,7 @@ pub async fn login(
     }
 
 
+    // Generate access and refresh token.
     let access_token_claims = JWTClaims::create(
         login_info.username.clone(),
         Utc::now(),
@@ -226,6 +228,7 @@ pub async fn refresh_login(
     state: web::Data<AppState>,
     refresh_info: web::Json<UserLoginRefreshRequest>,
 ) -> EndpointResult {
+    // Parse and validate provided refresh token.
     let refresh_token_claims = match state.jwt_manager.decode_token(&refresh_info.refresh_token) {
         Ok(token_claims) => token_claims,
         Err(error) => {

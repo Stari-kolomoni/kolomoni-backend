@@ -1,6 +1,6 @@
 use sea_orm::entity::prelude::*;
 
-#[derive(Clone, Debug, DeriveEntityModel)]
+#[derive(Clone, Debug, Eq, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "user_permission")]
 pub struct Model {
     #[sea_orm(primary_key)]

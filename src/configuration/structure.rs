@@ -7,7 +7,7 @@ use serde::Deserialize;
 use crate::configuration::utilities::get_default_configuration_file_path;
 
 
-/// This struct contains the entire server configuration.
+/// The entire Stari Kolomoni backend configuration.
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     /// Configuration related to the HTTP server.
@@ -22,13 +22,14 @@ pub struct Config {
     /// Json Web Token-related configuration.
     pub jsonwebtoken: ConfigJsonWebToken,
 
-    /// This is the real path this `Config` was loaded from.
+    /// This is the file path this `Config` instance was loaded from.
     #[serde(skip)]
     pub file_path: PathBuf,
 }
 
 #[allow(dead_code)]
 impl Config {
+    /// Load the configuration from a specific file path.
     pub fn load_from_path<S: AsRef<Path>>(configuration_file_path: S) -> Result<Self> {
         // Read the configuration file into memory.
         let configuration_string = fs::read_to_string(configuration_file_path.as_ref())
@@ -44,6 +45,7 @@ impl Config {
         Ok(config)
     }
 
+    /// Load the configuration from the default path (`./data/configuration.toml`).
     pub fn load_from_default_path() -> Result<Config> {
         Config::load_from_path(
             get_default_configuration_file_path()
@@ -52,6 +54,7 @@ impl Config {
     }
 }
 
+/// Actix HTTP server-related configuration.
 #[derive(Deserialize, Debug, Clone)]
 pub struct ConfigHTTP {
     /// Host to bind the HTTP server to.
@@ -61,6 +64,7 @@ pub struct ConfigHTTP {
     pub port: usize,
 }
 
+/// PostgreSQL-related configuration.
 #[derive(Deserialize, Debug, Clone)]
 pub struct ConfigDatabase {
     /// Host of the database.
@@ -69,18 +73,23 @@ pub struct ConfigDatabase {
     /// Port the database is listening at.
     pub port: usize,
 
+    /// Login username.
     pub username: String,
 
+    /// Login password.
     pub password: String,
 
+    /// Database name.
     pub database_name: String,
 }
 
+/// Password hashing-related configuration.
 #[derive(Deserialize, Debug, Clone)]
 pub struct ConfigPasswords {
     pub hash_salt: String,
 }
 
+/// JSON Web Token-related configuration.
 #[derive(Deserialize, Debug, Clone)]
 pub struct ConfigJsonWebToken {
     pub secret: String,

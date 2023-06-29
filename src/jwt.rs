@@ -15,6 +15,8 @@ const JWT_ISSUER: &str = "Stari Kolomoni";
 const JWT_SUBJECT: &str = "API token";
 
 
+/// JSON Web Token validation error type.
+/// A token can be either expired or simply invalid.
 #[derive(Error, Debug)]
 pub enum JWTValidationError {
     #[error("token has expired")]
@@ -24,6 +26,7 @@ pub enum JWTValidationError {
     InvalidToken(String),
 }
 
+/// Type of one of our JSON Web Tokens.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum JWTTokenType {
     #[serde(rename = "access")]
@@ -33,6 +36,9 @@ pub enum JWTTokenType {
     Refresh,
 }
 
+/// JSON Web Token data ("claims").
+/// Can be either an access token or a refresh token.
+///
 /// For more information see:
 /// - https://jwt.io/introduction
 /// - https://datatracker.ietf.org/doc/html/rfc7519#section-4.1
@@ -40,9 +46,13 @@ pub enum JWTTokenType {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct JWTClaims {
     /// JWT registered claim: Issuer
+    ///
+    /// Should always be the same as `JWT_ISSUER`.
     pub iss: String,
 
     /// JWT registered claim: Subject
+    ///
+    /// Should always be the same as `JWT_SUBJECT`.
     pub sub: String,
 
     /// JWT registered claim: Issued At
@@ -54,13 +64,20 @@ pub struct JWTClaims {
     pub exp: DateTime<Utc>,
 
     /// JWT private claim: Username
+    ///
+    /// Username of the user that this token belongs to.
     pub username: String,
 
     /// JWT private claim: Token type (access or refresh token)
+    ///
+    /// Access tokens can be used to call restricted endpoints and
+    /// refresh tokens can be used to generate new access tokens when they
+    /// expire (refresh tokens have a longer expiration time).
     pub token_type: JWTTokenType,
 }
 
 impl JWTClaims {
+    /// Create a new JSON Web Token.
     pub fn create(
         username: String,
         issued_at: DateTime<Utc>,
@@ -80,6 +97,7 @@ impl JWTClaims {
     }
 }
 
+/// Central JSON Web Token manager (encoder and decoder).
 pub struct JsonWebTokenManager {
     header: Header,
     encoding_key: EncodingKey,
@@ -94,8 +112,12 @@ impl JsonWebTokenManager {
         let decoding_key = DecodingKey::from_secret(config.jsonwebtoken.secret.as_bytes());
 
         let mut validation = Validation::new(Algorithm::HS256);
+
+        /// Validate issuer and subject automatically when decoding.
         validation.set_issuer(&[JWT_ISSUER]);
         validation.sub = Some(JWT_SUBJECT.to_string());
+
+        // Disable "expiry" and "not before" validation, we'll do it ourselves (as we use `chrono`).
         validation.validate_exp = false;
         validation.validate_nbf = false;
 
@@ -107,11 +129,13 @@ impl JsonWebTokenManager {
         }
     }
 
+    /// Create (encode) a new token into a string.
     pub fn create_token(&self, claims: JWTClaims) -> Result<String> {
         jsonwebtoken::encode(&self.header, &claims, &self.encoding_key)
             .with_context(|| "Failed to create JWT token.")
     }
 
+    /// Decode a token from a string.
     pub fn decode_token(&self, token: &str) -> Result<JWTClaims, JWTValidationError> {
         let token_data =
             jsonwebtoken::decode::<JWTClaims>(token, &self.decoding_key, &self.validation)

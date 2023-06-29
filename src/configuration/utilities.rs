@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
 
-/// Returns the default configuration filepath. This is at `./data/configuration.toml`.
+/// Returns the default configuration filepath at `./data/configuration.toml`.
 pub fn get_default_configuration_file_path() -> Result<String> {
     let default_configuration_file_path = Path::new("./data/configuration.toml");
     if !default_configuration_file_path.exists() {

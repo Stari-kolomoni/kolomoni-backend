@@ -25,6 +25,9 @@ use crate::database::mutation::ArgonHasher;
 use crate::jwt::JsonWebTokenManager;
 use crate::state::AppState;
 
+
+/// Connect to PostgreSQL database as specified in the configuration file
+/// and apply any pending migrations.
 pub async fn connect_and_set_up_database(config: &Config) -> Result<DatabaseConnection> {
     let database = Database::connect(format!(
         "postgres://{}:{}@{}:{}/{}",
@@ -47,6 +50,7 @@ pub async fn connect_and_set_up_database(config: &Config) -> Result<DatabaseConn
 
     Ok(database)
 }
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -97,8 +101,7 @@ async fn main() -> Result<()> {
     #[rustfmt::skip]
     let server = HttpServer::new(
         move || {
-            // Maximum configured JSON payload size is 1 MB.
-            let json_extractor_config = web::JsonConfig::default().limit(1048576);
+            let json_extractor_config = web::JsonConfig::default();
 
             // FIXME Modify permissive CORS to something more safe in production.
             let cors = Cors::permissive();
@@ -124,6 +127,7 @@ async fn main() -> Result<()> {
         "HTTP server initialized and running."
     );
 
+    // Run HTTP server until stopped.
     server
         .run()
         .await

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
+/// Command-line arguments for the backend.
 #[derive(Parser)]
 #[command(
     name = "stari-kolomoni-backend",
@@ -10,6 +11,8 @@ use clap::Parser;
     version
 )]
 pub struct CLIArgs {
+    /// This is the path to the configuration file to use.
+    /// If unspecified, this defaults to `./data/configuration.toml`.
     #[arg(
         short = 'c',
         long = "configurationFilePath",

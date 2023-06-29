@@ -20,6 +20,26 @@ pub trait DumbResponder {
 ///   a reference to `HttpRequest`, making code cleaner.
 ///
 /// The provided struct must already implement `Serialize`.
+///
+/// ## Example
+/// ```
+/// #[derive(Serialize)]
+/// struct SomeResponse {
+///     value: i32,
+/// }
+///
+/// impl_json_responder!(SomeResponse);
+///
+///
+/// #[get("/some/path")]
+/// async fn example_handler() -> EndpointResult {
+///     // ...
+///     
+///     // What we gain is essentially this `.into_response()` method
+///     // that builds the `HttpResponse` with the JSON-encoded body.
+///     Ok(SomeResponse { value: 42 }.into_response());
+/// }
+/// ```
 #[macro_export]
 macro_rules! impl_json_responder {
     ($struct:ty) => {
@@ -46,22 +66,27 @@ macro_rules! impl_json_responder {
 ///
 /// First argument is the `actix_web::StatusCode` status code and
 /// the second argument is the reason to respond with (must implement `Into<String>`).
+///
+/// ## Example
+/// ```
+/// #[post("/here")]
+/// async def here_endpoint() -> EndpointResult {
+///     // ...
+///     
+///     if some_condition {
+///         return Ok(response_with_reason!(
+///             StatusCode::CONFLICT,
+///             "Here is a reason."
+///         ));
+///     }
+///
+///     // ...
+/// }
+/// ```
 #[macro_export]
 macro_rules! response_with_reason {
     ($status_code:expr, $reason:expr) => {
         HttpResponseBuilder::new($status_code).json(ErrorReasonResponse::custom_reason($reason))
-    };
-}
-
-/// A macro for more cleanly generating an `APIError::NotFound` error with the given reason.
-///
-/// There is only one argument: the reason (must implement `Into<String>`).
-#[macro_export]
-macro_rules! not_found_error_with_reason {
-    ($reason:expr) => {
-        APIError::NotFound {
-            response: ErrorReasonResponse::custom_reason($reason),
-        }
     };
 }
 
@@ -71,6 +96,8 @@ macro_rules! not_found_error_with_reason {
 ///
 /// The first argument is the `UserPermissions` struct.
 /// The second argument is the permission you require (`UserPermission` variant).
+///
+/// See documentation for `APIError` for more information.
 #[macro_export]
 macro_rules! require_permission {
     ($user_permissions:expr, $required_permission:expr) => {
