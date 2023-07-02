@@ -26,9 +26,8 @@ const STANDARD_PERMISSIONS: [(i32, &str, &str); 4] = [
     (
         4,
         "user.any:write",
-        "Allows the user to update public account information of any other user."
+        "Allows the user to update account information of any other user."
     ),
-    // TODO Add other permissions.
 ];
 
 async fn insert_permission<'manager>(

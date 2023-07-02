@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use sea_orm::{ColumnTrait, DbConn, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
 use crate::database::entities;
 
@@ -7,8 +7,8 @@ use crate::database::entities;
 pub struct UserPermissionsQuery {}
 
 impl UserPermissionsQuery {
-    pub async fn get_user_permission_names_by_username(
-        database: &DbConn,
+    pub async fn get_user_permission_names_by_username<C: ConnectionTrait>(
+        database: &C,
         username: &str,
     ) -> Result<Option<Vec<String>>> {
         let results = entities::users::Entity::find()
@@ -35,8 +35,8 @@ impl UserPermissionsQuery {
         ))
     }
 
-    pub async fn get_user_permission_names_by_user_id(
-        database: &DbConn,
+    pub async fn get_user_permission_names_by_user_id<C: ConnectionTrait>(
+        database: &C,
         user_id: i32,
     ) -> Result<Option<Vec<String>>> {
         let results = entities::users::Entity::find_by_id(user_id)

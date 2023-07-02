@@ -14,7 +14,7 @@ use sea_orm::{
 };
 
 use super::super::entities::users;
-use crate::api::auth::DEFAULT_USER_PERMISSIONS;
+use crate::auth::permissions::DEFAULT_USER_PERMISSIONS;
 use crate::configuration::Config;
 use crate::database::{entities, query};
 

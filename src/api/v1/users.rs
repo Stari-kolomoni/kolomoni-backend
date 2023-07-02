@@ -9,9 +9,10 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::api::auth::{UserAuth, UserPermission, UserPermissions};
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
 use crate::api::macros::DumbResponder;
+use crate::auth::authentication::UserAuth;
+use crate::auth::permissions::{UserPermission, UserPermissions};
 use crate::database::mutation::UserRegistrationInfo;
 use crate::database::{entities, mutation, query};
 use crate::state::AppState;

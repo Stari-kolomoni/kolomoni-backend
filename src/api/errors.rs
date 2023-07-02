@@ -9,7 +9,7 @@ use thiserror::Error;
 use tracing::error;
 use utoipa::ToSchema;
 
-use crate::api::auth::UserPermission;
+use crate::auth::permissions::UserPermission;
 
 /// Simple JSON-encodable response containing a single field: a "reason".
 /// Useful for specifying reasons when returning a HTTP status code with an error.

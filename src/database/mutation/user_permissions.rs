@@ -1,7 +1,7 @@
 use anyhow::Result;
 use sea_orm::{ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
-use crate::api::auth::UserPermission;
+use crate::auth::permissions::UserPermission;
 use crate::database::entities;
 
 #[allow(dead_code)]

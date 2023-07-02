@@ -1,8 +1,8 @@
 use sea_orm::DatabaseConnection;
 
+use crate::auth::token::JsonWebTokenManager;
 use crate::configuration::Config;
 use crate::database::mutation::ArgonHasher;
-use crate::jwt::JsonWebTokenManager;
 
 /// Central application state.
 /// See https://actix.rs/docs/application#state for more information.

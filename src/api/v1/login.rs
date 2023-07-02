@@ -8,9 +8,9 @@ use utoipa::ToSchema;
 
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
 use crate::api::macros::DumbResponder;
+use crate::auth::token::{JWTClaims, JWTTokenType, JWTValidationError};
 use crate::database::query;
 use crate::impl_json_responder;
-use crate::jwt::{JWTClaims, JWTTokenType, JWTValidationError};
 use crate::state::AppState;
 
 /*

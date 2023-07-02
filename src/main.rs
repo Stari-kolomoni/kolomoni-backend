@@ -5,10 +5,10 @@ use actix_cors::Cors;
 use anyhow::{Context, Result};
 
 mod api;
+pub mod auth;
 mod cli;
 mod configuration;
 mod database;
-pub mod jwt;
 pub mod state;
 
 use actix_web::{middleware, web, App, HttpServer};
@@ -19,10 +19,10 @@ use tracing::info;
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
+use crate::auth::token::JsonWebTokenManager;
 use crate::cli::CLIArgs;
 use crate::configuration::Config;
 use crate::database::mutation::ArgonHasher;
-use crate::jwt::JsonWebTokenManager;
 use crate::state::AppState;
 
 
