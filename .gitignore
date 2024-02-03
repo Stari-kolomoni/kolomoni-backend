@@ -25,3 +25,4 @@ data/*.log
 
 data/*.toml
 data/!*.TEMPLATE.toml
+.vscode
