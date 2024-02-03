@@ -1,0 +1,58 @@
+[config]
+default_to_workspace = false
+
+[env]
+CARGO_MAKE_USE_WORKSPACE_PROFILE = false
+
+
+
+
+
+[tasks.create-migration]
+clear = true
+workspace = false
+command = "sea-orm-cli"
+args = [
+    "migrate",
+    "generate",
+    "--universal-time",
+    "--migration-dir",
+    "./kolomoni_migrations",
+    "create_users_table"
+]
+
+
+
+[tasks.generate-entities-from-database]
+clear = true
+workspace = false
+command = "sea-orm-cli"
+args = [
+    "generate",
+    "entity",
+    "--output-dir",
+    "./kolomoni_database/src/entities",
+    "--expanded-format"
+]
+
+
+
+[tasks.initialize-database]
+clear = true
+workspace = false
+condition = { platforms = ["windows"]}
+command = "pwsh"
+args = [
+    "./scripts/database/init-database.ps1"
+]
+
+
+
+[tasks.run-database]
+clear = true
+workspace = false
+condition = { platforms = ["windows"]}
+command = "pwsh"
+args = [
+    "./scripts/database/run-database.ps1"
+]
