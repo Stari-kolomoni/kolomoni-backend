@@ -222,6 +222,7 @@ As a general rule, it probably makes sense to write query and mutation methods a
 As for the SeaORM documentation related to fetching and updating database data, the [SeaORM - Basic CRUD](https://www.sea-ql.org/SeaORM/docs/basic-crud/basic-schema/) chapter might be of much help.
 
 
-#### A.4 `actix-web` and `EndpointResult`/`APIError` examples
+
+### B `actix-web` and `EndpointResult`/`APIError` examples
 We've introduced a few new types to easily `?`-return common `Result` errors,
 see documentation for `api::v1::errors::APIError` for more information.
