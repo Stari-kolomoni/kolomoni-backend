@@ -2,14 +2,19 @@
 
 use sea_orm::entity::prelude::*;
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "user")]
+#[derive(Copy, Clone, Default, Debug, DeriveEntity)]
+pub struct Entity;
+
+impl EntityName for Entity {
+    fn table_name(&self) -> &str {
+        "user"
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel, Eq)]
 pub struct Model {
-    #[sea_orm(primary_key)]
     pub id: i32,
-    #[sea_orm(unique)]
     pub username: String,
-    #[sea_orm(unique)]
     pub display_name: String,
     pub hashed_password: String,
     pub joined_at: DateTimeWithTimeZone,
@@ -17,10 +22,55 @@ pub struct Model {
     pub last_active_at: DateTimeWithTimeZone,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+#[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
+pub enum Column {
+    Id,
+    Username,
+    DisplayName,
+    HashedPassword,
+    JoinedAt,
+    LastModifiedAt,
+    LastActiveAt,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
+pub enum PrimaryKey {
+    Id,
+}
+
+impl PrimaryKeyTrait for PrimaryKey {
+    type ValueType = i32;
+    fn auto_increment() -> bool {
+        true
+    }
+}
+
+#[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::user_permission::Entity")]
     UserPermission,
+}
+
+impl ColumnTrait for Column {
+    type EntityName = Entity;
+    fn def(&self) -> ColumnDef {
+        match self {
+            Self::Id => ColumnType::Integer.def(),
+            Self::Username => ColumnType::String(None).def().unique(),
+            Self::DisplayName => ColumnType::String(None).def().unique(),
+            Self::HashedPassword => ColumnType::String(None).def(),
+            Self::JoinedAt => ColumnType::TimestampWithTimeZone.def(),
+            Self::LastModifiedAt => ColumnType::TimestampWithTimeZone.def(),
+            Self::LastActiveAt => ColumnType::TimestampWithTimeZone.def(),
+        }
+    }
+}
+
+impl RelationTrait for Relation {
+    fn def(&self) -> RelationDef {
+        match self {
+            Self::UserPermission => Entity::has_many(super::user_permission::Entity).into(),
+        }
+    }
 }
 
 impl Related<super::user_permission::Entity> for Entity {
