@@ -1,4 +1,27 @@
 ###
+# Logging
+###
+[logging]
+# The console log output level.
+# This value can be overriden with the RUST_LOG environment variable.
+# 
+# For more details about setting up this logging level and a guide on more granular settings, 
+# see <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives>).
+console_output_level_filter = "debug,hyper=info,reqwest::connect=info"
+# The log file output level.
+# This value is not overriden by the RUST_LOG environment variable.
+# 
+# For more details about setting up this logging level and a guide on more granular settings, 
+# see <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives>).
+log_file_output_level_filter = "info,hyper=info,reqwest::connect=info"
+
+# Log file output directory.
+log_file_output_directory = "./logs/"
+
+
+
+
+###
 # HTTP server-related configuration.
 ###
 [http]
@@ -6,6 +29,9 @@
 host = "127.0.0.1"
 # What port to bind the HTTP server to.
 port = 8866
+
+
+
 
 ###
 # PostgreSQL database-related configuration.
@@ -22,16 +48,22 @@ password = "postgres"
 # Database name.
 database_name = "starikolomoni"
 
+
+
+
 ###
-# Password-related configuration.
+# Secrets
 ###
-[password]
+[secrets]
 # Salt for the Argon2id hasher. 32 characters is probably fine.
 hash_salt = "32 base64 characters"
+
+
+
 
 ###
 # JWT authentication token-related configuration.
 ###
-[jsonwebtoken]
+[json_web_token]
 # JWT secret used to
 secret = "your secret here"

@@ -1,5 +1,5 @@
 [package]
-name = "stari-kolomoni-backend"
+name = "kolomoni"
 description = "Backend system for the Stari Kolomoni fantasy translation project."
 license-file = "LICENSE.md"
 version = "0.1.0"
@@ -7,32 +7,86 @@ edition = "2021"
 authors = ["Grimpy101 <gorupgorazd@gmail.com>", "Simon Goričar <simon.peter.goricar@gmail.com>"]
 rust-version = "1.65.0"
 
+
 [workspace]
-members = [".", "migrations", "openapi"]
+members = [
+    "kolomoni_auth",
+    "kolomoni_configuration",
+    "kolomoni_database",
+    "kolomoni_migrations",
+    "kolomoni_openapi"
+]
 
-[[bin]]
-name = "stari-kolomoni-backend"
-path = "./src/main.rs"
-
-[dependencies]
-migration = { path = "migrations" }
+[workspace.dependencies]
 clap = { version = "4.4.18", features = ["derive"] }
-thiserror = "1.0.56"
-anyhow = "1.0.79"
-serde = { version = "1.0.196", features = ["derive"] }
-serde_json = "1.0.113"
-serde_with = { version = "3.6.0", features = ["chrono"] }
+
 tokio = { version = "1.36.0", features = ["full"] }
-actix-web = "4.4.1"
-actix-utils = "3.0.1"
+
+serde = { version = "1.0.196", features = ["derive"] }
+serde_with = { version = "3.6.0", features = ["chrono"] }
+serde_json = "1.0.113"
+toml = "0.8.9"
+
+miette = "5.10.0"
+thiserror = "1.0.56"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
+tracing-appender = "0.2.3"
 tracing-actix-web = "0.7.9"
-sea-orm = { version = "0.12.2", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros", "with-chrono" ] }
-argon2 = "0.5.3"
 dunce = "1.0.4"
-toml = "0.8.9"
-chrono = "0.4.33"
-jsonwebtoken = "9.2.0"
-utoipa = { version = "4.2.0", features = ["actix_extras", "chrono", "preserve_order"] }
+
+actix-web = "4.4.1"
+actix-utils = "3.0.1"
 actix-cors = "0.7.0"
+
+utoipa = { version = "4.2.0", features = ["actix_extras", "chrono", "preserve_order"] }
+utoipa-swagger-ui = { version = "6.0.0", features = ["actix-web"] }
+
+sea-orm = { version = "0.12.12", features = ["runtime-tokio-rustls", "sqlx-postgres", "macros", "with-chrono"] }
+sea-orm-migration = { version = "0.12.12", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+
+argon2 = "0.5.3"
+jsonwebtoken = "9.2.0"
+chrono = "0.4.33"
+
+
+[lib]
+name = "kolomoni"
+path = "./kolomoni/src/lib.rs"
+
+[[bin]]
+name = "kolomoni"
+path = "./kolomoni/src/main.rs"
+
+
+[dependencies]
+kolomoni_migrations = { path = "./kolomoni_migrations" }
+kolomoni_configuration = { path = "./kolomoni_configuration" }
+kolomoni_auth = { path = "./kolomoni_auth" }
+kolomoni_database = { path = "./kolomoni_database" }
+
+clap = { workspace = true }
+
+thiserror = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-actix-web = { workspace = true }
+
+serde = { workspace = true }
+serde_with = { workspace = true }
+serde_json = { workspace = true }
+
+tokio = { workspace = true }
+
+actix-web = { workspace = true }
+actix-utils = { workspace = true }
+actix-cors = { workspace = true }
+
+utoipa = { workspace = true }
+
+sea-orm = { workspace = true }
+
+dunce = { workspace = true }
+chrono = { workspace = true }

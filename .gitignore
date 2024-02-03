@@ -20,9 +20,11 @@ Cargo.lock
 
 
 ## Sensitive files
+.env
 data/database
 data/*.log
 
 data/*.toml
 data/!*.TEMPLATE.toml
 .vscode
+logs

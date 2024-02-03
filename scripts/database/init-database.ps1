@@ -34,6 +34,9 @@ Write-Log -Name "Initialization" -Content "Creating user kolomon (password kolom
 Write-Log -Name "Initialization" -Content "Warning: using bad password, don't use in production." -Color DarkRed
 Invoke-Expression "$PostgresPsqlBinary -h localhost -U postgres -c `"CREATE ROLE kolomon with PASSWORD 'kolomon' LOGIN`""
 Invoke-Expression "$PostgresPsqlBinary -h localhost -U postgres -c `"CREATE DATABASE kolomondb WITH OWNER kolomon ENCODING UTF8`""
+Invoke-Expression "$PostgresPsqlBinary -h localhost -U postgres -c `"REVOKE CONNECT ON DATABASE kolomondb FROM PUBLIC`""
+Invoke-Expression "$PostgresPsqlBinary -h localhost -U postgres -c `"GRANT CONNECT ON DATABASE kolomondb TO postgres`""
+Invoke-Expression "$PostgresPsqlBinary -h localhost -U postgres -c `"GRANT CONNECT ON DATABASE kolomondb TO kolomon`""
 
 Write-Log -Name "Initialization" -Content "Stopping PostgreSQL server."
 Invoke-Expression "$PostgresPgCtlBinary stop -D `"$DatabaseDataDirectory`""
