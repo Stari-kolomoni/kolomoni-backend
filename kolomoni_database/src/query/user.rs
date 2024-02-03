@@ -5,9 +5,9 @@ use super::super::entities::prelude::User;
 use super::super::entities::user;
 use crate::mutation::ArgonHasher;
 
-pub struct UsersQuery {}
+pub struct UserQuery {}
 
-impl UsersQuery {
+impl UserQuery {
     pub async fn get_user_by_id<C: ConnectionTrait>(
         database: &C,
         id: i32,

@@ -9,9 +9,9 @@ use crate::entities::{permission, user};
 /// For something more high-level, see [`UserPermissions`],
 /// especially the methods in its [`UserPermissionExt`] impl.
 #[allow(dead_code)]
-pub struct UserPermissionsQuery {}
+pub struct UserPermissionQuery {}
 
-impl UserPermissionsQuery {
+impl UserPermissionQuery {
     pub async fn get_user_permission_names_by_username<C: ConnectionTrait>(
         database: &C,
         username: &str,
@@ -101,7 +101,7 @@ impl UserPermissionsExt for UserPermissions {
         username: &str,
     ) -> Result<Option<Self>> {
         let permission_names =
-            UserPermissionsQuery::get_user_permission_names_by_username(database, username)
+            UserPermissionQuery::get_user_permission_names_by_username(database, username)
                 .await
                 .with_context(|| "Failed to get user permissions from database.")?;
 
@@ -119,7 +119,7 @@ impl UserPermissionsExt for UserPermissions {
         user_id: i32,
     ) -> Result<Option<Self>> {
         let permission_names =
-            UserPermissionsQuery::get_user_permission_names_by_user_id(database, user_id)
+            UserPermissionQuery::get_user_permission_names_by_user_id(database, user_id)
                 .await
                 .with_context(|| "Failed to get user permissions from database.")?;
 

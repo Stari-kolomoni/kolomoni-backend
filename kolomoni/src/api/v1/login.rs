@@ -91,7 +91,7 @@ pub async fn login(
     login_info: web::Json<UserLoginRequest>,
 ) -> EndpointResult {
     // Validate user login credentials.
-    let is_valid_login = query::UsersQuery::validate_user_credentials(
+    let is_valid_login = query::UserQuery::validate_user_credentials(
         &state.database,
         &state.hasher,
         &login_info.username,

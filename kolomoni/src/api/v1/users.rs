@@ -188,7 +188,7 @@ async fn get_all_registered_users(
 
 
     // Load all users from the database and parse them info `UserInformation` instances.
-    let all_users = query::UsersQuery::get_all_users(&state.database)
+    let all_users = query::UserQuery::get_all_users(&state.database)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -307,7 +307,7 @@ pub async fn register_user(
 ) -> EndpointResult {
     // Ensure the provided username is unique.
     let username_already_exists =
-        query::UsersQuery::user_exists_by_username(&state.database, &json_data.username)
+        query::UserQuery::user_exists_by_username(&state.database, &json_data.username)
             .await
             .map_err(APIError::InternalError)?;
 
@@ -321,7 +321,7 @@ pub async fn register_user(
 
     // Ensure the provided display name is unique.
     let display_name_already_exists =
-        query::UsersQuery::user_exists_by_display_name(&state.database, &json_data.display_name)
+        query::UserQuery::user_exists_by_display_name(&state.database, &json_data.display_name)
             .await
             .map_err(APIError::InternalError)?;
 
@@ -334,7 +334,7 @@ pub async fn register_user(
 
 
     // Create new user.
-    let new_user = mutation::UsersMutation::create_user(
+    let new_user = mutation::UserMutation::create_user(
         &state.database,
         &state.hasher,
         json_data.clone().into(),
@@ -417,7 +417,7 @@ pub async fn get_current_user_info(
 
 
     // Load user from database.
-    let user = query::UsersQuery::get_user_by_username(&state.database, &token.username)
+    let user = query::UserQuery::get_user_by_username(&state.database, &token.username)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(APIError::not_found)?;
@@ -582,7 +582,7 @@ async fn update_current_user_display_name(
 
 
     // Ensure the display name is unique.
-    let display_name_already_exists = query::UsersQuery::user_exists_by_display_name(
+    let display_name_already_exists = query::UserQuery::user_exists_by_display_name(
         &database_transaction,
         &json_data.new_display_name,
     )
@@ -598,7 +598,7 @@ async fn update_current_user_display_name(
 
 
     // Update user in the database.
-    mutation::UsersMutation::update_display_name_by_username(
+    mutation::UserMutation::update_display_name_by_username(
         &database_transaction,
         &token.username,
         json_data.new_display_name.clone(),
@@ -608,7 +608,7 @@ async fn update_current_user_display_name(
 
     // TODO Consider merging this update into all mutation methods where it makes sense.
     //      Otherwise we're wasting a round-trip to the database for no real reason.
-    let updated_user = mutation::UsersMutation::update_last_active_at_by_username(
+    let updated_user = mutation::UserMutation::update_last_active_at_by_username(
         &database_transaction,
         &token.username,
         None,
@@ -712,7 +712,7 @@ async fn get_specific_user_info(
     let requested_user_id = path_info.into_inner().0;
 
     let optional_requested_user =
-        query::UsersQuery::get_user_by_id(&state.database, requested_user_id)
+        query::UserQuery::get_user_by_id(&state.database, requested_user_id)
             .await
             .map_err(APIError::InternalError)?;
 
@@ -798,7 +798,7 @@ async fn get_specific_user_permissions(
     let requested_user_id = path_info.into_inner().0;
 
     let optional_user_permissions =
-        query::UserPermissionsQuery::get_user_permission_names_by_user_id(
+        query::UserPermissionQuery::get_user_permission_names_by_user_id(
             &state.database,
             requested_user_id,
         )
@@ -899,7 +899,7 @@ async fn update_specific_user_display_name(
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
     let requested_user_id = path_info.into_inner().0;
 
-    let current_user = query::UsersQuery::get_user_by_username(&state.database, &token.username)
+    let current_user = query::UserQuery::get_user_by_username(&state.database, &token.username)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
@@ -921,7 +921,7 @@ async fn update_specific_user_display_name(
 
 
     // Modify requested user's display name.
-    let display_name_already_exists = query::UsersQuery::user_exists_by_display_name(
+    let display_name_already_exists = query::UserQuery::user_exists_by_display_name(
         &database_transaction,
         &json_data.new_display_name,
     )
@@ -937,7 +937,7 @@ async fn update_specific_user_display_name(
 
 
     // Update requested user's display name.
-    mutation::UsersMutation::update_display_name_by_user_id(
+    mutation::UserMutation::update_display_name_by_user_id(
         &database_transaction,
         requested_user_id,
         json_data.new_display_name.clone(),
@@ -945,7 +945,7 @@ async fn update_specific_user_display_name(
     .await
     .map_err(APIError::InternalError)?;
 
-    let updated_user = mutation::UsersMutation::update_last_active_at_by_user_id(
+    let updated_user = mutation::UserMutation::update_last_active_at_by_user_id(
         &database_transaction,
         requested_user_id,
         None,
@@ -1083,7 +1083,7 @@ async fn add_permissions_to_specific_user(
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
     let current_user =
-        query::UsersQuery::get_user_by_username(&state.database, &current_user_token.username)
+        query::UserQuery::get_user_by_username(&state.database, &current_user_token.username)
             .await
             .map_err(APIError::InternalError)?
             .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
@@ -1131,7 +1131,7 @@ async fn add_permissions_to_specific_user(
 
 
     // Add the permissions to the specified user.
-    mutation::UserPermissionsMutation::add_permissions_to_user_by_user_id(
+    mutation::UserPermissionMutation::add_permissions_to_user_by_user_id(
         &state.database,
         requested_user_id,
         permissions_to_add,
@@ -1267,7 +1267,7 @@ async fn remove_permissions_from_specific_user(
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
     let current_user =
-        query::UsersQuery::get_user_by_username(&state.database, &current_user_token.username)
+        query::UserQuery::get_user_by_username(&state.database, &current_user_token.username)
             .await
             .map_err(APIError::InternalError)?
             .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
@@ -1315,7 +1315,7 @@ async fn remove_permissions_from_specific_user(
 
 
     // Remove the permission from the specified user.
-    mutation::UserPermissionsMutation::remove_permissions_from_user_by_user_id(
+    mutation::UserPermissionMutation::remove_permissions_from_user_by_user_id(
         &state.database,
         requested_user_id,
         permissions_to_remove,

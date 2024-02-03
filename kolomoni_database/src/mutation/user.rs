@@ -68,9 +68,9 @@ pub struct UserRegistrationInfo {
     pub password: String,
 }
 
-pub struct UsersMutation {}
+pub struct UserMutation {}
 
-impl UsersMutation {
+impl UserMutation {
     pub async fn create_user(
         database: &DbConn,
         hasher: &ArgonHasher,
@@ -131,7 +131,7 @@ impl UsersMutation {
     ) -> Result<user::Model> {
         // TODO This can be further optimized by using a lower-level query.
 
-        let user = query::UsersQuery::get_user_by_username(database, username)
+        let user = query::UserQuery::get_user_by_username(database, username)
             .await?
             .ok_or_else(|| miette!("Invalid username, no such user."))?;
 
@@ -188,7 +188,7 @@ impl UsersMutation {
             .into_diagnostic()
             .wrap_err("Failed while updating a user's display name in the database (by ID).")?;
 
-        let updated_user = query::UsersQuery::get_user_by_id(database, user_id)
+        let updated_user = query::UserQuery::get_user_by_id(database, user_id)
             .await?
             .ok_or_else(|| miette!("BUG: No such user ID: {user_id}"))?;
 
@@ -223,7 +223,7 @@ impl UsersMutation {
             ));
         }
 
-        let updated_user = query::UsersQuery::get_user_by_username(database, username)
+        let updated_user = query::UserQuery::get_user_by_username(database, username)
             .await?
             .ok_or_else(|| miette!("BUG: No such user: {username}"))?;
 

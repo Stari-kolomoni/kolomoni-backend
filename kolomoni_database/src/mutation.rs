@@ -1,5 +1,5 @@
-mod user_permissions;
-mod users;
+mod user;
+mod user_permission;
 
-pub use user_permissions::*;
-pub use users::*;
+pub use user::*;
+pub use user_permission::*;

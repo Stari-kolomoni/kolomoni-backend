@@ -5,9 +5,9 @@ use sea_orm::{ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilte
 use crate::entities;
 
 #[allow(dead_code)]
-pub struct UserPermissionsMutation {}
+pub struct UserPermissionMutation {}
 
-impl UserPermissionsMutation {
+impl UserPermissionMutation {
     pub async fn add_permissions_to_user_by_user_id<C: ConnectionTrait>(
         database: &C,
         user_id: i32,
