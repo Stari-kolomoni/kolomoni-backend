@@ -28,7 +28,7 @@ serde_with = { version = "3.6.0", features = ["chrono"] }
 serde_json = "1.0.113"
 toml = "0.8.9"
 
-miette = "5.10.0"
+miette = "7.0.0"
 thiserror = "1.0.56"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
