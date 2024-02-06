@@ -23,7 +23,7 @@ args = [
     "--universal-time",
     "--migration-dir",
     "./kolomoni_migrations",
-    "${0}"
+    "${@}"
 ]
 
 
