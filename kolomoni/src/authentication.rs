@@ -11,21 +11,23 @@ use miette::{miette, Result};
 use sea_orm::ConnectionTrait;
 use tracing::{debug, error, info};
 
-use crate::state::AppState;
+use crate::state::ApplicationStateInner;
 
 
 
-/// User authentication state. Holding this struct doesn't automatically mean
+/// User authentication state (actix extractor).
+/// Holding this struct doesn't automatically mean
 /// the user is authenticated (see the enum variants).
 ///
 /// ## Use in actix-web
 /// To easily extract authentication and permission data on an endpoint handler,
-/// `UserAuth` is an Actix [extractor](https://actix.rs/docs/extractors).
+/// `UserAuth` is an [Actix extractor](https://actix.rs/docs/extractors).
 ///
 /// To use it, simply add a `user_auth: UserAuth` parameter to your endpoint handler.
 ///
-/// Inside the handler body, you can call any of `token_if_authenticated`, `permissions_if_authenticated`
-/// or `token_and_permissions_if_authenticated` that all return `Option`s and the requested
+/// Inside the handler body, you can then call any of e.g.
+/// [`Self::token_if_authenticated`], [`Self::permissions_if_authenticated`]
+/// or [`Self::token_and_permissions_if_authenticated`] that all return `Option`s and the requested
 /// information, depending on your use-case.
 ///
 /// Note that getting permissions requires a database lookup.
@@ -35,7 +37,7 @@ pub enum UserAuth {
 }
 
 impl UserAuth {
-    /// If authenticated, return `Some` containing a reference to the token contents.
+    /// If authenticated, return a reference to the token's contents (claims).
     #[allow(dead_code)]
     #[inline]
     pub fn token_if_authenticated(&self) -> Option<&JWTClaims> {
@@ -45,8 +47,7 @@ impl UserAuth {
         }
     }
 
-    /// If authenticated, lookup permissions for the user and return `Some`
-    /// containing `UserPermissions`.
+    /// If authenticated, look up the user's permissions and return them.
     #[inline]
     pub async fn permissions_if_authenticated<C: ConnectionTrait>(
         &self,
@@ -64,9 +65,9 @@ impl UserAuth {
         }
     }
 
-    /// If authenticated, return `Some` containing a tuple of:
-    /// - a reference to the token contents ([`&JWTClaims`][JWTClaims]) and
-    /// - [`UserPermissionSet`], which is the permission list of the user.
+    /// If authenticated, return a tuple:
+    /// - [`&JWTClaims`][JWTClaims] --- a reference to the token's contents, and
+    /// - [`UserPermissionSet`] --- the permission list of the user.
     ///
     /// This requires a database lookup (if authenticated).
     #[inline]
@@ -96,7 +97,7 @@ impl FromRequest for UserAuth {
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
         match req.headers().get(header::AUTHORIZATION) {
             Some(authorization_header_value) => {
-                let jwt_manager = match req.app_data::<Data<AppState>>() {
+                let jwt_manager = match req.app_data::<Data<ApplicationStateInner>>() {
                     Some(app_state) => &app_state.jwt_manager,
                     None => {
                         error!("BUG: No AppState injected, all UserAuth extractors will fail!");

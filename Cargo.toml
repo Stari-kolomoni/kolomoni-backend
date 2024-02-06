@@ -46,6 +46,7 @@ utoipa-swagger-ui = { version = "6.0.0", features = ["actix-web"] }
 sea-orm = { version = "0.12.12", features = ["runtime-tokio-rustls", "sqlx-postgres", "macros", "with-chrono"] }
 sea-orm-migration = { version = "0.12.12", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 
+itertools = "0.12.1"
 argon2 = "0.5.3"
 jsonwebtoken = "9.2.0"
 chrono = "0.4.33"
@@ -91,3 +92,6 @@ sea-orm = { workspace = true }
 
 dunce = { workspace = true }
 chrono = { workspace = true }
+
+itertools = { workspace = true }
+

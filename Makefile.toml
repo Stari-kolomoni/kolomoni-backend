@@ -1,5 +1,10 @@
 [config]
 default_to_workspace = false
+skip_core_tasks = true
+skip_crate_env_info = true
+skip_git_env_info = true
+skip_rust_env_info = true
+min_version = "0.37.9"
 
 [env]
 CARGO_MAKE_USE_WORKSPACE_PROFILE = false
@@ -18,7 +23,7 @@ args = [
     "--universal-time",
     "--migration-dir",
     "./kolomoni_migrations",
-    "create_users_table"
+    "${0}"
 ]
 
 
@@ -55,4 +60,39 @@ condition = { platforms = ["windows"]}
 command = "pwsh"
 args = [
     "./scripts/database/run-database.ps1"
+]
+
+
+
+[tasks.build-and-open-full-documentation]
+clear = true
+workspace = true
+command = "cargo"
+args = [
+    "doc",
+    "--workspace",
+    "--open"
+]
+
+
+
+[tasks.build-and-watch-workspace-documentation-with-private-items]
+clear = true
+workspace = true
+command = "cargo"
+args = [
+    "doc",
+    "--workspace",
+    "--open"
+]
+
+
+
+[tasks.documentation]
+clear = true
+workspace = true
+alias = "doc"
+dependencies = [
+    "build-and-open-full-documentation",
+    "build-and-watch-workspace-documentation-with-private-items"
 ]

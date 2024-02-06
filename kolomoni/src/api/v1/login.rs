@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
 use crate::api::macros::DumbResponder;
 use crate::impl_json_responder;
-use crate::state::AppState;
+use crate::state::ApplicationState;
 
 /*
  * POST /login
@@ -86,7 +86,7 @@ impl_json_responder!(UserLoginResponse);
 )]
 #[post("/login")]
 pub async fn login(
-    state: web::Data<AppState>,
+    state: ApplicationState,
     login_info: web::Json<UserLoginRequest>,
 ) -> EndpointResult {
     // Validate user login credentials.
@@ -224,7 +224,7 @@ impl_json_responder!(UserLoginRefreshResponse);
 )]
 #[post("/login/refresh")]
 pub async fn refresh_login(
-    state: web::Data<AppState>,
+    state: ApplicationState,
     refresh_info: web::Json<UserLoginRefreshRequest>,
 ) -> EndpointResult {
     // Parse and validate provided refresh token.

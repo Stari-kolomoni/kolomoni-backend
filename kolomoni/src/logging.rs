@@ -9,21 +9,27 @@ use tracing_subscriber::{
     Layer,
 };
 
-/// Initialize the console and file logging.
+/// Initialize console and file logging via [`tracing`](../../tracing/index.html).
 ///
-/// If `log_file_directory_path` is `Some`, the logs will be written to the specified directory
-/// into a daily-rolling log file.
+/// The `console_level_filter` and `log_file_level_filter` specify the logging levels for
+/// the console and log file, respectively.
 ///
-/// **IMPORTANT: Retain the returned
-/// [`WorkerGuard`](../tracing_appender/non_blocking/struct.WorkerGuard.html)
-/// in scope, otherwise flushing to file will stop.**
-pub fn initialize_tracing<P>(
+/// The `log_file_directory_path` should point to a directory in which the log files should be stored.
+/// The log files themselves will automatically roll over daily.
+///
+/// # Return value ([`WorkerGuard`]) obligations
+/// **The caller must ensure that the returned [`WorkerGuard`]
+/// is not dropped until the end of the program.
+/// After the guard is dropped, the log file will not be written to.**
+pub fn initialize_tracing<P, S>(
     console_level_filter: EnvFilter,
     log_file_level_filter: EnvFilter,
     log_file_directory_path: P,
+    log_file_name_prefix: S,
 ) -> Result<WorkerGuard>
 where
     P: AsRef<Path>,
+    S: AsRef<str>,
 {
     let console_layer = {
         let console_tracing_format = tracing_subscriber::fmt::format()
@@ -53,7 +59,7 @@ where
 
         let (appender, guard) = tracing_appender::non_blocking(tracing_appender::rolling::daily(
             log_file_directory_path,
-            "stari-kolomoni.log",
+            log_file_name_prefix.as_ref(),
         ));
 
         let file_subscriber = tracing_subscriber::fmt::layer()

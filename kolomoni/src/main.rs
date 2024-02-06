@@ -19,7 +19,7 @@ use tracing_actix_web::TracingLogger;
 
 use crate::cli::CLIArgs;
 use crate::logging::initialize_tracing;
-use crate::state::AppState;
+use crate::state::ApplicationStateInner;
 
 
 /// Connect to PostgreSQL database as specified in the configuration file
@@ -72,6 +72,7 @@ async fn main() -> Result<()> {
         configuration.logging.console_output_level_filter(),
         configuration.logging.log_file_output_level_filter(),
         &configuration.logging.log_file_output_directory,
+        "kolomoni.log",
     )
     .wrap_err("Failed to initialize tracing.")?;
 
@@ -83,7 +84,7 @@ async fn main() -> Result<()> {
     let hasher = ArgonHasher::new(&configuration)?;
     let json_web_token_manager = JsonWebTokenManager::new(&configuration);
 
-    let state = web::Data::new(AppState {
+    let state = web::Data::new(ApplicationStateInner {
         configuration: configuration.clone(),
         hasher,
         database,

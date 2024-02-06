@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 use actix_web::body::BoxBody;
 use actix_web::http::StatusCode;
 use actix_web::{HttpResponse, ResponseError};
+use itertools::Itertools;
 use kolomoni_auth::permissions::Permission;
 use sea_orm::DbErr;
 use serde::Serialize;
@@ -11,7 +12,9 @@ use tracing::error;
 use utoipa::ToSchema;
 
 /// Simple JSON-encodable response containing a single field: a `reason`.
-/// Useful for specifying reasons when returning a HTTP status code with an error.
+///
+/// This is useful for specifying reasons when returning a HTTP status code
+/// with an error.
 #[derive(Serialize, Debug, ToSchema)]
 pub struct ErrorReasonResponse {
     /// Error reason.
@@ -42,23 +45,56 @@ impl ErrorReasonResponse {
     }
 
     /// Initialize an `ErrorReasonResponse` with a message about a specific missing permission.
-    pub fn missing_specific_permission(permission: Permission) -> Self {
+    pub fn missing_specific_permission(permission: &Permission) -> Self {
         Self {
             reason: format!("Missing permission: {}", permission.name()),
+        }
+    }
+
+    /// Initialize an `ErrorReasonResponse` with a message about a specific missing permission
+    /// or permissions.
+    pub fn missing_specific_permissions(permission: &[Permission]) -> Self {
+        if permission.is_empty() {
+            Self::missing_permissions()
+        } else if permission.len() == 1 {
+            Self::missing_specific_permission(
+                // PANIC SAFETY: We just checked that the length is one.
+                permission.first().unwrap(),
+            )
+        } else {
+            Self {
+                reason: format!(
+                    "Missing permissions: {}",
+                    permission
+                        .iter()
+                        .map(|permission| permission.name())
+                        .join(", ")
+                ),
+            }
         }
     }
 }
 
 
-/// General Stari Kolomoni API error type.
-/// Use alongside [`EndpointResult`] in your actix endpoint handlers to easily [`?`][std::try]-return errors.
+/// General-purpose Stari Kolomoni API error type.
 ///
+/// Use this type alongside an [`EndpointResult`] return type in your actix endpoint handlers
+/// to allow you to easily
+/// [`?`](https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html#a-shortcut-for-propagating-errors-the--operator)-return
+/// errors and automatically convert them into HTTP 4xx and 5xx errors!
+/// For more details on how this works, consult the
+/// [Actix documentation on errors](https://actix.rs/docs/errors) and the
+/// `impl `[`ResponseError`]` for `[`APIError`] block.
 ///
-/// # Examples
+/// <br>
 ///
-/// ## Internal errors
-/// If the function you're calling returns an [`miette::Result`], you can simply
-/// map it to [`APIError::InternalError`] and use `?` to return early if an error occurred:
+/// # Usage examples
+///
+/// ## 1.1 Internal errors
+/// If the function you're calling returns a [`miette::Result`], you can simply
+/// map it to an [`APIError::InternalError`] and use `?` to return early if an error occurred.
+/// If it returns a std-compatible [`Error`][std::error::Error], you must first call
+/// [`error.into_diagnostic()`][miette::IntoDiagnostic::into_diagnostic].
 ///
 /// ```
 /// # use miette::miette;
@@ -89,6 +125,12 @@ impl ErrorReasonResponse {
 /// > Note that in this case `.map_err(APIError::InternalError)` is the same as
 /// > the longer version: `.map_err(|error| APIError::InternalError(error))`.
 ///
+/// As mentioned, returning an [`APIError`] from a [`EndpointResult`]-returning actix handler
+/// will mean actix will automatically generate a relevant 4xx/5xx error, including any additional info,
+/// as configured.
+///
+/// ---
+///
 /// Similarly, you can map a [`sea_orm::error::DbErr`] to [`APIError::InternalDatabaseError`].
 /// If you are working with some other type of `Result`, you can do something like this instead
 /// to produce an `500 Internal Server Error` on `Err`:
@@ -105,31 +147,37 @@ impl ErrorReasonResponse {
 /// ```
 ///
 ///
-/// ### Other (not found / not authenticated / missing permissions)
+/// ## 1.2 Other errors (not found, missing permissions, etc.)
 /// Just like [`APIError::internal_reason`], which returns a constructed [`APIError::InternalReason`]
-/// with your message, there are other helper methods, such as [`APIError::not_found`],
-/// [`APIError::not_found_with_reason`], [`APIError::not_enough_permissions`]
-/// and [`APIError::missing_specific_permission`].
+/// with your message, there are other helper methods, such as:
+/// - [`APIError::not_found`],
+/// - [`APIError::not_found_with_reason`],
+/// - [`APIError::missing_permission`],
+/// - [`APIError::missing_specific_permission`], and
+/// - [`APIError::missing_specific_permissions`].
 ///
 ///
-/// ### Full authentication example
-/// When the user is not authenticated at all, you can use the [`APIError::NotAuthenticated`] variant.
+/// <br>
+///
+/// # Full authentication example
+/// When the user is not authenticated at all, you can use the
+/// [`APIError::NotAuthenticated`] error variant.
 ///
 /// What follows is a full authentication and permission example, requiring the user to
-/// be authenticated and have the `user.self:read` permission:
+/// be authenticated and have the `user.self:read` permission.
 ///
 /// ```
 /// # use actix_web::{post, web};
 /// # use kolomoni::require_permission;
 /// # use kolomoni::authentication::UserAuth;
-/// # use kolomoni::state::AppState;
-/// # use kolomoni_auth::permissions::UserPermission;
+/// # use kolomoni::state::ApplicationState;
+/// # use kolomoni_auth::permissions::Permission;
 /// # use kolomoni::api::errors::{APIError, EndpointResult};
 /// # use kolomoni::api::macros::DumbResponder;
 /// #[post("/some/path")]
 /// async fn example_auth(
+///     state: ApplicationState,
 ///     user_auth: UserAuth,
-///     state: web::Data<AppState>,
 /// ) -> EndpointResult {
 ///     let (token, permissions) = user_auth
 ///         .token_and_permissions_if_authenticated(&state.database)
@@ -137,20 +185,22 @@ impl ErrorReasonResponse {
 ///         .map_err(APIError::InternalError)?
 ///         .ok_or_else(|| APIError::NotAuthenticated)?;
 ///
-///     require_permission!(permissions, UserPermission::UserSelfRead);
+///     require_permission!(permissions, Permission::UserSelfRead);
 ///
+///     // [the rest of the function]
 ///     # todo!();
 /// }
 /// ```
 #[derive(Debug, Error)]
 pub enum APIError {
-    /// User is not authenticated (missing `Authorization` header).
+    /// User is not authenticated
+    /// (missing `Authorization: Bearer <token>` HTTP header).
     NotAuthenticated,
 
-    /// User does not have the required permissions.
-    /// If `Some`, this specifies the missing permission.
+    /// User does not have the required permission (or permissions).
+    /// If `Some`, this specifies the missing permission (or permissions).
     NotEnoughPermissions {
-        missing_permission: Option<Permission>,
+        missing_permission: Option<Vec<Permission>>,
     },
 
     /// Resource could not be found. If `Some`, this describes the reason for a 404.
@@ -189,27 +239,45 @@ impl APIError {
         }
     }
 
-    /// Initialize a new not enough permissions API error without a specific permission.
+    /// Initialize a new API error, clarifying that the user is missing
+    /// a permission (or multiple permissions), but without clarification as to which those are.
     #[allow(dead_code)]
     #[inline]
-    pub fn not_enough_permissions() -> Self {
+    pub fn missing_permission() -> Self {
         Self::NotEnoughPermissions {
             missing_permission: None,
         }
     }
 
-    /// Initialize a new not enough permissions API error with a specific permission.
+
+    /// Initialize a new API error, clarifying that the user is missing
+    /// some permission.
     #[inline]
     pub fn missing_specific_permission(permission: Permission) -> Self {
         Self::NotEnoughPermissions {
-            missing_permission: Some(permission),
+            missing_permission: Some(vec![permission]),
         }
     }
 
-    /// Initialize a new internal API error with an internal reason (not leaked through the API).
+    /// Initialize a new API error, clarifying that the user is missing
+    /// some set of permissions.
     #[inline]
-    pub fn internal_reason(reason: &str) -> Self {
-        Self::InternalReason(reason.to_string())
+    #[allow(dead_code)]
+    pub fn missing_specific_permissions(permissions: Vec<Permission>) -> Self {
+        Self::NotEnoughPermissions {
+            missing_permission: Some(permissions),
+        }
+    }
+
+    /// Initialize a new internal API error using an internal reason string.
+    /// When constructing an HTTP response using this error variant, the **reason
+    /// is not leaked through the API.**
+    #[inline]
+    pub fn internal_reason<S>(reason: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self::InternalReason(reason.into())
     }
 }
 
@@ -218,11 +286,25 @@ impl Display for APIError {
         match self {
             APIError::NotAuthenticated => write!(f, "No authentication."),
             APIError::NotEnoughPermissions { missing_permission } => match missing_permission {
-                Some(missing_permission) => write!(
-                    f,
-                    "User doesn't have the required permission: {}",
-                    missing_permission.name()
-                ),
+                Some(missing_permission) => {
+                    if missing_permission.len() == 1 {
+                        write!(
+                            f,
+                            "User doesn't have the required permission: {}",
+                            // PANIC SAFETY: We just checked that length is 1.
+                            missing_permission.first().unwrap().name()
+                        )
+                    } else {
+                        write!(
+                            f,
+                            "User doesn't have the required permissions: {}",
+                            missing_permission
+                                .iter()
+                                .map(|permission| permission.name())
+                                .join(", ")
+                        )
+                    }
+                }
                 None => write!(f, "User doesn't have enough permissions."),
             },
             APIError::NotFound { reason_response } => match reason_response {
@@ -258,8 +340,8 @@ impl ResponseError for APIError {
                 HttpResponse::Unauthorized().json(ErrorReasonResponse::not_authenticated())
             }
             APIError::NotEnoughPermissions { missing_permission } => match missing_permission {
-                Some(missing_permission) => HttpResponse::Forbidden().json(
-                    ErrorReasonResponse::missing_specific_permission(*missing_permission),
+                Some(missing_permissions) => HttpResponse::Forbidden().json(
+                    ErrorReasonResponse::missing_specific_permissions(missing_permissions),
                 ),
                 None => HttpResponse::Forbidden().json(ErrorReasonResponse::missing_permissions()),
             },

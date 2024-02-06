@@ -1,20 +1,24 @@
 use actix_web::body::MessageBody;
 use actix_web::HttpResponse;
 
-/// Simple responder trait similar to `Responder` from `actix_web`.
-/// The main difference is that the `into_response` method does not require
-/// a reference to `HttpRequest` (i.e. the response must be built without a request).
+/// Simple responder trait (similar to [`actix_web::Responder`]).
 ///
-/// See documentation for `impl_json_responder` for reasoning.
+/// The main difference is that our `into_response` method does not require
+/// a reference to [`HttpRequest`],
+/// i.e. the response must be built without a request when using this trait.
+/// This can make the call signature more sensible in certain cases.
+///
+/// See documentation for [`impl_json_responder`][crate::impl_json_responder] for reasoning.
 pub trait DumbResponder {
     type Body: MessageBody + 'static;
 
-    /// Serialize self as JSON and return a `HTTP 200 OK` response with JSON-encoded body.  
+    /// Serializes `self` as JSON and return a `HTTP 200 OK` response
+    /// with a JSON-encoded body.  
     fn into_response(self) -> HttpResponse<Self::Body>;
 }
 
-/// Macro that implements two traits:
-/// - [`actix_web::Responder`], allowing you to return this struct in an endpoint handler, and
+/// Macro that implements two traits for the given struct:
+/// - [`actix_web::Responder`], allowing you to return this struct in an actix endpoint handler, and
 /// - [`DumbResponder`], which is a simpler internal trait that has the `into_response` method that
 ///   does basically the same as [`actix_web::Responder::respond_to`], but without having to provide
 ///   a reference to [`HttpRequest`][actix_web::HttpRequest], making code cleaner.

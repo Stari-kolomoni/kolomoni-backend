@@ -2,12 +2,12 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-/// Command-line arguments for the backend.
+/// Server command-line arguments.
 #[derive(Parser)]
 #[command(
     name = "stari-kolomoni-backend",
     author,
-    about = "Backend API for the Stari Kolomoni open translation project.",
+    about = "API for the Stari Kolomoni open translation project.",
     version
 )]
 pub struct CLIArgs {

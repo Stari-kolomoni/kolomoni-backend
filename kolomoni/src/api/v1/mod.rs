@@ -12,6 +12,9 @@ pub mod users;
 
 use actix_web::{web, Scope};
 
+
+/// Router for the entire V1 API.
+/// Lives under the `/api/v1` path.
 pub fn v1_api_router() -> Scope {
     web::scope("/v1")
         .service(users::users_router())

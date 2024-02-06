@@ -15,7 +15,7 @@ use utoipa::ToSchema;
 use crate::api::errors::{APIError, EndpointResult};
 use crate::api::macros::DumbResponder;
 use crate::authentication::UserAuth;
-use crate::state::AppState;
+use crate::state::ApplicationState;
 use crate::{impl_json_responder, require_permission, response_with_reason};
 
 /*
@@ -163,10 +163,7 @@ impl_json_responder!(RegisteredUsersListResponse);
     )
 )]
 #[get("")]
-async fn get_all_registered_users(
-    user_auth: UserAuth,
-    state: web::Data<AppState>,
-) -> EndpointResult {
+async fn get_all_registered_users(state: ApplicationState, user_auth: UserAuth) -> EndpointResult {
     // User must provide the authentication token and
     // have the `user.any:read` permission to access this endpoint.
     let (_, permissions) = user_auth
@@ -293,7 +290,7 @@ impl_json_responder!(UserRegistrationResponse);
 )]
 #[post("")]
 pub async fn register_user(
-    state: web::Data<AppState>,
+    state: ApplicationState,
     json_data: web::Json<UserRegistrationRequest>,
 ) -> EndpointResult {
     // Ensure the provided username is unique.
@@ -392,10 +389,7 @@ pub async fn register_user(
     )
 )]
 #[get("/me")]
-pub async fn get_current_user_info(
-    user_auth: UserAuth,
-    state: web::Data<AppState>,
-) -> EndpointResult {
+pub async fn get_current_user_info(state: ApplicationState, user_auth: UserAuth) -> EndpointResult {
     // User must provide an authentication token and
     // have the `user.self:read` permission to access this endpoint.
     let (token, permissions) = user_auth
@@ -464,8 +458,8 @@ pub async fn get_current_user_info(
 )]
 #[get("/me/permissions")]
 async fn get_current_user_permissions(
+    state: ApplicationState,
     user_auth: UserAuth,
-    state: web::Data<AppState>,
 ) -> EndpointResult {
     // User must be authenticated and
     // have the `user.self:read` permission to access this endpoint.
@@ -549,8 +543,8 @@ async fn get_current_user_permissions(
 )]
 #[patch("/me/display_name")]
 async fn update_current_user_display_name(
+    state: ApplicationState,
     user_auth: UserAuth,
-    state: web::Data<AppState>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
     // User must be authenticated and
@@ -685,9 +679,9 @@ async fn update_current_user_display_name(
 )]
 #[get("/{user_id}")]
 async fn get_specific_user_info(
+    state: ApplicationState,
     user_auth: UserAuth,
     path_info: web::Path<(i32,)>,
-    state: web::Data<AppState>,
 ) -> EndpointResult {
     // Only authenticated users with the `user.any:read` permission can access this endpoint.
     let permissions = user_auth
@@ -771,9 +765,9 @@ async fn get_specific_user_info(
 )]
 #[get("/{user_id}/permissions")]
 async fn get_specific_user_permissions(
+    state: ApplicationState,
     user_auth: UserAuth,
     path_info: web::Path<(i32,)>,
-    state: web::Data<AppState>,
 ) -> EndpointResult {
     // Only authenticated users with the `user.any:read` permission can access this endpoint.
     let permissions = user_auth
@@ -871,9 +865,9 @@ async fn get_specific_user_permissions(
 )]
 #[patch("/{user_id}/display_name")]
 async fn update_specific_user_display_name(
+    state: ApplicationState,
     user_auth: UserAuth,
     path_info: web::Path<(i32,)>,
-    state: web::Data<AppState>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
     // Only authenticated users with the `user.any:write` permission can modify
@@ -1048,9 +1042,9 @@ pub struct UserPermissionsAddRequest {
 )]
 #[post("/{user_id}/permissions")]
 async fn add_permissions_to_specific_user(
+    state: ApplicationState,
     user_auth: UserAuth,
     path_info: web::Path<(i32,)>,
-    state: web::Data<AppState>,
     json_data: web::Json<UserPermissionsAddRequest>,
 ) -> EndpointResult {
     // Only authenticated users with the `user.any:write` permission can add permissions
@@ -1229,9 +1223,9 @@ pub struct UserPermissionsRemoveRequest {
 )]
 #[delete("/{user_id}/permissions")]
 async fn remove_permissions_from_specific_user(
+    state: ApplicationState,
     user_auth: UserAuth,
     path_info: web::Path<(i32,)>,
-    state: web::Data<AppState>,
     json_data: web::Json<UserPermissionsRemoveRequest>,
 ) -> EndpointResult {
     // Only authenticated users with the `user.any:write` permission can remove permissions
