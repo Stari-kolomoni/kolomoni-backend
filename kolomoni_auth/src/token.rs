@@ -10,7 +10,10 @@ use serde_with::serde_as;
 use serde_with::TimestampSeconds;
 use thiserror::Error;
 
+/// JSON Web Token issuer.
 const JWT_ISSUER: &str = "Stari Kolomoni";
+
+/// JSON Web Token subject.
 const JWT_SUBJECT: &str = "API token";
 
 
@@ -38,9 +41,9 @@ pub enum JWTTokenType {
 /// JSON Web Token data ("claims").
 /// Can be either an access token or a refresh token.
 ///
-/// For more information see:
-/// - https://jwt.io/introduction
-/// - https://datatracker.ietf.org/doc/html/rfc7519#section-4.1
+/// More information:
+/// - <https://jwt.io/introduction>
+/// - <https://datatracker.ietf.org/doc/html/rfc7519#section-4.1>
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct JWTClaims {

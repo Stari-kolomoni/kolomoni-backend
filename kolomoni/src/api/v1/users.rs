@@ -1,9 +1,8 @@
-use actix_web::body::BoxBody;
+use actix_web::delete;
 use actix_web::http::StatusCode;
-use actix_web::{delete, HttpResponseBuilder};
-use actix_web::{get, patch, post, web, HttpRequest, HttpResponse, Responder, Scope};
+use actix_web::{get, patch, post, web, HttpResponse, Scope};
 use chrono::{DateTime, Utc};
-use kolomoni_auth::permissions::{UserPermission, UserPermissions};
+use kolomoni_auth::permissions::{Permission, UserPermissionSet};
 use kolomoni_database::mutation::{self, UserRegistrationInfo};
 use kolomoni_database::query::UserPermissionsExt;
 use kolomoni_database::{entities, query};
@@ -13,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
+use crate::api::errors::{APIError, EndpointResult};
 use crate::api::macros::DumbResponder;
 use crate::authentication::UserAuth;
 use crate::state::AppState;
@@ -117,14 +116,6 @@ pub struct RegisteredUsersListResponse {
 
 impl_json_responder!(RegisteredUsersListResponse);
 
-// # Development note
-//
-// We use "" instead of "/" below (in `#[get("")`) and in other places
-// because this allows the user to request `GET /api/v1/users` OR `GET /api/v1/users/` and
-// get the correct endpoint both times.
-//
-// For more information, see `actix_web::middleware::NormalizePath` (trim mode).
-
 /// List users
 ///
 /// This endpoint returns a list of all registered users.
@@ -184,7 +175,7 @@ async fn get_all_registered_users(
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    require_permission!(permissions, UserPermission::UserAnyRead);
+    require_permission!(permissions, Permission::UserAnyRead);
 
 
     // Load all users from the database and parse them info `UserInformation` instances.
@@ -413,7 +404,7 @@ pub async fn get_current_user_info(
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    require_permission!(permissions, UserPermission::UserSelfRead);
+    require_permission!(permissions, Permission::UserSelfRead);
 
 
     // Load user from database.
@@ -484,7 +475,7 @@ async fn get_current_user_permissions(
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    require_permission!(permissions, UserPermission::UserSelfRead);
+    require_permission!(permissions, Permission::UserSelfRead);
 
 
     Ok(UserPermissionsResponse {
@@ -570,7 +561,7 @@ async fn update_current_user_display_name(
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    require_permission!(permissions, UserPermission::UserSelfWrite);
+    require_permission!(permissions, Permission::UserSelfWrite);
 
 
     let json_data = json_data.into_inner();
@@ -705,7 +696,7 @@ async fn get_specific_user_info(
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    require_permission!(permissions, UserPermission::UserAnyRead);
+    require_permission!(permissions, Permission::UserAnyRead);
 
 
     // Return information about the requested user.
@@ -791,7 +782,7 @@ async fn get_specific_user_permissions(
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    require_permission!(permissions, UserPermission::UserAnyRead);
+    require_permission!(permissions, Permission::UserAnyRead);
 
 
     // Get requested user's permissions.
@@ -893,7 +884,7 @@ async fn update_specific_user_display_name(
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    require_permission!(permissions, UserPermission::UserAnyWrite);
+    require_permission!(permissions, Permission::UserAnyWrite);
 
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
@@ -1071,10 +1062,7 @@ async fn add_permissions_to_specific_user(
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    require_permission!(
-        current_user_permissions,
-        UserPermission::UserAnyWrite
-    );
+    require_permission!(current_user_permissions, Permission::UserAnyWrite);
 
 
     let requested_user_id = path_info.into_inner().0;
@@ -1096,13 +1084,13 @@ async fn add_permissions_to_specific_user(
     }
 
 
-    let permissions_to_add_result: Result<Vec<UserPermission>, &str> = json_data
+    let permissions_to_add_result: Result<Vec<Permission>, &str> = json_data
         .permissions_to_add
         .iter()
         .map(|permission_name| {
-            UserPermission::from_name(permission_name.as_str()).ok_or(permission_name.as_str())
+            Permission::from_name(permission_name.as_str()).ok_or(permission_name.as_str())
         })
-        .collect::<Result<Vec<UserPermission>, &str>>();
+        .collect::<Result<Vec<Permission>, &str>>();
 
     let permissions_to_add = match permissions_to_add_result {
         Ok(permissions_to_add) => permissions_to_add,
@@ -1123,7 +1111,7 @@ async fn add_permissions_to_specific_user(
                 StatusCode::FORBIDDEN,
                 format!(
                     "You are not allowed to add the {} permission to other users.",
-                    permission.to_name()
+                    permission.name()
                 )
             ));
         }
@@ -1141,7 +1129,7 @@ async fn add_permissions_to_specific_user(
 
     // Retrieve updated list of permission for the specified user.
     let updated_permission_list =
-        UserPermissions::get_from_database_by_user_id(&state.database, requested_user_id)
+        UserPermissionSet::get_from_database_by_user_id(&state.database, requested_user_id)
             .await
             .map_err(APIError::InternalError)?
             .ok_or_else(|| {
@@ -1255,10 +1243,7 @@ async fn remove_permissions_from_specific_user(
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::NotAuthenticated)?;
 
-    require_permission!(
-        current_user_permissions,
-        UserPermission::UserAnyWrite
-    );
+    require_permission!(current_user_permissions, Permission::UserAnyWrite);
 
 
     let requested_user_id = path_info.into_inner().0;
@@ -1280,13 +1265,13 @@ async fn remove_permissions_from_specific_user(
     }
 
 
-    let permissions_to_remove_result: Result<Vec<UserPermission>, &str> = json_data
+    let permissions_to_remove_result: Result<Vec<Permission>, &str> = json_data
         .permissions_to_remove
         .iter()
         .map(|permission_name| {
-            UserPermission::from_name(permission_name.as_str()).ok_or(permission_name.as_str())
+            Permission::from_name(permission_name.as_str()).ok_or(permission_name.as_str())
         })
-        .collect::<Result<Vec<UserPermission>, &str>>();
+        .collect::<Result<Vec<Permission>, &str>>();
 
     let permissions_to_remove = match permissions_to_remove_result {
         Ok(permissions_to_remove) => permissions_to_remove,
@@ -1307,7 +1292,7 @@ async fn remove_permissions_from_specific_user(
                 StatusCode::FORBIDDEN,
                 format!(
                     "You are not allowed to remove the {} permission from other users.",
-                    permission.to_name()
+                    permission.name()
                 )
             ));
         }
@@ -1325,7 +1310,7 @@ async fn remove_permissions_from_specific_user(
 
     // Retrieve updated list of permissions for the user we just modified.
     let updated_permission_list =
-        UserPermissions::get_from_database_by_user_id(&state.database, requested_user_id)
+        UserPermissionSet::get_from_database_by_user_id(&state.database, requested_user_id)
             .await
             .map_err(APIError::InternalError)?
             .ok_or_else(|| {

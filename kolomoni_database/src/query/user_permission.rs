@@ -1,17 +1,20 @@
-use kolomoni_auth::permissions::UserPermissions;
+use kolomoni_auth::permissions::UserPermissionSet;
 use miette::{miette, Context, IntoDiagnostic, Result};
 use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 
 use crate::entities::{permission, user};
 
 
-/// Raw permissions query implementation.
-/// For something more high-level, see [`UserPermissions`],
-/// especially the methods in its [`UserPermissionExt`] impl.
+/// Queries related to the [`crate::entities::user_permission::Entity`] entity.
+///
+/// For something more high-level, see [`UserPermissionSet`],
+/// especially the methods in its [`UserPermissionsExt`] impl.
 #[allow(dead_code)]
 pub struct UserPermissionQuery {}
 
 impl UserPermissionQuery {
+    /// Get a user's raw permission name set by their username.
+    /// Use [`UserPermissionSet::get_from_database_by_username`] instead!
     pub async fn get_user_permission_names_by_username<C: ConnectionTrait>(
         database: &C,
         username: &str,
@@ -44,6 +47,8 @@ impl UserPermissionQuery {
         ))
     }
 
+    /// Get a user's raw permission name set by their ID.
+    /// Use [`UserPermissionSet::get_from_database_by_user_id`] instead!
     pub async fn get_user_permission_names_by_user_id<C: ConnectionTrait>(
         database: &C,
         user_id: i32,
@@ -77,6 +82,7 @@ impl UserPermissionQuery {
 
 #[allow(async_fn_in_trait)]
 pub trait UserPermissionsExt {
+    /// Load a user's parsed permission set by their username.
     async fn get_from_database_by_username<C: ConnectionTrait>(
         database: &C,
         username: &str,
@@ -84,6 +90,7 @@ pub trait UserPermissionsExt {
     where
         Self: Sized;
 
+    /// Get a user's parsed permission set by their ID.
     async fn get_from_database_by_user_id<C: ConnectionTrait>(
         database: &C,
         user_id: i32,
@@ -93,9 +100,7 @@ pub trait UserPermissionsExt {
 }
 
 
-impl UserPermissionsExt for UserPermissions {
-    /// Initialize `UserPermissions` by loading permissions from
-    /// the database.
+impl UserPermissionsExt for UserPermissionSet {
     async fn get_from_database_by_username<C: ConnectionTrait>(
         database: &C,
         username: &str,
@@ -112,8 +117,6 @@ impl UserPermissionsExt for UserPermissions {
         Ok(Some(Self::from_permission_names(names)?))
     }
 
-    /// Initialize `UserPermissions` by loading permissions from
-    /// the database.
     async fn get_from_database_by_user_id<C: ConnectionTrait>(
         database: &C,
         user_id: i32,

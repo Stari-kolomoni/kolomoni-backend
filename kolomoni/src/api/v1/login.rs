@@ -1,5 +1,4 @@
-use actix_web::body::BoxBody;
-use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{post, web, HttpResponse};
 use chrono::{Duration, Utc};
 use kolomoni_auth::token::{JWTClaims, JWTTokenType, JWTValidationError};
 use kolomoni_database::query;

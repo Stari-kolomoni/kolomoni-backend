@@ -23,7 +23,7 @@ use crate::traits::{ResolvableConfiguration, ResolvableConfigurationWithContext}
 use crate::utilities::get_default_configuration_file_path;
 
 #[derive(Deserialize, Debug)]
-struct UnresolvedConfiguration {
+pub(crate) struct UnresolvedConfiguration {
     /// Logging-related configuration.
     logging: UnresolvedLoggingConfiguration,
 

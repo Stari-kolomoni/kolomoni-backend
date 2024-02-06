@@ -62,15 +62,20 @@ impl ArgonHasher {
     }
 }
 
+
 pub struct UserRegistrationInfo {
     pub username: String,
     pub display_name: String,
     pub password: String,
 }
 
+
+
+/// Mutations for the [`crate::entities::user::Entity`] entity.
 pub struct UserMutation {}
 
 impl UserMutation {
+    /// Create a new user.
     pub async fn create_user(
         database: &DbConn,
         hasher: &ArgonHasher,
@@ -107,7 +112,7 @@ impl UserMutation {
         for permission in DEFAULT_USER_PERMISSIONS {
             user_permission::ActiveModel {
                 user_id: ActiveValue::Set(user.id),
-                permission_id: ActiveValue::Set(permission.to_id()),
+                permission_id: ActiveValue::Set(permission.id()),
             }
             .insert(&transaction)
             .await
@@ -124,6 +129,7 @@ impl UserMutation {
         Ok(user)
     }
 
+    /// Update last activity time for a user. The user is looked up by their username.
     pub async fn update_last_active_at_by_username<C: ConnectionTrait>(
         database: &C,
         username: &str,
@@ -150,6 +156,7 @@ impl UserMutation {
         Ok(updated_user)
     }
 
+    /// Update last activity time for a user. The user is looked up by their ID.
     pub async fn update_last_active_at_by_user_id<C: ConnectionTrait>(
         database: &C,
         user_id: i32,
@@ -170,6 +177,7 @@ impl UserMutation {
         Ok(updated_user)
     }
 
+    /// Update a user's display name. The user is looked up by their ID.
     pub async fn update_display_name_by_user_id<C: ConnectionTrait>(
         database: &C,
         user_id: i32,
@@ -195,6 +203,7 @@ impl UserMutation {
         Ok(updated_user)
     }
 
+    /// Update a user's display name. The user is looked up by their username.
     pub async fn update_display_name_by_username<C: ConnectionTrait>(
         database: &C,
         username: &str,

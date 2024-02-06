@@ -4,7 +4,7 @@ use actix_web::dev::Payload;
 use actix_web::http::{header, StatusCode};
 use actix_web::web::Data;
 use actix_web::{FromRequest, HttpRequest};
-use kolomoni_auth::permissions::UserPermissions;
+use kolomoni_auth::permissions::UserPermissionSet;
 use kolomoni_auth::token::{JWTClaims, JWTValidationError};
 use kolomoni_database::query::UserPermissionsExt;
 use miette::{miette, Result};
@@ -20,8 +20,9 @@ use crate::state::AppState;
 ///
 /// ## Use in actix-web
 /// To easily extract authentication and permission data on an endpoint handler,
-/// `UserAuth` can be an extractor (https://actix.rs/docs/extractors). Simply
-/// add a `user_auth: UserAuth` parameter to your endpoint handler and that's it.
+/// `UserAuth` is an Actix [extractor](https://actix.rs/docs/extractors).
+///
+/// To use it, simply add a `user_auth: UserAuth` parameter to your endpoint handler.
 ///
 /// Inside the handler body, you can call any of `token_if_authenticated`, `permissions_if_authenticated`
 /// or `token_and_permissions_if_authenticated` that all return `Option`s and the requested
@@ -50,12 +51,12 @@ impl UserAuth {
     pub async fn permissions_if_authenticated<C: ConnectionTrait>(
         &self,
         database: &C,
-    ) -> Result<Option<UserPermissions>> {
+    ) -> Result<Option<UserPermissionSet>> {
         match self {
             UserAuth::Unauthenticated => Ok(None),
             UserAuth::Authenticated { token } => {
                 let user_permissions =
-                    UserPermissions::get_from_database_by_username(database, &token.username)
+                    UserPermissionSet::get_from_database_by_username(database, &token.username)
                         .await?;
 
                 Ok(user_permissions)
@@ -64,20 +65,20 @@ impl UserAuth {
     }
 
     /// If authenticated, return `Some` containing a tuple of:
-    /// - a reference to the token contents (`&JWTClaims`) and
-    /// - `UserPermissions`, which is the permission list of the user.
+    /// - a reference to the token contents ([`&JWTClaims`][JWTClaims]) and
+    /// - [`UserPermissionSet`], which is the permission list of the user.
     ///
     /// This requires a database lookup (if authenticated).
     #[inline]
     pub async fn token_and_permissions_if_authenticated<C: ConnectionTrait>(
         &self,
         database: &C,
-    ) -> Result<Option<(&JWTClaims, UserPermissions)>> {
+    ) -> Result<Option<(&JWTClaims, UserPermissionSet)>> {
         match self {
             UserAuth::Unauthenticated => Ok(None),
             UserAuth::Authenticated { token } => {
                 let user_permissions =
-                    UserPermissions::get_from_database_by_username(database, &token.username)
+                    UserPermissionSet::get_from_database_by_username(database, &token.username)
                         .await?
                         .ok_or_else(|| miette!("User is missing from the database."))?;
 

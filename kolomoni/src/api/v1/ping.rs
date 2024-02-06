@@ -1,5 +1,4 @@
-use actix_web::body::BoxBody;
-use actix_web::{get, HttpRequest, HttpResponse, Responder};
+use actix_web::get;
 use serde::Serialize;
 use utoipa::ToSchema;
 

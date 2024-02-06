@@ -5,7 +5,11 @@ use crate::m20230624_170512_create_permissions_table::Permission;
 #[derive(DeriveMigrationName)]
 pub struct Migration;
 
-// See `auth.rs` for the source of these permissions.
+
+/// This is the list of available permissions.
+/// 
+/// **IMPORTANT: This permission list (or on related migrations) should be kept in sync 
+/// with `./kolomoni_auth/src/permissions.rs`.**
 #[rustfmt::skip]
 const STANDARD_PERMISSIONS: [(i32, &str, &str); 4] = [
     (
@@ -29,6 +33,7 @@ const STANDARD_PERMISSIONS: [(i32, &str, &str); 4] = [
         "Allows the user to update account information of any other user."
     ),
 ];
+
 
 async fn insert_permission<'manager>(
     manager: &SchemaManager<'manager>,

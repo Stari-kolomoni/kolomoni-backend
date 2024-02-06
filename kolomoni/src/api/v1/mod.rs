@@ -1,3 +1,11 @@
+//! # Development note
+//!
+//! We use "" instead of "/" in many places (e.g. `#[get("")`, etc.)
+//! because this allows the user to request e.g. `GET /api/v1/users` OR `GET /api/v1/users/` and
+//! get the correct endpoint both times.
+//!
+//! For more information, see `actix_web::middleware::NormalizePath` (trim mode).
+
 pub mod login;
 pub mod ping;
 pub mod users;

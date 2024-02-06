@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 /// **The defined permissions must match with the `*_seed_permissions.rs` file in `migrations`!**
 #[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone, Debug)]
 #[allow(clippy::enum_variant_names)]
-pub enum UserPermission {
+pub enum Permission {
     /// Allows the user to log in and view their account information.
     #[serde(rename = "user.self:read")]
     UserSelfRead,
@@ -28,7 +28,8 @@ pub enum UserPermission {
     UserAnyWrite,
 }
 
-impl UserPermission {
+impl Permission {
+    /// Attempt to parse a [`Permission`] from its name.
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "user.self:read" => Some(Self::UserSelfRead),
@@ -39,107 +40,86 @@ impl UserPermission {
         }
     }
 
-    pub fn to_id(self) -> i32 {
+    /// Get the internal ID of the given [`Permission`].
+    /// This ID is used primarily in the database and should not be visible externally.
+    pub fn id(&self) -> i32 {
         match self {
-            UserPermission::UserSelfRead => 1,
-            UserPermission::UserSelfWrite => 2,
-            UserPermission::UserAnyRead => 3,
-            UserPermission::UserAnyWrite => 4,
+            Permission::UserSelfRead => 1,
+            Permission::UserSelfWrite => 2,
+            Permission::UserAnyRead => 3,
+            Permission::UserAnyWrite => 4,
         }
     }
 
-    pub fn to_name(self) -> &'static str {
+    /// Get the name of the given [`Permission`].
+    pub fn name(&self) -> &'static str {
         match self {
-            UserPermission::UserSelfRead => "user.self:read",
-            UserPermission::UserSelfWrite => "user.self:write",
-            UserPermission::UserAnyRead => "user.any:read",
-            UserPermission::UserAnyWrite => "user.any:write",
+            Permission::UserSelfRead => "user.self:read",
+            Permission::UserSelfWrite => "user.self:write",
+            Permission::UserAnyRead => "user.any:read",
+            Permission::UserAnyWrite => "user.any:write",
         }
     }
 
-    pub fn to_description(self) -> &'static str {
+    /// Get the description of the given [`Permission`].
+    pub fn description(&self) -> &'static str {
         match self {
-            UserPermission::UserSelfRead => {
+            Permission::UserSelfRead => {
                 "Allows the user to log in and view their account information."
             }
-            UserPermission::UserSelfWrite => "Allows the user to update their account information.",
-            UserPermission::UserAnyRead => {
+            Permission::UserSelfWrite => "Allows the user to update their account information.",
+            Permission::UserAnyRead => {
                 "Allows the user to view public account information of any other user."
             }
-            UserPermission::UserAnyWrite => {
+            Permission::UserAnyWrite => {
                 "Allows the user to update account information of any other user."
             }
         }
     }
 }
 
-// List of user permissions given to newly-registered users.
-pub const DEFAULT_USER_PERMISSIONS: [UserPermission; 3] = [
-    UserPermission::UserSelfRead,
-    UserPermission::UserSelfWrite,
-    UserPermission::UserAnyRead,
+/// List of user permissions given to newly-registered users.
+pub const DEFAULT_USER_PERMISSIONS: [Permission; 3] = [
+    Permission::UserSelfRead,
+    Permission::UserSelfWrite,
+    Permission::UserAnyRead,
 ];
 
 
 
 /// Set of permissions for a specific user.
-pub struct UserPermissions {
-    permissions: HashSet<UserPermission>,
+///
+/// Not to be confused with `kolomoni_database::entities::UserPermission`,
+/// which is a raw database entity.
+pub struct UserPermissionSet {
+    /// Permission set.
+    permissions: HashSet<Permission>,
 }
 
-impl UserPermissions {
-    /// Initialize `UserPermissions` given a `Vec` of permission names.
-    /// Returns `Err` if a permission name doesn't resolve to a `UserPermission`.
-    pub fn from_permission_names(permission_names: Vec<String>) -> Result<Self> {
+impl UserPermissionSet {
+    /// Initialize [`UserPermissionSet`] given a `Vec` of permission names.
+    /// Returns `Err` if a permission name doesn't resolve to a [`Permission`].
+    pub fn from_permission_names<P>(permission_names: Vec<P>) -> Result<Self>
+    where
+        P: AsRef<str>,
+    {
         let permissions = permission_names
             .into_iter()
             .map(|permission_name| {
-                UserPermission::from_name(&permission_name)
-                    .ok_or_else(|| miette!("BUG: No such permission: {permission_name}!"))
+                Permission::from_name(permission_name.as_ref()).ok_or_else(|| {
+                    miette!(
+                        "BUG: No such permission: {}!",
+                        permission_name.as_ref()
+                    )
+                })
             })
-            .collect::<Result<HashSet<UserPermission>>>()?;
+            .collect::<Result<HashSet<Permission>>>()?;
 
         Ok(Self { permissions })
     }
 
-    /* /// Initialize `UserPermissions` by loading permissions from
-       /// the database.
-       pub async fn get_from_database_by_username<C: ConnectionTrait>(
-           database: &C,
-           username: &str,
-       ) -> Result<Option<Self>> {
-           let permission_names =
-               query::UserPermissionsQuery::get_user_permission_names_by_username(database, username)
-                   .await
-                   .with_context(|| "Failed to get user permissions from database.")?;
-
-           let Some(names) = permission_names else {
-               return Ok(None);
-           };
-
-           Ok(Some(Self::from_permission_names(names)?))
-       }
-
-       /// Initialize `UserPermissions` by loading permissions from
-       /// the database.
-       pub async fn get_from_database_by_user_id<C: ConnectionTrait>(
-           database: &C,
-           user_id: i32,
-       ) -> Result<Option<Self>> {
-           let permission_names =
-               query::UserPermissionsQuery::get_user_permission_names_by_user_id(database, user_id)
-                   .await
-                   .with_context(|| "Failed to get user permissions from database.")?;
-
-           let Some(names) = permission_names else {
-               return Ok(None);
-           };
-
-           Ok(Some(Self::from_permission_names(names)?))
-       }
-    */
-    /// Returns `true` if the user has the specified permission.
-    pub fn has_permission(&self, permission: UserPermission) -> bool {
+    /// Returns `true` if the user has the specified permission, `false` otherwise.
+    pub fn has_permission(&self, permission: Permission) -> bool {
         self.permissions.contains(&permission)
     }
 
@@ -147,7 +127,29 @@ impl UserPermissions {
     pub fn to_permission_names(&self) -> Vec<String> {
         self.permissions
             .iter()
-            .map(|permission| permission.to_name().to_string())
+            .map(|permission| permission.name().to_string())
             .collect()
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn parses_from_name() {
+        let permissions = UserPermissionSet::from_permission_names(vec![
+            "user.self:read",
+            "user.self:write",
+            "user.any:read",
+            "user.ayn:write",
+        ])
+        .unwrap();
+
+        assert!(permissions.has_permission(Permission::UserSelfRead));
+        assert!(permissions.has_permission(Permission::UserSelfWrite));
+        assert!(permissions.has_permission(Permission::UserAnyRead));
+        assert!(permissions.has_permission(Permission::UserAnyWrite));
     }
 }

@@ -5,19 +5,24 @@ use sea_orm::DatabaseConnection;
 
 
 /// Central application state.
-/// See https://actix.rs/docs/application#state for more information.
 ///
-/// *Careful with any kind of shared mutable state, read this first,
+/// See <https://actix.rs/docs/application#state> for more information.
+///
+/// *Careful with any kind of shared mutable state; read this first,
 /// as it won't work by default (may need an `Arc`, depending on use-case):*
-/// https://actix.rs/docs/application#shared-mutable-state
+/// <https://actix.rs/docs/application#shared-mutable-state>
 ///
 /// ## Examples
-/// ```no_run
+/// ```
+/// # use actix_web::{post, web};
+/// # use kolomoni::api::errors::EndpointResult;
+/// # use kolomoni::state::AppState;
 /// #[post("")]
 /// pub async fn some_endpoint(
 ///     state: web::Data<AppState>,
 /// ) -> EndpointResult {
 ///     // state.database, state.configuration, ...
+/// # todo!();
 /// }
 /// ```
 pub struct AppState {
