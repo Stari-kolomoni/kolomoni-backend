@@ -1,5 +1,3 @@
-use std::env;
-use std::env::VarError;
 use std::net::Ipv4Addr;
 
 use actix_web::{App, HttpServer};
@@ -7,18 +5,19 @@ use kolomoni::api::errors;
 use kolomoni::api::v1::login;
 use kolomoni::api::v1::ping;
 use kolomoni::api::v1::users;
+use kolomoni::logging::initialize_tracing;
 use miette::Context;
 use miette::IntoDiagnostic;
 use miette::Result;
 use tracing::info;
 use tracing_actix_web::TracingLogger;
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use tracing_subscriber::EnvFilter;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
-use utoipa::{Modify, OpenApi};
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa::{openapi::OpenApi, Modify, OpenApi as OpenApiDerivable};
+use utoipa_rapidoc::RapiDoc;
 
 
-#[derive(OpenApi)]
+#[derive(OpenApiDerivable)]
 #[openapi(
     paths(
         ping::ping,
@@ -54,7 +53,7 @@ use utoipa_swagger_ui::SwaggerUi;
         ),
         license(
             name = "GPL-3.0-only",
-            url = "https://github.com/Stari-kolomoni/kolomoni-backend-rust/blob/master/LICENSE.md"
+            url = "https://github.com/Stari-kolomoni/kolomoni-backend/blob/master/LICENSE.md"
         )
     ),
     servers(
@@ -74,7 +73,8 @@ struct JWTBearerTokenModifier;
 
 impl Modify for JWTBearerTokenModifier {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        let components = openapi.components.as_mut().unwrap(); // we can unwrap safely since there already is components registered.
+        // We can unwrap safely since there already are components registered.
+        let components = openapi.components.as_mut().unwrap();
 
         components.add_security_scheme(
             "access_token",
@@ -91,34 +91,78 @@ impl Modify for JWTBearerTokenModifier {
     }
 }
 
+const PRIVATE_COMMENTS_SEPARATOR: &str = "--- EXCLUDE FROM PUBLIC API DOCUMENTATION ---";
+
+fn remove_private_comments(string: &mut String) {
+    if let Some(starting_index) = string.find(PRIVATE_COMMENTS_SEPARATOR) {
+        *string = string[..starting_index].to_string();
+    }
+}
+
+fn remove_duplicated_summary_from_description(summary: &str, paragraph: &mut String) {
+    if paragraph.starts_with(summary) {
+        *paragraph = paragraph[summary.len()..].trim_start().to_string();
+    }
+}
+
+/// Filters out private comments from the API documentation
+/// (marked by `--- EXCLUDE FROM PUBLIC API DOCUMENTATION ---`) and
+/// removes duplicated summary paragraphs from description fields.
+fn clean_up_documentation(documentation: &mut OpenApi) {
+    if let Some(info_description) = documentation.info.description.as_mut() {
+        remove_private_comments(info_description);
+    }
+
+    for path in documentation.paths.paths.values_mut() {
+        if let Some(path_description) = path.description.as_mut() {
+            if let Some(path_summary) = path.summary.as_ref() {
+                remove_duplicated_summary_from_description(path_summary, path_description);
+            }
+
+            remove_private_comments(path_description);
+        }
+
+        for operation in path.operations.values_mut() {
+            if let Some(operation_description) = operation.description.as_mut() {
+                if let Some(operation_summary) = operation.summary.as_ref() {
+                    remove_duplicated_summary_from_description(
+                        operation_summary,
+                        operation_description,
+                    );
+                }
+
+                remove_private_comments(operation_description);
+            }
+        }
+    }
+}
+
 
 #[actix_web::main]
 async fn main() -> Result<()> {
     // Initialize logging and tracing.
-    if let Err(error) = env::var("RUST_LOG") {
-        if error == VarError::NotPresent {
-            env::set_var("RUST_LOG", "INFO");
-        }
-    }
-
-    let tracing_subscriber = FmtSubscriber::builder()
-        .with_env_filter(EnvFilter::from_default_env())
-        .finish();
-
-    tracing::subscriber::set_global_default(tracing_subscriber)
-        .into_diagnostic()
-        .wrap_err("Failed to set up tracing formatter.")?;
+    let guard = initialize_tracing(
+        EnvFilter::builder().from_env_lossy(),
+        EnvFilter::builder().from_env_lossy(),
+        "./logs",
+        "kolomoni-openapi.log",
+    );
 
     // Initialize compile-time generated OpenApi documentation.
-    let open_api = APIDocumentation::openapi();
+    let mut open_api: OpenApi = APIDocumentation::openapi();
+    clean_up_documentation(&mut open_api);
 
     // Start actix HTTP server to serve the documentation.
+    // The interactive documentation page will be served at `/api-documentation`,
+    // and the OpenAPI JSON file at `/api-documentation/openapi.json`.
+
     let server = HttpServer::new(move || {
         App::new().wrap(TracingLogger::default()).service(
-            SwaggerUi::new("/api-documentation/{_:.*}").url(
+            RapiDoc::with_openapi(
                 "/api-documentation/openapi.json",
                 open_api.clone(),
-            ),
+            )
+            .path("/api-documentation"),
         )
     })
     .bind((Ipv4Addr::LOCALHOST, 8877))
@@ -133,5 +177,6 @@ async fn main() -> Result<()> {
         .into_diagnostic()
         .wrap_err("Errored while running actix HTTP server.")?;
 
+    drop(guard);
     Ok(())
 }
