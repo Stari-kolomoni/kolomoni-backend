@@ -81,9 +81,9 @@ clear = true
 workspace = true
 command = "cargo"
 args = [
-    "doc",
-    "--workspace",
-    "--open"
+    "watch",
+    "--exec",
+    "doc --workspace --no-deps --document-private-items"
 ]
 
 
@@ -91,7 +91,6 @@ args = [
 [tasks.documentation]
 clear = true
 workspace = true
-alias = "doc"
 dependencies = [
     "build-and-open-full-documentation",
     "build-and-watch-workspace-documentation-with-private-items"
