@@ -1,6 +1,38 @@
 use sea_orm_migration::prelude::*;
 
-const USERNAME_INDEX_NAME: &str = "idx-username";
+
+/// Learn more at <https://docs.rs/sea-query#iden>.
+#[derive(Iden)]
+pub enum User {
+    #[iden = "user"]
+    Table,
+
+    #[iden = "id"]
+    Id,
+
+    #[iden = "username"]
+    Username,
+
+    #[iden = "display_name"]
+    DisplayName,
+
+    #[iden = "hashed_password"]
+    HashedPassword,
+
+    #[iden = "joined_at"]
+    JoinedAt,
+
+    #[iden = "last_modified_at"]
+    LastModifiedAt,
+
+    #[iden = "last_active_at"]
+    LastActiveAt,
+}
+
+const USER_TABLE_INDEX_ON_USERNAME: &str = "index__user__on__username";
+
+
+
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -55,7 +87,7 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name(USERNAME_INDEX_NAME)
+                    .name(USER_TABLE_INDEX_ON_USERNAME)
                     .table(User::Table)
                     .col(User::Username)
                     .to_owned(),
@@ -65,39 +97,11 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
-            .drop_index(Index::drop().name(USERNAME_INDEX_NAME).to_owned())
+            .drop_index(Index::drop().name(USER_TABLE_INDEX_ON_USERNAME).to_owned())
             .await?;
 
         manager
             .drop_table(Table::drop().table(User::Table).to_owned())
             .await
     }
-}
-
-/// Learn more at <https://docs.rs/sea-query#iden>.
-#[derive(Iden)]
-pub enum User {
-    #[iden = "user"]
-    Table,
-
-    #[iden = "id"]
-    Id,
-
-    #[iden = "username"]
-    Username,
-
-    #[iden = "display_name"]
-    DisplayName,
-
-    #[iden = "hashed_password"]
-    HashedPassword,
-
-    #[iden = "joined_at"]
-    JoinedAt,
-
-    #[iden = "last_modified_at"]
-    LastModifiedAt,
-
-    #[iden = "last_active_at"]
-    LastActiveAt,
 }

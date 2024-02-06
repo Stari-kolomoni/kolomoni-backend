@@ -10,6 +10,10 @@ pub struct Migration;
 /// 
 /// **IMPORTANT: This permission list (or on related migrations) should be kept in sync 
 /// with `./kolomoni_auth/src/permissions.rs`.**
+/// 
+/// We don't keep them in sync automatically because that would mean a migration would
+/// not stay the same. We can modify the migration sanely if any only if we're still in 
+/// the unstable prototyping phase. Otherwise, opt for a new migration that adds the new permissions.
 #[rustfmt::skip]
 const STANDARD_PERMISSIONS: [(i32, &str, &str); 4] = [
     (

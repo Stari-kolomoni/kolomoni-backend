@@ -2,8 +2,38 @@ use sea_orm_migration::prelude::*;
 
 use crate::m20230624_133941_create_users_table::User;
 
-const FOREIGN_KEY_USER_ID: &str = "fk_user-permission_user-id";
-const FOREIGN_KEY_PERMISSION_ID: &str = "fk_user-permission_permission-id";
+const USER_PERMISSION_FOREIGN_KEY_USER_ID: &str = "fk__user_permission__user_id";
+const USER_PERMISSION_FOREIGN_KEY_PERMISSION_ID: &str = "fk__user_permission__permission_id";
+
+
+/// Learn more at <https://docs.rs/sea-query#iden>.
+#[derive(Iden)]
+pub enum Permission {
+    #[iden = "permission"]
+    Table,
+
+    #[iden = "id"]
+    Id,
+
+    #[iden = "name"]
+    Name,
+
+    #[iden = "description"]
+    Description,
+}
+
+#[derive(Iden)]
+pub enum UserPermission {
+    #[iden = "user_permission"]
+    Table,
+
+    #[iden = "user_id"]
+    UserId,
+
+    #[iden = "permission_id"]
+    PermissionId,
+}
+
 
 
 #[derive(DeriveMigrationName)]
@@ -62,7 +92,7 @@ impl MigrationTrait for Migration {
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name(FOREIGN_KEY_USER_ID)
+                            .name(USER_PERMISSION_FOREIGN_KEY_USER_ID)
                             .from(UserPermission::Table, UserPermission::UserId)
                             .to(User::Table, User::Id)
                             .on_delete(ForeignKeyAction::Cascade)
@@ -70,7 +100,7 @@ impl MigrationTrait for Migration {
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name(FOREIGN_KEY_PERMISSION_ID)
+                            .name(USER_PERMISSION_FOREIGN_KEY_PERMISSION_ID)
                             .from(
                                 UserPermission::Table,
                                 UserPermission::PermissionId,
@@ -93,32 +123,4 @@ impl MigrationTrait for Migration {
             .drop_table(Table::drop().table(Permission::Table).to_owned())
             .await
     }
-}
-
-/// Learn more at <https://docs.rs/sea-query#iden>.
-#[derive(Iden)]
-pub enum Permission {
-    #[iden = "permission"]
-    Table,
-
-    #[iden = "id"]
-    Id,
-
-    #[iden = "name"]
-    Name,
-
-    #[iden = "description"]
-    Description,
-}
-
-#[derive(Iden)]
-pub enum UserPermission {
-    #[iden = "user_permission"]
-    Table,
-
-    #[iden = "user_id"]
-    UserId,
-
-    #[iden = "permission_id"]
-    PermissionId,
 }
