@@ -82,6 +82,6 @@ impl MigrationTrait for Migration {
             delete_permission_by_id(manager, id).await?;
         }
 
-        todo!();
+        Ok(())
     }
 }

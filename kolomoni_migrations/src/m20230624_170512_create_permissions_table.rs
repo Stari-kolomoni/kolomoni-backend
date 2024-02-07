@@ -7,30 +7,30 @@ const USER_PERMISSION_FOREIGN_KEY_PERMISSION_ID: &str = "fk__user_permission__pe
 
 
 /// Learn more at <https://docs.rs/sea-query#iden>.
-#[derive(Iden)]
+#[derive(DeriveIden)]
 pub enum Permission {
-    #[iden = "permission"]
+    #[sea_orm(iden = "permission")]
     Table,
 
-    #[iden = "id"]
+    #[sea_orm(iden = "id")]
     Id,
 
-    #[iden = "name"]
+    #[sea_orm(iden = "name")]
     Name,
 
-    #[iden = "description"]
+    #[sea_orm(iden = "description")]
     Description,
 }
 
-#[derive(Iden)]
+#[derive(DeriveIden)]
 pub enum UserPermission {
-    #[iden = "user_permission"]
+    #[sea_orm(iden = "user_permission")]
     Table,
 
-    #[iden = "user_id"]
+    #[sea_orm(iden = "user_id")]
     UserId,
 
-    #[iden = "permission_id"]
+    #[sea_orm(iden = "permission_id")]
     PermissionId,
 }
 

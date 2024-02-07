@@ -2,30 +2,30 @@ use sea_orm_migration::prelude::*;
 
 
 /// Learn more at <https://docs.rs/sea-query#iden>.
-#[derive(Iden)]
+#[derive(DeriveIden)]
 pub enum User {
-    #[iden = "user"]
+    #[sea_orm(iden = "user")]
     Table,
 
-    #[iden = "id"]
+    #[sea_orm(iden = "id")]
     Id,
 
-    #[iden = "username"]
+    #[sea_orm(iden = "username")]
     Username,
 
-    #[iden = "display_name"]
+    #[sea_orm(iden = "display_name")]
     DisplayName,
 
-    #[iden = "hashed_password"]
+    #[sea_orm(iden = "hashed_password")]
     HashedPassword,
 
-    #[iden = "joined_at"]
+    #[sea_orm(iden = "joined_at")]
     JoinedAt,
 
-    #[iden = "last_modified_at"]
+    #[sea_orm(iden = "last_modified_at")]
     LastModifiedAt,
 
-    #[iden = "last_active_at"]
+    #[sea_orm(iden = "last_active_at")]
     LastActiveAt,
 }
 
