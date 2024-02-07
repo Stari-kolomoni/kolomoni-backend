@@ -3,3 +3,6 @@
 pub use super::permission::Entity as Permission;
 pub use super::user::Entity as User;
 pub use super::user_permission::Entity as UserPermission;
+pub use super::word::Entity as Word;
+pub use super::word_english::Entity as WordEnglish;
+pub use super::word_slovene::Entity as WordSlovene;
