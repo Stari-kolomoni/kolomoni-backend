@@ -14,7 +14,7 @@ pub struct PingResponse {
 impl_json_responder!(PingResponse);
 
 
-/// Ping the server
+/// Ping the server.
 #[utoipa::path(
     get,
     path = "/ping",

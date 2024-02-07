@@ -16,19 +16,24 @@ use crate::state::ApplicationStateInner;
 
 
 /// User authentication state (actix extractor).
-/// Holding this struct doesn't automatically mean
-/// the user is authenticated (see the enum variants).
+/// **Holding this struct doesn't automatically mean the user is authenticated!**
 ///
-/// ## Use in actix-web
+/// ## Usage with Actix
 /// To easily extract authentication and permission data on an endpoint handler,
-/// `UserAuth` is an [Actix extractor](https://actix.rs/docs/extractors).
+/// `UserAuth` is in reality an [Actix extractor](https://actix.rs/docs/extractors).
 ///
-/// To use it, simply add a `user_auth: UserAuth` parameter to your endpoint handler.
-///
+/// To use it, simply add a `user_auth: `[`UserAuth`] parameter to your endpoint handler.
 /// Inside the handler body, you can then call any of e.g.
 /// [`Self::token_if_authenticated`], [`Self::permissions_if_authenticated`]
 /// or [`Self::token_and_permissions_if_authenticated`] that all return `Option`s and the requested
 /// information, depending on your use-case.
+///
+/// Even better, use the following macros to further reduce boilerplate code:
+/// - [`require_authentication`][crate::require_authentication] --- ensures the user is authenticated
+///   and looks up the user's permissions, and
+/// - [`require_permission`][crate::require_permission] --- ensures the user holds a specific permission.
+///
+/// See their documentation for more information and examples.
 ///
 /// Note that getting permissions requires a database lookup.
 pub enum UserAuth {

@@ -82,7 +82,7 @@ async fn main() -> Result<()> {
     // Initialize database connection and other static structs.
     let database = connect_and_set_up_database(&configuration).await?;
     let hasher = ArgonHasher::new(&configuration)?;
-    let json_web_token_manager = JsonWebTokenManager::new(&configuration);
+    let json_web_token_manager = JsonWebTokenManager::new(&configuration.json_web_token.secret);
 
     let state = web::Data::new(ApplicationStateInner {
         configuration: configuration.clone(),

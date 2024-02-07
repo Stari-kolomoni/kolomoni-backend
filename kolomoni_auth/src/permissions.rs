@@ -143,7 +143,7 @@ mod test {
             "user.self:read",
             "user.self:write",
             "user.any:read",
-            "user.ayn:write",
+            "user.any:write",
         ])
         .unwrap();
 
@@ -151,5 +151,19 @@ mod test {
         assert!(permissions.has_permission(Permission::UserSelfWrite));
         assert!(permissions.has_permission(Permission::UserAnyRead));
         assert!(permissions.has_permission(Permission::UserAnyWrite));
+    }
+
+    #[test]
+    fn converts_to_name() {
+        assert_eq!(Permission::UserSelfRead.name(), "user.self:read");
+
+        assert_eq!(
+            Permission::UserSelfWrite.name(),
+            "user.self:write",
+        );
+
+        assert_eq!(Permission::UserAnyRead.name(), "user.any:read");
+
+        assert_eq!(Permission::UserAnyWrite.name(), "user.any:write");
     }
 }

@@ -4,7 +4,7 @@ use actix_web::HttpResponse;
 /// Simple responder trait (similar to [`actix_web::Responder`]).
 ///
 /// The main difference is that our `into_response` method does not require
-/// a reference to [`HttpRequest`],
+/// a reference to [`HttpRequest`][actix_web::HttpRequest],
 /// i.e. the response must be built without a request when using this trait.
 /// This can make the call signature more sensible in certain cases.
 ///
@@ -28,11 +28,12 @@ pub trait DumbResponder {
 ///
 /// # Example
 /// ```
-/// # use actix_web::get;
-/// # use serde::Serialize;
-/// # use kolomoni::impl_json_responder;
-/// # use kolomoni::api::errors::EndpointResult;
-/// # use kolomoni::api::macros::DumbResponder;
+/// use actix_web::get;
+/// use serde::Serialize;
+/// use kolomoni::impl_json_responder;
+/// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::api::macros::DumbResponder;
+///
 /// #[derive(Serialize)]
 /// struct SomeResponse {
 ///     value: i32,
@@ -45,9 +46,11 @@ pub trait DumbResponder {
 /// async fn example_handler() -> EndpointResult {
 ///     // ...
 ///     
-///     // What we gain is essentially this `.into_response()` method
-///     // that builds the `HttpResponse` with the JSON-encoded body.
 ///     Ok(SomeResponse { value: 42 }.into_response())
+///     //                           ^^^^^^^^^^^^^^^^
+///     // By calling the implementor macro we gained the ability to call
+///     // the `into_response` method, allowing us to ergonomically build
+///     // an HTTP response with a JSON-encoded body.
 /// }
 /// ```
 #[macro_export]
@@ -74,29 +77,37 @@ macro_rules! impl_json_responder {
     };
 }
 
-/// A macro for generating a `HttpResponse` with a given status code and
-/// a JSON body containing the `reason` field.
+/// A macro for generating a [`HttpResponse`]
+/// with a given status code and a JSON body containing the `reason` field
+/// that describes the issue.
 ///
-/// First argument is the `actix_web::StatusCode` status code and
-/// the second argument is the reason to respond with (must implement `Into<String>`).
+/// The first argument must be the [`StatusCode`][actix_web::http::StatusCode]
+/// to use in the response.
+///
+/// The second argument must be the value of the `reason` field to include.
+/// The provided expression does not need to be a `String`; it must, however, implement `Into<String>`.
 ///
 /// ## Example
 /// ```
-/// # use actix_web::post;
-/// # use actix_web::http::StatusCode;
-/// # use kolomoni::api::macros::DumbResponder;
-/// # use kolomoni::api::errors::EndpointResult;
-/// # use kolomoni::response_with_reason;
+/// use actix_web::post;
+/// use actix_web::http::StatusCode;
+/// use kolomoni::api::macros::DumbResponder;
+/// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::response_with_reason;
+///
 /// #[post("/here")]
 /// async fn here_endpoint() -> EndpointResult {
+///     // ...
 ///     # let some_condition = true;
+///
 ///     if some_condition {
 ///         return Ok(response_with_reason!(
 ///             StatusCode::CONFLICT,
 ///             "Here is a reason."
 ///         ));
 ///     }
-///
+///     
+///     // ...
 ///     # todo!();
 /// }
 /// ```
@@ -108,21 +119,86 @@ macro_rules! response_with_reason {
     };
 }
 
-/// A macro that early-returns an `Err(APIError::missing_specific_permission)` if the given permissions
-/// struct doesn't have the required permission. This essentially generates a `403 Forbidden`
-/// with JSON-encoded reasons in the body of the response (see `APIError` for more information).
+
+/// A macro that takes an [`ApplicationState`][crate::state::ApplicationState]
+/// and a [`UserAuth`][`crate::authentication::UserAuth`] and attempts to look up the
+/// authenticated user's permissions.
 ///
-/// The first argument is the `UserPermissions` struct.
-/// The second argument is the permission you require (`UserPermission` variant).
+/// The resulting expression is a tuple
+/// `(`[`&JWTClaims`][kolomoni_auth::token::JWTClaims]`, `[`UserPermissionSet`][kolomoni_auth::permissions::UserPermissionSet]`)`.
 ///
-/// See documentation for `APIError` for more information.
+///
+/// # Early-return values
+/// If there is no authentication, the macro early-returns a
+/// `Err(`[`APIError::NotAuthenticated`][crate::api::errors::APIError::NotAuthenticated]`)`,
+/// which results in a `401 Unauthorized` HTTP status code, indicating to the API caller
+/// that authentication is required.
+///
+/// If the macro fails to look up the authenticated user's permissions, it early-returns a
+/// `Err(`[`APIError::InternalError`][crate::api::errors::APIError::InternalError]`)`,
+/// which results in a `500 Internal Server Error` HTTP status code, indicating that something
+/// went wrong on our side, not the caller's.
+///
+///
+/// # Examples
+/// ```
+/// use actix_web::get;
+/// use kolomoni::state::ApplicationState;
+/// use kolomoni::authentication::UserAuth;
+/// use kolomoni::api::errors::{EndpointResult, APIError};
+/// use kolomoni::{require_permission, require_authentication};
+/// use kolomoni_auth::permissions::{UserPermissionSet, Permission};
+/// use kolomoni_auth::token::JWTClaims;
+///
+/// #[get("")]
+/// async fn get_all_registered_users(
+///     state: ApplicationState,
+///     user_auth: UserAuth,
+/// ) -> EndpointResult {
+///     // This will ensure the user is authenticated.
+///     // `permissions` will contain the user's permissions
+///     // (this will perform a database lookup).
+///     let (token, permissions): (JWTClaims, UserPermissionSet)
+///         = require_authentication!(state, user_auth);
+///
+///     // This will ensure the user has the `user.any:read` permission by early-returning
+///     // an `APIError::NotEnoughPermissions` if the user does not have it.
+///     require_permission!(permissions, Permission::UserAnyRead);
+///     
+///     // ...
+///     # todo!();
+/// }
+/// ```
+#[macro_export]
+macro_rules! require_authentication {
+    ($state:expr, $user_auth:expr) => {
+        $user_auth
+            .token_and_permissions_if_authenticated(&$state.database)
+            .await
+            .map_err($crate::api::errors::APIError::InternalError)?
+            .ok_or_else(|| $crate::api::errors::APIError::NotAuthenticated)?
+    };
+}
+
+
+/// A macro that early-returns an
+/// `Err(`[`APIError::NotEnoughPermissions`][crate::api::errors::APIError::NotEnoughPermissions]`)`
+/// if the given permissions struct doesn't have the required permission.
+/// This essentially generates a `403 Forbidden` with JSON-encoded reasons
+/// in the body of the response (see [`APIError`][crate::api::errors::APIError] for more information).
+///
+/// The first argument must be the
+/// [`UserPermissionSet`][kolomoni_auth::permissions::UserPermissionSet] struct.
+///
+/// The second argument must be the permission you require
+/// (a [`Permission`][kolomoni_auth::permissions::Permission]).
 #[macro_export]
 macro_rules! require_permission {
     ($user_permissions:expr, $required_permission:expr) => {
         if !$user_permissions.has_permission($required_permission) {
-            return Err(APIError::missing_specific_permission(
-                $required_permission,
-            ));
+            return Err(
+                $crate::api::errors::APIError::missing_specific_permission($required_permission),
+            );
         }
     };
 }

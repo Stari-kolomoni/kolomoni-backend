@@ -46,14 +46,15 @@ pub struct UserLoginResponse {
 impl_json_responder!(UserLoginResponse);
 
 
-/// Validate provided user credentials and generate access token
+/// Create an access token.
 ///
-/// This endpoint validates the credentials (username and password) and gives the user
-/// an access token they can use in future requests to authenticate themselves.
+/// This endpoint is the login method: it validates the credentials (username and password) and
+/// gives the user an access token they can use in future requests to authenticate themselves.
 ///
-/// A refresh token is also provided to the user can request a new access token (the refresh
-/// token is valid for longer than the access token, but only the access token can be added
-/// in the *Authorization* header).
+/// In addition to the access token, a refresh token is provided to the user so they can request
+/// a new access token. The refresh token is valid for longer than the access token,
+/// but only the access token can be used in the *Authorization* header. For login refreshing,
+/// see the `POST /api/v1/login/refresh` endpoint.
 #[utoipa::path(
     post,
     path = "/login",
@@ -136,10 +137,12 @@ pub async fn login(
         .wrap_err("Errored while creating JWT refresh token.")
         .map_err(APIError::InternalError)?;
 
+
     debug!(
         username = login_info.username,
         "User has successfully logged in."
     );
+
 
     Ok(UserLoginResponse {
         access_token,
@@ -277,10 +280,12 @@ pub async fn refresh_login(
         .create_token(access_token_claims)
         .map_err(APIError::InternalError)?;
 
+
     debug!(
         username = refresh_token_claims.username,
         "User has successfully refreshed access token."
     );
+
 
     Ok(UserLoginRefreshResponse { access_token }.into_response())
 }

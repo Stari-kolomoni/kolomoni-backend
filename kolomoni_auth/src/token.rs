@@ -1,9 +1,8 @@
 use std::ops::Add;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, SubsecRound, Utc};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use kolomoni_configuration::Configuration;
 use miette::{Context, IntoDiagnostic, Result};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -80,12 +79,16 @@ pub struct JWTClaims {
 
 impl JWTClaims {
     /// Create a new JSON Web Token.
+    ///
+    /// Note that the `issued_at` timestamp will have its sub-second content truncated
+    /// (see [`trunc_subsecs`][chrono::round::SubsecRound::trunc_subsecs]).
     pub fn create(
         username: String,
         issued_at: DateTime<Utc>,
         valid_for: Duration,
         token_type: JWTTokenType,
     ) -> Self {
+        let issued_at = issued_at.trunc_subsecs(0);
         let expires_on = issued_at.add(valid_for);
 
         Self {
@@ -108,10 +111,10 @@ pub struct JsonWebTokenManager {
 }
 
 impl JsonWebTokenManager {
-    pub fn new(config: &Configuration) -> Self {
+    pub fn new(json_web_token_secret: &str) -> Self {
         let header = Header::new(Algorithm::HS256);
-        let encoding_key = EncodingKey::from_secret(config.json_web_token.secret.as_bytes());
-        let decoding_key = DecodingKey::from_secret(config.json_web_token.secret.as_bytes());
+        let encoding_key = EncodingKey::from_secret(json_web_token_secret.as_bytes());
+        let decoding_key = DecodingKey::from_secret(json_web_token_secret.as_bytes());
 
         let mut validation = Validation::new(Algorithm::HS256);
 
@@ -164,5 +167,40 @@ impl JsonWebTokenManager {
         }
 
         Ok(token_data.claims)
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use chrono::SubsecRound;
+
+    use super::*;
+
+    #[test]
+    fn create_and_validate_token() {
+        let manager = JsonWebTokenManager::new("secret");
+
+        let issued_at = Utc::now().trunc_subsecs(0);
+        let valid_for = chrono::Duration::from_std(std::time::Duration::from_secs(60)).unwrap();
+
+        let claims = JWTClaims::create(
+            "mock-username".to_string(),
+            issued_at,
+            valid_for,
+            JWTTokenType::Access,
+        );
+
+        let encoded_token = manager.create_token(claims).unwrap();
+
+
+        let decoded_claims = manager.decode_token(&encoded_token).unwrap();
+
+        assert_eq!(decoded_claims.iss, JWT_ISSUER);
+        assert_eq!(decoded_claims.sub, JWT_SUBJECT);
+        assert_eq!(decoded_claims.iat, issued_at);
+        assert_eq!(decoded_claims.exp, issued_at + valid_for);
+        assert_eq!(&decoded_claims.username, "mock-username");
+        assert_eq!(decoded_claims.token_type, JWTTokenType::Access);
     }
 }

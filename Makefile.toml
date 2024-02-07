@@ -27,6 +27,18 @@ args = [
 ]
 
 
+[tasks.run-migrations]
+clear = true
+workspace = false
+command = "sea-orm-cli"
+args = [
+    "migrate",
+    "up",
+    "--migration-dir",
+    "./kolomoni_migrations"
+]
+
+
 
 [tasks.generate-entities-from-database]
 clear = true
