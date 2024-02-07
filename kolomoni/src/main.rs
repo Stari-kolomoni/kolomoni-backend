@@ -1,5 +1,5 @@
 use actix_cors::Cors;
-use kolomoni_auth::token::JsonWebTokenManager;
+use kolomoni_auth::JsonWebTokenManager;
 use kolomoni_configuration::Configuration;
 use kolomoni_database::mutation::ArgonHasher;
 use miette::{Context, IntoDiagnostic, Result};

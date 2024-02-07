@@ -1,7 +1,7 @@
 use argon2::password_hash::SaltString;
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use chrono::{DateTime, Utc};
-use kolomoni_auth::permissions::DEFAULT_USER_PERMISSIONS;
+use kolomoni_auth::DEFAULT_USER_PERMISSIONS;
 use kolomoni_configuration::Configuration;
 use miette::{miette, Context, IntoDiagnostic, Result};
 use sea_orm::{

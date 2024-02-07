@@ -3,7 +3,7 @@
  */
 
 use actix_web::{delete, get, http::StatusCode, patch, post, web, HttpResponse};
-use kolomoni_auth::permissions::{Permission, UserPermissionSet};
+use kolomoni_auth::{Permission, UserPermissionSet};
 use kolomoni_database::{
     mutation,
     query::{self, UserPermissionsExt},

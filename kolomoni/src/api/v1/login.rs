@@ -1,6 +1,6 @@
 use actix_web::{post, web, HttpResponse};
 use chrono::{Duration, Utc};
-use kolomoni_auth::token::{JWTClaims, JWTTokenType, JWTValidationError};
+use kolomoni_auth::{JWTClaims, JWTTokenType, JWTValidationError};
 use kolomoni_database::query;
 use miette::Context;
 use serde::{Deserialize, Serialize};

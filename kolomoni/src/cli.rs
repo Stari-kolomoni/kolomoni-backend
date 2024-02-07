@@ -7,7 +7,7 @@ use clap::Parser;
 #[command(
     name = "stari-kolomoni-backend",
     author,
-    about = "API for the Stari Kolomoni open translation project.",
+    about = "API server for the Stari Kolomoni open translation project.",
     version
 )]
 pub struct CLIArgs {

@@ -1,4 +1,4 @@
-use kolomoni_auth::permissions::Permission;
+use kolomoni_auth::Permission;
 use miette::{Context, IntoDiagnostic, Result};
 use sea_orm::{ActiveValue, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
 

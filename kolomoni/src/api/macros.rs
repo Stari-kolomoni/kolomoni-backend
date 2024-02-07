@@ -125,7 +125,7 @@ macro_rules! response_with_reason {
 /// authenticated user's permissions.
 ///
 /// The resulting expression is a tuple
-/// `(`[`&JWTClaims`][kolomoni_auth::token::JWTClaims]`, `[`UserPermissionSet`][kolomoni_auth::permissions::UserPermissionSet]`)`.
+/// `(`[`&JWTClaims`][kolomoni_auth::JWTClaims]`, `[`UserPermissionSet`][kolomoni_auth::UserPermissionSet]`)`.
 ///
 ///
 /// # Early-return values
@@ -147,8 +147,7 @@ macro_rules! response_with_reason {
 /// use kolomoni::authentication::UserAuth;
 /// use kolomoni::api::errors::{EndpointResult, APIError};
 /// use kolomoni::{require_permission, require_authentication};
-/// use kolomoni_auth::permissions::{UserPermissionSet, Permission};
-/// use kolomoni_auth::token::JWTClaims;
+/// use kolomoni_auth::{UserPermissionSet, Permission, JWTClaims};
 ///
 /// #[get("")]
 /// async fn get_all_registered_users(
@@ -188,10 +187,10 @@ macro_rules! require_authentication {
 /// in the body of the response (see [`APIError`][crate::api::errors::APIError] for more information).
 ///
 /// The first argument must be the
-/// [`UserPermissionSet`][kolomoni_auth::permissions::UserPermissionSet] struct.
+/// [`UserPermissionSet`][kolomoni_auth::UserPermissionSet] struct.
 ///
 /// The second argument must be the permission you require
-/// (a [`Permission`][kolomoni_auth::permissions::Permission]).
+/// (a [`Permission`][kolomoni_auth::Permission]).
 #[macro_export]
 macro_rules! require_permission {
     ($user_permissions:expr, $required_permission:expr) => {

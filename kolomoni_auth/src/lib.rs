@@ -1,2 +1,6 @@
-pub mod permissions;
-pub mod token;
+mod permissions;
+mod token;
+
+
+pub use permissions::*;
+pub use token::*;

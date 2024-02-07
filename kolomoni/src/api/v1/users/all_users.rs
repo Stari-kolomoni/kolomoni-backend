@@ -1,5 +1,5 @@
 use actix_web::get;
-use kolomoni_auth::permissions::Permission;
+use kolomoni_auth::Permission;
 use kolomoni_database::query;
 use serde::Serialize;
 use utoipa::ToSchema;

@@ -1,5 +1,5 @@
 use actix_web::{get, http::StatusCode, patch, web};
-use kolomoni_auth::permissions::Permission;
+use kolomoni_auth::Permission;
 use kolomoni_database::{mutation, query};
 use sea_orm::TransactionTrait;
 use tracing::info;

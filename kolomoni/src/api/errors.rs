@@ -4,7 +4,7 @@ use actix_web::body::BoxBody;
 use actix_web::http::StatusCode;
 use actix_web::{HttpResponse, ResponseError};
 use itertools::Itertools;
-use kolomoni_auth::permissions::Permission;
+use kolomoni_auth::Permission;
 use sea_orm::DbErr;
 use serde::Serialize;
 use thiserror::Error;
@@ -171,7 +171,7 @@ impl ErrorReasonResponse {
 /// # use kolomoni::require_permission;
 /// # use kolomoni::authentication::UserAuth;
 /// # use kolomoni::state::ApplicationState;
-/// # use kolomoni_auth::permissions::Permission;
+/// # use kolomoni_auth::Permission;
 /// # use kolomoni::api::errors::{APIError, EndpointResult};
 /// # use kolomoni::api::macros::DumbResponder;
 /// #[post("/some/path")]
