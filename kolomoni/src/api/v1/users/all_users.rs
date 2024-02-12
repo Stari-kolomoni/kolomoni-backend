@@ -8,10 +8,10 @@ use super::UserInformation;
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
-        macros::DumbResponder,
+        macros::ContextlessResponder,
     },
     authentication::UserAuth,
-    impl_json_responder,
+    impl_json_response_builder,
     require_authentication,
     require_permission,
     state::ApplicationState,
@@ -23,7 +23,7 @@ pub struct RegisteredUsersListResponse {
     pub users: Vec<UserInformation>,
 }
 
-impl_json_responder!(RegisteredUsersListResponse);
+impl_json_response_builder!(RegisteredUsersListResponse);
 
 
 /// List all registered users.

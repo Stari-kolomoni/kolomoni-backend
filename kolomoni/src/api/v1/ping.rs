@@ -3,15 +3,15 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 use crate::api::errors::EndpointResult;
-use crate::api::macros::DumbResponder;
-use crate::impl_json_responder;
+use crate::api::macros::ContextlessResponder;
+use crate::impl_json_response_builder;
 
 #[derive(Serialize, ToSchema)]
 pub struct PingResponse {
     ok: bool,
 }
 
-impl_json_responder!(PingResponse);
+impl_json_response_builder!(PingResponse);
 
 
 /// Ping the server.

@@ -91,6 +91,7 @@ async fn main() -> Result<()> {
         jwt_manager: json_web_token_manager,
     });
 
+
     // Initialize and start the actix HTTP server.
     #[rustfmt::skip]
     let server = HttpServer::new(
@@ -98,8 +99,9 @@ async fn main() -> Result<()> {
             let json_extractor_config = web::JsonConfig::default();
 
             // FIXME Modify permissive CORS to something more safe in production.
-            let cors = Cors::permissive();
-            
+            let cors = Cors::permissive()
+                .expose_headers(vec!["Date", "Content-Type", "Last-Modified", "Content-Length"]);
+
             App::new()
                 .wrap(middleware::NormalizePath::trim())
                 .wrap(cors)

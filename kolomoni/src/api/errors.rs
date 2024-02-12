@@ -102,7 +102,7 @@ impl ErrorReasonResponse {
 /// # use actix_web::get;
 /// # use kolomoni::impl_json_responder;
 /// # use kolomoni::api::errors::APIError;
-/// # use kolomoni::api::macros::DumbResponder;
+/// # use kolomoni::api::macros::ContextlessResponder;
 /// # use kolomoni::api::errors::EndpointResult;
 /// #[derive(Serialize)]
 /// struct RandomValueResponse {
@@ -173,7 +173,7 @@ impl ErrorReasonResponse {
 /// # use kolomoni::state::ApplicationState;
 /// # use kolomoni_auth::Permission;
 /// # use kolomoni::api::errors::{APIError, EndpointResult};
-/// # use kolomoni::api::macros::DumbResponder;
+/// # use kolomoni::api::macros::ContextlessResponder;
 /// #[post("/some/path")]
 /// async fn example_auth(
 ///     state: ApplicationState,
@@ -377,5 +377,10 @@ impl ResponseError for APIError {
 /// Short for [`Result`]`<`[`HttpResponse`]`, `[`APIError`]`>`, intended to be used in most
 /// places in handlers of the Stari Kolomoni API.
 ///
+/// The generic parameter (`Body`) specifies which body type is used inside [`HttpResponse`]
+/// and defaults to [`BoxBody`], which is what
+/// [`KolomoniResponseBuilder`][super::macros::KolomoniResponseBuilder]
+/// uses and will likely be the most common body type.
+///
 /// See documentation for [`APIError`] for more info.
-pub type EndpointResult = Result<HttpResponse, APIError>;
+pub type EndpointResult<Body = BoxBody> = Result<HttpResponse<Body>, APIError>;

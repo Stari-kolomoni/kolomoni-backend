@@ -1,13 +1,24 @@
-use actix_web::{get, http::StatusCode, patch, web};
+use actix_web::{
+    get,
+    http::{header, StatusCode},
+    patch,
+    web,
+    HttpResponse,
+};
 use kolomoni_auth::Permission;
 use kolomoni_database::{mutation, query};
+use miette::IntoDiagnostic;
 use sea_orm::TransactionTrait;
 use tracing::info;
 
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
-        macros::DumbResponder,
+        macros::{
+            construct_last_modified_header_value,
+            ContextlessResponder,
+            IntoKolomoniResponseBuilder,
+        },
         v1::users::{
             UserDisplayNameChangeRequest,
             UserDisplayNameChangeResponse,
@@ -15,11 +26,12 @@ use crate::{
             UserInformation,
             UserPermissionsResponse,
         },
+        OptionalIfModifiedSince,
     },
     authentication::UserAuth,
+    error_response_with_reason,
     require_authentication,
     require_permission,
-    response_with_reason,
     state::ApplicationState,
 };
 
@@ -35,11 +47,25 @@ use crate::{
     get,
     path = "/users/me",
     tag = "self",
+    params(
+        (
+            "If-Modified-Since" = Option<String>,
+            Header,
+            description = "If specified, this header makes the server return `304 Not Modified` if \
+                           the user's data hasn't changed since the specified timestamp. \
+                           See [this article on MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Modified-Since) \
+                           for more information about this conditional header.",
+            example = "Wed, 21 Oct 2015 07:28:00 GMT"
+        )
+    ),
     responses(
         (
             status = 200,
-            description = "Information about current user.",
+            description = "Information about the current user (i.e. the user who owns the authentication token used in the request).",
             body = UserInfoResponse,
+            headers(
+                ("Last-Modified" = String, description = "Last user modification time. Use this value for caching.")
+            ),
             example = json!({
                 "user": {
                     "id": 1,
@@ -52,12 +78,19 @@ use crate::{
             })
         ),
         (
+            status = 304,
+            description = "User hasn't been modified since the timestamp specified in the `If-Modified-Since` header. \
+                           As such, this status code can only be returned if that header is provided in the request."
+        ),
+        (
             status = 401,
-            description = "Missing user authentication."
+            description = "Missing authentication. Include an `Authorization: Bearer <token>` header \
+                           with your request to access this endpoint."
         ),
         (
             status = 403,
-            description = "Missing `user.self:read` permission.",
+            description = "Missing the `user.self:read` permission.",
+            content_type = "application/json",
             body = ErrorReasonResponse,
             example = json!({ "reason": "Missing permission: user.self:read." })
         ),
@@ -75,7 +108,11 @@ use crate::{
     )
 )]
 #[get("/me")]
-pub async fn get_current_user_info(state: ApplicationState, user_auth: UserAuth) -> EndpointResult {
+pub async fn get_current_user_info(
+    state: ApplicationState,
+    user_auth: UserAuth,
+    modified_since_conditional: OptionalIfModifiedSince,
+) -> EndpointResult {
     // User must provide an authentication token and
     // have the `user.self:read` permission to access this endpoint.
     let (token, permissions) = require_authentication!(state, user_auth);
@@ -88,8 +125,25 @@ pub async fn get_current_user_info(state: ApplicationState, user_auth: UserAuth)
         .map_err(APIError::InternalError)?
         .ok_or_else(APIError::not_found)?;
 
+    let last_modification_time = user.last_modified_at.to_utc();
 
-    Ok(UserInfoResponse::new(user).into_response())
+    if modified_since_conditional.is_unchanged(&last_modification_time) {
+        let mut unchanged_response = HttpResponse::new(StatusCode::NOT_MODIFIED);
+
+        unchanged_response.headers_mut().append(
+            header::LAST_MODIFIED,
+            construct_last_modified_header_value(&last_modification_time)
+                .into_diagnostic()
+                .map_err(APIError::InternalError)?,
+        );
+
+        Ok(unchanged_response)
+    } else {
+        Ok(UserInfoResponse::new(user)
+            .into_response_builder()?
+            .last_modified_at(last_modification_time)?
+            .build())
+    }
 }
 
 
@@ -146,10 +200,10 @@ async fn get_current_user_permissions(
     require_permission!(permissions, Permission::UserSelfRead);
 
 
-    Ok(UserPermissionsResponse {
-        permissions: permissions.to_permission_names(),
-    }
-    .into_response())
+    Ok(
+        UserPermissionsResponse::from_permission_names(permissions.to_permission_names())
+            .into_response(),
+    )
 }
 
 
@@ -242,7 +296,7 @@ async fn update_current_user_display_name(
     .map_err(APIError::InternalError)?;
 
     if display_name_already_exists {
-        return Ok(response_with_reason!(
+        return Ok(error_response_with_reason!(
             StatusCode::CONFLICT,
             "User with given display name already exists."
         ));
@@ -250,20 +304,10 @@ async fn update_current_user_display_name(
 
 
     // Update user in the database.
-    mutation::UserMutation::update_display_name_by_username(
+    let updated_user = mutation::UserMutation::update_display_name_by_username(
         &database_transaction,
         &token.username,
         json_data.new_display_name.clone(),
-    )
-    .await
-    .map_err(APIError::InternalError)?;
-
-    // TODO Consider merging this update into all mutation methods where it makes sense.
-    //      Otherwise we're wasting a round-trip to the database for no real reason.
-    let updated_user = mutation::UserMutation::update_last_active_at_by_username(
-        &database_transaction,
-        &token.username,
-        None,
     )
     .await
     .map_err(APIError::InternalError)?;

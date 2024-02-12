@@ -43,8 +43,8 @@ pub enum UserAuth {
 
 impl UserAuth {
     /// If authenticated, return a reference to the token's contents (claims).
-    #[allow(dead_code)]
     #[inline]
+    #[allow(dead_code)]
     pub fn token_if_authenticated(&self) -> Option<&JWTClaims> {
         match self {
             UserAuth::Unauthenticated => None,
@@ -54,6 +54,7 @@ impl UserAuth {
 
     /// If authenticated, look up the user's permissions and return them.
     #[inline]
+    #[allow(dead_code)]
     pub async fn permissions_if_authenticated<C: ConnectionTrait>(
         &self,
         database: &C,

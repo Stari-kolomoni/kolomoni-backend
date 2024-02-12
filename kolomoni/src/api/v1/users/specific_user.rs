@@ -16,7 +16,7 @@ use utoipa::ToSchema;
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
-        macros::DumbResponder,
+        macros::ContextlessResponder,
         v1::users::{
             UserDisplayNameChangeRequest,
             UserDisplayNameChangeResponse,
@@ -26,9 +26,9 @@ use crate::{
         },
     },
     authentication::UserAuth,
+    error_response_with_reason,
     require_authentication,
     require_permission,
-    response_with_reason,
     state::ApplicationState,
 };
 
@@ -282,7 +282,7 @@ async fn update_specific_user_display_name(
         .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
 
     if current_user.id == requested_user_id {
-        return Ok(response_with_reason!(
+        return Ok(error_response_with_reason!(
             StatusCode::FORBIDDEN,
             "Can't modify your own account on this endpoint."
         ));
@@ -306,7 +306,7 @@ async fn update_specific_user_display_name(
     .map_err(APIError::InternalError)?;
 
     if display_name_already_exists {
-        return Ok(response_with_reason!(
+        return Ok(error_response_with_reason!(
             StatusCode::CONFLICT,
             "User with given display name already exists."
         ));
@@ -458,7 +458,7 @@ async fn add_permissions_to_specific_user(
             .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
 
     if current_user.id == requested_user_id {
-        return Ok(response_with_reason!(
+        return Ok(error_response_with_reason!(
             StatusCode::FORBIDDEN,
             "Can't modify your own account on this endpoint."
         ));
@@ -476,7 +476,7 @@ async fn add_permissions_to_specific_user(
     let permissions_to_add = match permissions_to_add_result {
         Ok(permissions_to_add) => permissions_to_add,
         Err(non_existent_permission_name) => {
-            return Ok(response_with_reason!(
+            return Ok(error_response_with_reason!(
                 StatusCode::BAD_REQUEST,
                 format!("No such permission: \"{non_existent_permission_name}\".")
             ))
@@ -488,7 +488,7 @@ async fn add_permissions_to_specific_user(
     // create a privilege escalation exploit once you had the `user.any:write` permission.
     for permission in &permissions_to_add {
         if !current_user_permissions.has_permission(*permission) {
-            return Ok(response_with_reason!(
+            return Ok(error_response_with_reason!(
                 StatusCode::FORBIDDEN,
                 format!(
                     "You are not allowed to add the {} permission to other users.",
@@ -634,7 +634,7 @@ async fn remove_permissions_from_specific_user(
             .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
 
     if current_user.id == requested_user_id {
-        return Ok(response_with_reason!(
+        return Ok(error_response_with_reason!(
             StatusCode::FORBIDDEN,
             "Can't modify your own account on this endpoint."
         ));
@@ -652,7 +652,7 @@ async fn remove_permissions_from_specific_user(
     let permissions_to_remove = match permissions_to_remove_result {
         Ok(permissions_to_remove) => permissions_to_remove,
         Err(non_existent_permission_name) => {
-            return Ok(response_with_reason!(
+            return Ok(error_response_with_reason!(
                 StatusCode::BAD_REQUEST,
                 format!("No such permission: {non_existent_permission_name}")
             ));
@@ -664,7 +664,7 @@ async fn remove_permissions_from_specific_user(
     // anything from anyone.
     for permission in &permissions_to_remove {
         if !current_user_permissions.has_permission(*permission) {
-            return Ok(response_with_reason!(
+            return Ok(error_response_with_reason!(
                 StatusCode::FORBIDDEN,
                 format!(
                     "You are not allowed to remove the {} permission from other users.",

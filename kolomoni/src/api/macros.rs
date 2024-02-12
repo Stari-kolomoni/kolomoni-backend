@@ -1,5 +1,99 @@
-use actix_web::body::MessageBody;
-use actix_web::HttpResponse;
+use actix_web::body::{BoxBody, MessageBody};
+use actix_web::http::header::{self, HeaderValue, InvalidHeaderValue};
+use actix_web::http::StatusCode;
+use actix_web::{http, HttpResponse, ResponseError};
+use chrono::{DateTime, Utc};
+use miette::{Context, IntoDiagnostic, Result};
+use serde::Serialize;
+
+use super::errors::APIError;
+
+
+pub fn construct_last_modified_header_value(
+    last_modification_time: &DateTime<Utc>,
+) -> Result<HeaderValue, InvalidHeaderValue> {
+    let date_time_formatter = last_modification_time.format("%a, %d %b %Y %H:%M:%S GMT");
+    HeaderValue::from_str(date_time_formatter.to_string().as_str())
+}
+
+pub struct KolomoniResponseBuilder {
+    status_code: StatusCode,
+    body: String,
+    additional_headers: http::header::HeaderMap,
+}
+
+impl KolomoniResponseBuilder {
+    pub fn new_json<S>(value: S) -> Result<Self>
+    where
+        S: Serialize,
+    {
+        let body = serde_json::to_string(&value)
+            .into_diagnostic()
+            .wrap_err("Failed to serialize JSON body.")?;
+
+        let mut additional_headers = http::header::HeaderMap::with_capacity(1);
+        additional_headers.append(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static(mime::APPLICATION_JSON.as_ref()),
+        );
+
+        Ok(Self {
+            status_code: StatusCode::OK,
+            body,
+            additional_headers,
+        })
+    }
+
+    #[allow(dead_code)]
+    pub fn status_code(mut self, status_code: StatusCode) -> Self {
+        self.status_code = status_code;
+
+        self
+    }
+
+    pub fn last_modified_at(mut self, last_modified_at: DateTime<Utc>) -> Result<Self, APIError> {
+        // See <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified#directives>
+        self.additional_headers.append(
+            http::header::LAST_MODIFIED,
+            construct_last_modified_header_value(&last_modified_at)
+                .into_diagnostic()
+                .map_err(APIError::InternalError)?,
+        );
+
+        Ok(self)
+    }
+
+    pub fn build(self) -> HttpResponse<BoxBody> {
+        self.into_response()
+    }
+}
+
+impl ContextlessResponder for KolomoniResponseBuilder {
+    type Body = BoxBody;
+
+    fn into_response(self) -> HttpResponse<Self::Body> {
+        let mut response =
+            actix_web::HttpResponse::with_body(self.status_code, BoxBody::new(self.body));
+
+        let response_headers = response.headers_mut();
+        for (additional_header_name, additional_header_value) in self.additional_headers {
+            if response_headers.contains_key(&additional_header_name) {
+                response_headers.remove(&additional_header_name);
+            }
+
+            response_headers.append(additional_header_name, additional_header_value);
+        }
+
+        response
+    }
+}
+
+
+
+pub trait IntoKolomoniResponseBuilder: Serialize {
+    fn into_response_builder(self) -> Result<KolomoniResponseBuilder, APIError>;
+}
+
 
 /// Simple responder trait (similar to [`actix_web::Responder`]).
 ///
@@ -9,7 +103,7 @@ use actix_web::HttpResponse;
 /// This can make the call signature more sensible in certain cases.
 ///
 /// See documentation for [`impl_json_responder`][crate::impl_json_responder] for reasoning.
-pub trait DumbResponder {
+pub trait ContextlessResponder {
     type Body: MessageBody + 'static;
 
     /// Serializes `self` as JSON and return a `HTTP 200 OK` response
@@ -17,9 +111,56 @@ pub trait DumbResponder {
     fn into_response(self) -> HttpResponse<Self::Body>;
 }
 
+
+pub(crate) fn generate_simple_http_ok_response<S>(value: S) -> HttpResponse<BoxBody>
+where
+    S: Serialize,
+{
+    match serde_json::to_vec(&value) {
+        Ok(serialized_value) => {
+            let mut response =
+                HttpResponse::with_body(StatusCode::OK, BoxBody::new(serialized_value));
+
+            let response_headers = response.headers_mut();
+            response_headers.append(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static(mime::APPLICATION_JSON.as_ref()),
+            );
+
+            response
+        }
+        Err(_) => APIError::InternalReason("Failed to serialize value to JSON.".to_string())
+            .error_response(),
+    }
+}
+
+
+#[macro_export]
+macro_rules! impl_json_response_builder {
+    ($struct:ty) => {
+        impl $crate::api::macros::ContextlessResponder for $struct {
+            type Body = actix_web::body::BoxBody;
+
+            fn into_response(self) -> actix_web::HttpResponse<Self::Body> {
+                $crate::api::macros::generate_simple_http_ok_response(self)
+            }
+        }
+
+        impl $crate::api::macros::IntoKolomoniResponseBuilder for $struct {
+            fn into_response_builder(
+                self,
+            ) -> Result<$crate::api::macros::KolomoniResponseBuilder, $crate::api::errors::APIError>
+            {
+                $crate::api::macros::KolomoniResponseBuilder::new_json(self)
+                    .map_err($crate::api::errors::APIError::InternalError)
+            }
+        }
+    };
+}
+
 /// Macro that implements two traits for the given struct:
 /// - [`actix_web::Responder`], allowing you to return this struct in an actix endpoint handler, and
-/// - [`DumbResponder`], which is a simpler internal trait that has the `into_response` method that
+/// - [`ContextlessResponder`], which is a simpler internal trait that has the `into_response` method that
 ///   does basically the same as [`actix_web::Responder::respond_to`], but without having to provide
 ///   a reference to [`HttpRequest`][actix_web::HttpRequest], making code cleaner.
 ///
@@ -32,7 +173,7 @@ pub trait DumbResponder {
 /// use serde::Serialize;
 /// use kolomoni::impl_json_responder;
 /// use kolomoni::api::errors::EndpointResult;
-/// use kolomoni::api::macros::DumbResponder;
+/// use kolomoni::api::macros::ContextlessResponder;
 ///
 /// #[derive(Serialize)]
 /// struct SomeResponse {
@@ -54,6 +195,7 @@ pub trait DumbResponder {
 /// }
 /// ```
 #[macro_export]
+#[deprecated]
 macro_rules! impl_json_responder {
     ($struct:ty) => {
         impl actix_web::Responder for $struct {
@@ -67,7 +209,7 @@ macro_rules! impl_json_responder {
             }
         }
 
-        impl $crate::api::macros::DumbResponder for $struct {
+        impl $crate::api::macros::ContextlessResponder for $struct {
             type Body = actix_web::body::BoxBody;
 
             fn into_response(self) -> actix_web::HttpResponse<Self::Body> {
@@ -91,7 +233,7 @@ macro_rules! impl_json_responder {
 /// ```
 /// use actix_web::post;
 /// use actix_web::http::StatusCode;
-/// use kolomoni::api::macros::DumbResponder;
+/// use kolomoni::api::macros::ContextlessResponder;
 /// use kolomoni::api::errors::EndpointResult;
 /// use kolomoni::response_with_reason;
 ///
@@ -112,7 +254,7 @@ macro_rules! impl_json_responder {
 /// }
 /// ```
 #[macro_export]
-macro_rules! response_with_reason {
+macro_rules! error_response_with_reason {
     ($status_code:expr, $reason:expr) => {
         actix_web::HttpResponseBuilder::new($status_code)
             .json($crate::api::errors::ErrorReasonResponse::custom_reason($reason))

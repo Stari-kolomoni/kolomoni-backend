@@ -8,8 +8,8 @@ use tracing::{debug, warn};
 use utoipa::ToSchema;
 
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
-use crate::api::macros::DumbResponder;
-use crate::impl_json_responder;
+use crate::api::macros::ContextlessResponder;
+use crate::impl_json_response_builder;
 use crate::state::ApplicationState;
 
 /*
@@ -43,7 +43,7 @@ pub struct UserLoginResponse {
     pub refresh_token: String,
 }
 
-impl_json_responder!(UserLoginResponse);
+impl_json_response_builder!(UserLoginResponse);
 
 
 /// Create an access token.
@@ -173,7 +173,7 @@ pub struct UserLoginRefreshResponse {
     pub access_token: String,
 }
 
-impl_json_responder!(UserLoginRefreshResponse);
+impl_json_response_builder!(UserLoginRefreshResponse);
 
 
 /// Refresh a user's access

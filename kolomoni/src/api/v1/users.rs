@@ -18,7 +18,7 @@ use self::specific_user::{
     remove_permissions_from_specific_user,
     update_specific_user_display_name,
 };
-use crate::impl_json_responder;
+use crate::impl_json_response_builder;
 
 pub mod all_users;
 pub mod current_user;
@@ -93,7 +93,7 @@ impl UserInfoResponse {
     }
 }
 
-impl_json_responder!(UserInfoResponse);
+impl_json_response_builder!(UserInfoResponse);
 
 
 
@@ -117,7 +117,7 @@ pub struct UserDisplayNameChangeResponse {
     pub user: UserInformation,
 }
 
-impl_json_responder!(UserDisplayNameChangeResponse);
+impl_json_response_builder!(UserDisplayNameChangeResponse);
 
 
 
@@ -129,7 +129,15 @@ pub struct UserPermissionsResponse {
     pub permissions: Vec<String>,
 }
 
-impl_json_responder!(UserPermissionsResponse);
+impl UserPermissionsResponse {
+    pub fn from_permission_names(permission_names: Vec<String>) -> Self {
+        Self {
+            permissions: permission_names,
+        }
+    }
+}
+
+impl_json_response_builder!(UserPermissionsResponse);
 
 
 /// Router for all user-related operations.

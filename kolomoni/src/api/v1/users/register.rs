@@ -10,10 +10,10 @@ use super::UserInformation;
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
-        macros::DumbResponder,
+        macros::ContextlessResponder,
     },
-    impl_json_responder,
-    response_with_reason,
+    error_response_with_reason,
+    impl_json_response_builder,
     state::ApplicationState,
 };
 
@@ -49,7 +49,7 @@ pub struct UserRegistrationResponse {
     pub user: UserInformation,
 }
 
-impl_json_responder!(UserRegistrationResponse);
+impl_json_response_builder!(UserRegistrationResponse);
 
 
 /// Register a new user
@@ -119,7 +119,7 @@ pub async fn register_user(
             .map_err(APIError::InternalError)?;
 
     if username_already_exists {
-        return Ok(response_with_reason!(
+        return Ok(error_response_with_reason!(
             StatusCode::CONFLICT,
             "User with provided username already exists."
         ));
@@ -133,7 +133,7 @@ pub async fn register_user(
             .map_err(APIError::InternalError)?;
 
     if display_name_already_exists {
-        return Ok(response_with_reason!(
+        return Ok(error_response_with_reason!(
             StatusCode::CONFLICT,
             "User with provided display name already exists."
         ));
