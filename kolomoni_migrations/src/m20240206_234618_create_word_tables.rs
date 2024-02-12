@@ -3,7 +3,6 @@ use std::borrow::BorrowMut;
 use sea_orm_migration::prelude::*;
 
 
-const WORD_INDEX_ON_ID: &str = "index__word__on__id";
 
 #[derive(DeriveIden)]
 enum Word {
@@ -17,9 +16,10 @@ enum Word {
     Language,
 }
 
+const WORD_PK_CONSTRAINT_NAME: &str = "pk__word";
+const WORD_INDEX_ON_ID: &str = "index__word__on__id";
 
-const WORD_SLOVENE_INDEX_ON_WORD_ID: &str = "index__word_slovene__on__word_id";
-const WORD_SLOVENE_FOREIGN_KEY_WORD_ID: &str = "fk__word_slovene__word_id__word";
+
 
 #[derive(DeriveIden)]
 enum WordSlovene {
@@ -45,9 +45,10 @@ enum WordSlovene {
     LastEditedAt,
 }
 
+const WORD_SLOVENE_PK_CONSTRAINT_NAME: &str = "pk__word_slovene";
+const WORD_SLOVENE_INDEX_ON_WORD_ID: &str = "index__word_slovene__on__word_id";
+const WORD_SLOVENE_FK_WORD_ID_CONSTRAINT_NAME: &str = "fk__word_slovene__word_id__word";
 
-const WORD_ENGLISH_INDEX_ON_WORD_ID: &str = "index__word_english__on__word_id";
-const WORD_ENGLISH_FOREIGN_KEY_WORD_ID: &str = "fk__word_english__word_id__word";
 
 #[derive(DeriveIden)]
 enum WordEnglish {
@@ -73,6 +74,11 @@ enum WordEnglish {
     LastEditedAt,
 }
 
+const WORD_ENGLISH_PK_CONSTRAINT_NAME: &str = "pk__word_english";
+const WORD_ENGLISH_INDEX_ON_WORD_ID: &str = "index__word_english__on__word_id";
+const WORD_ENGLISH_FOREIGN_KEY_WORD_ID: &str = "fk__word_english__word_id__word";
+
+
 
 
 #[derive(DeriveMigrationName)]
@@ -91,7 +97,6 @@ impl MigrationTrait for Migration {
                     .col(
                         ColumnDef::new_with_type(Word::Id, ColumnType::Uuid)
                             .not_null()
-                            .primary_key()
                             .unique_key(),
                     )
                     .col(
@@ -99,6 +104,7 @@ impl MigrationTrait for Migration {
                             .check(Expr::col(Word::Language).in_tuples(["en", "si"]))
                             .not_null(),
                     )
+                    .primary_key(Index::create().name(WORD_PK_CONSTRAINT_NAME).col(Word::Id))
                     .to_owned(),
             )
             .await?;
@@ -122,11 +128,7 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(WordSlovene::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new_with_type(WordSlovene::WordId, ColumnType::Uuid)
-                            .not_null()
-                            .primary_key(),
-                    )
+                    .col(ColumnDef::new_with_type(WordSlovene::WordId, ColumnType::Uuid).not_null())
                     .col(
                         ColumnDef::new_with_type(WordSlovene::Lemma, ColumnType::String(None))
                             .not_null(),
@@ -156,6 +158,19 @@ impl MigrationTrait for Migration {
                         )
                         .not_null(),
                     )
+                    .primary_key(
+                        Index::create()
+                            .name(WORD_SLOVENE_PK_CONSTRAINT_NAME)
+                            .col(WordSlovene::WordId),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name(WORD_SLOVENE_FK_WORD_ID_CONSTRAINT_NAME)
+                            .from(WordSlovene::Table, WordSlovene::WordId)
+                            .to(Word::Table, Word::Id)
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -170,18 +185,6 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        manager
-            .create_foreign_key(
-                ForeignKey::create()
-                    .name(WORD_SLOVENE_FOREIGN_KEY_WORD_ID)
-                    .from(WordSlovene::Table, WordSlovene::WordId)
-                    .to(Word::Table, Word::Id)
-                    .on_delete(ForeignKeyAction::Cascade)
-                    .on_update(ForeignKeyAction::Cascade)
-                    .to_owned(),
-            )
-            .await?;
-
 
 
         // English word
@@ -191,11 +194,7 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(WordEnglish::Table)
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new_with_type(WordEnglish::WordId, ColumnType::Uuid)
-                            .not_null()
-                            .primary_key(),
-                    )
+                    .col(ColumnDef::new_with_type(WordEnglish::WordId, ColumnType::Uuid).not_null())
                     .col(
                         ColumnDef::new_with_type(WordEnglish::Lemma, ColumnType::String(None))
                             .not_null(),
@@ -225,6 +224,19 @@ impl MigrationTrait for Migration {
                         )
                         .not_null(),
                     )
+                    .primary_key(
+                        Index::create()
+                            .name(WORD_ENGLISH_PK_CONSTRAINT_NAME)
+                            .col(WordEnglish::WordId),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name(WORD_ENGLISH_FOREIGN_KEY_WORD_ID)
+                            .from(WordEnglish::Table, WordEnglish::WordId)
+                            .to(Word::Table, Word::Id)
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -237,71 +249,18 @@ impl MigrationTrait for Migration {
                     .col(WordEnglish::WordId)
                     .to_owned(),
             )
-            .await?;
-
-        manager
-            .create_foreign_key(
-                ForeignKey::create()
-                    .name(WORD_ENGLISH_FOREIGN_KEY_WORD_ID)
-                    .from(WordEnglish::Table, WordEnglish::WordId)
-                    .to(Word::Table, Word::Id)
-                    .on_delete(ForeignKeyAction::Cascade)
-                    .on_update(ForeignKeyAction::Cascade)
-                    .to_owned(),
-            )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        // English word (foreign key constraint, index and table).
-        manager
-            .drop_foreign_key(
-                ForeignKey::drop()
-                    .name(WORD_ENGLISH_FOREIGN_KEY_WORD_ID)
-                    .table(WordEnglish::Table)
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .drop_index(
-                Index::drop()
-                    .name(WORD_ENGLISH_INDEX_ON_WORD_ID)
-                    .table(WordEnglish::Table)
-                    .to_owned(),
-            )
-            .await?;
-
         manager
             .drop_table(Table::drop().table(WordEnglish::Table).to_owned())
-            .await?;
-
-
-        // Slovene word (foreign key constraint, index and table).
-        manager
-            .drop_foreign_key(
-                ForeignKey::drop()
-                    .name(WORD_SLOVENE_FOREIGN_KEY_WORD_ID)
-                    .table(WordSlovene::Table)
-                    .to_owned(),
-            )
-            .await?;
-
-        manager
-            .drop_index(
-                Index::drop()
-                    .name(WORD_SLOVENE_INDEX_ON_WORD_ID)
-                    .table(WordSlovene::Table)
-                    .to_owned(),
-            )
             .await?;
 
         manager
             .drop_table(Table::drop().table(WordSlovene::Table).to_owned())
             .await?;
 
-
-        // Base word entity (table).
         manager
             .drop_table(Table::drop().table(Word::Table).to_owned())
             .await

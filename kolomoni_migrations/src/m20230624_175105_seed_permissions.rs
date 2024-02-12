@@ -1,9 +1,7 @@
 use sea_orm_migration::prelude::*;
 
-use crate::m20230624_170512_create_permissions_table::Permission;
+use crate::m20230624_170512_initialize_permission_related_tables::Permission;
 
-#[derive(DeriveMigrationName)]
-pub struct Migration;
 
 
 /// This is the list of available permissions.
@@ -15,7 +13,7 @@ pub struct Migration;
 /// not stay the same. We can modify the migration sanely if any only if we're still in 
 /// the unstable prototyping phase. Otherwise, opt for a new migration that adds the new permissions.
 #[rustfmt::skip]
-const STANDARD_PERMISSIONS: [(i32, &str, &str); 4] = [
+const STANDARD_PERMISSIONS: [(i32, &str, &str); 8] = [
     (
         1,
         "user.self:read",
@@ -36,6 +34,26 @@ const STANDARD_PERMISSIONS: [(i32, &str, &str); 4] = [
         "user.any:write",
         "Allows the user to update account information of any other user."
     ),
+    (
+        5,
+        "word:create",
+        "Allows the user to create words in the dictionary."
+    ),
+    (
+        6,
+        "word:read",
+        "Allows the user to read words in the dictionary."
+    ),
+    (
+        7,
+        "word:update",
+        "Allows the user to update existing words in the dictionary (but not delete them)."
+    ),
+    (
+        8,
+        "word:delete",
+        "Allows the user to delete words from the dictionary."
+    )
 ];
 
 
@@ -66,6 +84,9 @@ async fn delete_permission_by_id<'manager>(
     manager.exec_stmt(delete).await
 }
 
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
 
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {

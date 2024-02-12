@@ -29,7 +29,11 @@ pub enum User {
     LastActiveAt,
 }
 
-const USER_TABLE_INDEX_ON_USERNAME: &str = "index__user__on__username";
+const USER_PK_CONSTRAINT_NAME: &str = "pk__user";
+const USER_UNIQUE_ON_USERNAME_CONSTRAINT_NAME: &str = "unique__user__username";
+const USER_UNIQUE_ON_DISPLAY_NAME_CONSTRAINT_NAME: &str = "unique__user__display_name";
+const USER_IDX_ON_ID_INDEX_NAME: &str = "index__user__on__id";
+const USER_IDX_ON_USERNAME_INDEX_NAME: &str = "index__user__on__username";
 
 
 
@@ -46,39 +50,45 @@ impl MigrationTrait for Migration {
                     .table(User::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(User::Id)
-                            .integer()
+                        ColumnDef::new_with_type(User::Id, ColumnType::Integer)
                             .not_null()
-                            .auto_increment()
-                            .primary_key(),
+                            .auto_increment(),
                     )
                     .col(
-                        ColumnDef::new(User::Username)
-                            .string()
-                            .not_null()
-                            .unique_key(),
-                    )
-                    .col(
-                        ColumnDef::new(User::DisplayName)
-                            .string()
-                            .not_null()
-                            .unique_key(),
-                    )
-                    .col(ColumnDef::new(User::HashedPassword).string().not_null())
-                    .col(
-                        ColumnDef::new(User::JoinedAt)
-                            .timestamp_with_time_zone()
+                        ColumnDef::new_with_type(User::Username, ColumnType::String(None))
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(User::LastModifiedAt)
-                            .timestamp_with_time_zone()
+                        ColumnDef::new_with_type(User::DisplayName, ColumnType::String(None))
                             .not_null(),
                     )
                     .col(
-                        ColumnDef::new(User::LastActiveAt)
-                            .timestamp_with_time_zone()
+                        ColumnDef::new_with_type(User::HashedPassword, ColumnType::String(None))
                             .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new_with_type(User::JoinedAt, ColumnType::TimestampWithTimeZone)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new_with_type(
+                            User::LastModifiedAt,
+                            ColumnType::TimestampWithTimeZone,
+                        )
+                        .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new_with_type(
+                            User::LastActiveAt,
+                            ColumnType::TimestampWithTimeZone,
+                        )
+                        .not_null(),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .name(USER_PK_CONSTRAINT_NAME)
+                            .table(User::Table)
+                            .col(User::Id),
                     )
                     .to_owned(),
             )
@@ -87,19 +97,47 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
-                    .name(USER_TABLE_INDEX_ON_USERNAME)
+                    .name(USER_IDX_ON_ID_INDEX_NAME)
+                    .table(User::Table)
+                    .col(User::Id)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name(USER_IDX_ON_USERNAME_INDEX_NAME)
                     .table(User::Table)
                     .col(User::Username)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name(USER_UNIQUE_ON_USERNAME_CONSTRAINT_NAME)
+                    .table(User::Table)
+                    .col(User::Username)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name(USER_UNIQUE_ON_DISPLAY_NAME_CONSTRAINT_NAME)
+                    .table(User::Table)
+                    .col(User::DisplayName)
+                    .unique()
                     .to_owned(),
             )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .drop_index(Index::drop().name(USER_TABLE_INDEX_ON_USERNAME).to_owned())
-            .await?;
-
         manager
             .drop_table(Table::drop().table(User::Table).to_owned())
             .await

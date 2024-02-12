@@ -2,8 +2,6 @@ use sea_orm_migration::prelude::*;
 
 use crate::m20230624_133941_create_users_table::User;
 
-const USER_PERMISSION_FOREIGN_KEY_USER_ID: &str = "fk__user_permission__user_id";
-const USER_PERMISSION_FOREIGN_KEY_PERMISSION_ID: &str = "fk__user_permission__permission_id";
 
 
 /// Learn more at <https://docs.rs/sea-query#iden>.
@@ -22,6 +20,12 @@ pub enum Permission {
     Description,
 }
 
+const PERMISSION_PK_CONSTRAINT_NAME: &str = "pk__permission";
+const PERMISSION_IDX_ON_ID_INDEX_NAME: &str = "index__permission__on__id";
+const PERMISSION_IDX_ON_NAME_INDEX_NAME: &str = "index__permission__on__name";
+const PERMISSION_UNIQUE_ON_NAME_CONSTRAINT_NAME: &str = "unique__permission__name";
+
+
 #[derive(DeriveIden)]
 pub enum UserPermission {
     #[sea_orm(iden = "user_permission")]
@@ -33,6 +37,10 @@ pub enum UserPermission {
     #[sea_orm(iden = "permission_id")]
     PermissionId,
 }
+
+const USER_PERMISSION_PK_CONSTRAINT_NAME: &str = "pk__user_permission";
+const USER_PERMISSION_FK_USER_ID: &str = "fk__user_permission__user_id";
+const USER_PERMISSION_FK_PERMISSION_ID: &str = "fk__user_permission__permission_id";
 
 
 
@@ -48,19 +56,26 @@ impl MigrationTrait for Migration {
                     .table(Permission::Table)
                     .if_not_exists()
                     .col(
-                        ColumnDef::new(Permission::Id)
-                            .integer()
+                        ColumnDef::new_with_type(Permission::Id, ColumnType::Integer)
                             .not_null()
-                            .auto_increment()
-                            .primary_key(),
+                            .auto_increment(),
                     )
                     .col(
-                        ColumnDef::new(Permission::Name)
-                            .string()
+                        ColumnDef::new_with_type(Permission::Name, ColumnType::String(None))
                             .not_null()
                             .unique_key(),
                     )
-                    .col(ColumnDef::new(Permission::Description).string().not_null())
+                    .col(
+                        ColumnDef::new_with_type(Permission::Description, ColumnType::String(None))
+                            .not_null(),
+                    )
+                    .primary_key(
+                        Index::create()
+                            .name(PERMISSION_PK_CONSTRAINT_NAME)
+                            .table(Permission::Table)
+                            .col(Permission::Id)
+                            .primary(),
+                    )
                     .to_owned(),
             )
             .await?;
@@ -68,6 +83,17 @@ impl MigrationTrait for Migration {
         manager
             .create_index(
                 Index::create()
+                    .name(PERMISSION_IDX_ON_ID_INDEX_NAME)
+                    .table(Permission::Table)
+                    .col(Permission::Id)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name(PERMISSION_IDX_ON_NAME_INDEX_NAME)
                     .table(Permission::Table)
                     .col(Permission::Name)
                     .to_owned(),
@@ -75,24 +101,39 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
+            .create_index(
+                Index::create()
+                    .name(PERMISSION_UNIQUE_ON_NAME_CONSTRAINT_NAME)
+                    .table(Permission::Table)
+                    .col(Permission::Name)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
+
+        manager
             .create_table(
                 Table::create()
                     .table(UserPermission::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(UserPermission::UserId).integer().not_null())
                     .col(
-                        ColumnDef::new(UserPermission::PermissionId)
-                            .integer()
+                        ColumnDef::new_with_type(UserPermission::UserId, ColumnType::Integer)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new_with_type(UserPermission::PermissionId, ColumnType::Integer)
                             .not_null(),
                     )
                     .primary_key(
                         Index::create()
+                            .name(USER_PERMISSION_PK_CONSTRAINT_NAME)
                             .col(UserPermission::UserId)
                             .col(UserPermission::PermissionId),
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name(USER_PERMISSION_FOREIGN_KEY_USER_ID)
+                            .name(USER_PERMISSION_FK_USER_ID)
                             .from(UserPermission::Table, UserPermission::UserId)
                             .to(User::Table, User::Id)
                             .on_delete(ForeignKeyAction::Cascade)
@@ -100,7 +141,7 @@ impl MigrationTrait for Migration {
                     )
                     .foreign_key(
                         ForeignKey::create()
-                            .name(USER_PERMISSION_FOREIGN_KEY_PERMISSION_ID)
+                            .name(USER_PERMISSION_FK_PERMISSION_ID)
                             .from(
                                 UserPermission::Table,
                                 UserPermission::PermissionId,
