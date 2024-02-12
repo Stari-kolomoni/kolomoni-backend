@@ -8,5 +8,7 @@
 //! for more information, consult the README.
 
 pub mod entities;
+pub mod macros;
 pub mod mutation;
 pub mod query;
+pub mod shared;

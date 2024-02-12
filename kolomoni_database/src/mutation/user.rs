@@ -72,7 +72,7 @@ pub struct UserRegistrationInfo {
 
 
 /// Mutations for the [`crate::entities::user::Entity`] entity.
-pub struct UserMutation {}
+pub struct UserMutation;
 
 impl UserMutation {
     /// Create a new user.
@@ -209,9 +209,12 @@ impl UserMutation {
         username: &str,
         new_display_name: String,
     ) -> Result<user::Model> {
+        let current_time = Utc::now().fixed_offset();
+
         let user_with_updated_display_name = user::ActiveModel {
             display_name: ActiveValue::Set(new_display_name),
-            last_modified_at: ActiveValue::Set(Utc::now().fixed_offset()),
+            last_active_at: ActiveValue::Set(current_time),
+            last_modified_at: ActiveValue::Set(current_time),
             ..Default::default()
         };
 

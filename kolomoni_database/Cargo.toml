@@ -10,8 +10,11 @@ publish = false
 kolomoni_auth = { path = "../kolomoni_auth" }
 kolomoni_configuration = { path = "../kolomoni_configuration" }
 
-sea-orm = { workspace = true }
+thiserror = { workspace = true }
 miette = { workspace = true }
+
+sea-orm = { workspace = true }
+
 argon2 = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }

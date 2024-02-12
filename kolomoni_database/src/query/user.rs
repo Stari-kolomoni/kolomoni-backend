@@ -7,7 +7,7 @@ use crate::mutation::ArgonHasher;
 
 
 /// Queries related to the [`crate::entities::user::Entity`] entity.
-pub struct UserQuery {}
+pub struct UserQuery;
 
 impl UserQuery {
     /// Get a user by their ID.
