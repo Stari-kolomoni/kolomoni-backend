@@ -74,6 +74,25 @@ args = [
     "./scripts/database/run-database.ps1"
 ]
 
+[tasks.start-database]
+clear = true
+workspace = false
+condition = { platforms = ["windows"]}
+command = "pwsh"
+args = [
+    "./scripts/database/manually-start-database.ps1"
+]
+
+[tasks.stop-database]
+clear = true
+workspace = false
+condition = { platforms = ["windows"]}
+command = "pwsh"
+args = [
+    "./scripts/database/manually-stop-database.ps1"
+]
+
+
 
 
 [tasks.build-and-open-full-documentation]
@@ -85,6 +104,30 @@ args = [
     "--workspace",
     "--open"
 ]
+
+[tasks.run-backend]
+clear = true
+workspace = true
+command = "cargo"
+args = ["run", "--release"]
+cwd = "."
+
+[tasks.run-openapi-backend]
+clear = true
+workspace = true
+command = "cargo"
+args = ["run", "--release"]
+cwd = "./kolomoni_openapi"
+
+
+[tasks.run-entire-backend]
+clear = true
+workspace = true
+[tasks.run-entire-backend.run_task]
+name = ["start-database", "run-backend", "run-openapi-backend"]
+fork = true
+parallel = true
+cleanup_task = "stop-database"
 
 
 
