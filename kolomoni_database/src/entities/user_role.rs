@@ -7,26 +7,26 @@ pub struct Entity;
 
 impl EntityName for Entity {
     fn table_name(&self) -> &str {
-        "user_permission"
+        "user_role"
     }
 }
 
 #[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel, Eq)]
 pub struct Model {
     pub user_id: i32,
-    pub permission_id: i32,
+    pub role_id: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
 pub enum Column {
     UserId,
-    PermissionId,
+    RoleId,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
 pub enum PrimaryKey {
     UserId,
-    PermissionId,
+    RoleId,
 }
 
 impl PrimaryKeyTrait for PrimaryKey {
@@ -38,7 +38,7 @@ impl PrimaryKeyTrait for PrimaryKey {
 
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    Permission,
+    Role,
     User,
 }
 
@@ -47,7 +47,7 @@ impl ColumnTrait for Column {
     fn def(&self) -> ColumnDef {
         match self {
             Self::UserId => ColumnType::Integer.def(),
-            Self::PermissionId => ColumnType::Integer.def(),
+            Self::RoleId => ColumnType::Integer.def(),
         }
     }
 }
@@ -55,9 +55,9 @@ impl ColumnTrait for Column {
 impl RelationTrait for Relation {
     fn def(&self) -> RelationDef {
         match self {
-            Self::Permission => Entity::belongs_to(super::permission::Entity)
-                .from(Column::PermissionId)
-                .to(super::permission::Column::Id)
+            Self::Role => Entity::belongs_to(super::role::Entity)
+                .from(Column::RoleId)
+                .to(super::role::Column::Id)
                 .into(),
             Self::User => Entity::belongs_to(super::user::Entity)
                 .from(Column::UserId)
@@ -67,9 +67,9 @@ impl RelationTrait for Relation {
     }
 }
 
-impl Related<super::permission::Entity> for Entity {
+impl Related<super::role::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Permission.def()
+        Relation::Role.def()
     }
 }
 

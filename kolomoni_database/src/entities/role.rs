@@ -7,7 +7,7 @@ pub struct Entity;
 
 impl EntityName for Entity {
     fn table_name(&self) -> &str {
-        "permission"
+        "role"
     }
 }
 
@@ -40,6 +40,7 @@ impl PrimaryKeyTrait for PrimaryKey {
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
     RolePermission,
+    UserRole,
 }
 
 impl ColumnTrait for Column {
@@ -47,7 +48,7 @@ impl ColumnTrait for Column {
     fn def(&self) -> ColumnDef {
         match self {
             Self::Id => ColumnType::Integer.def(),
-            Self::Name => ColumnType::String(None).def().unique(),
+            Self::Name => ColumnType::String(None).def(),
             Self::Description => ColumnType::String(None).def(),
         }
     }
@@ -57,6 +58,7 @@ impl RelationTrait for Relation {
     fn def(&self) -> RelationDef {
         match self {
             Self::RolePermission => Entity::has_many(super::role_permission::Entity).into(),
+            Self::UserRole => Entity::has_many(super::user_role::Entity).into(),
         }
     }
 }
@@ -67,12 +69,27 @@ impl Related<super::role_permission::Entity> for Entity {
     }
 }
 
-impl Related<super::role::Entity> for Entity {
+impl Related<super::user_role::Entity> for Entity {
     fn to() -> RelationDef {
-        super::role_permission::Relation::Role.def()
+        Relation::UserRole.def()
+    }
+}
+
+impl Related<super::permission::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::role_permission::Relation::Permission.def()
     }
     fn via() -> Option<RelationDef> {
-        Some(super::role_permission::Relation::Permission.def().rev())
+        Some(super::role_permission::Relation::Role.def().rev())
+    }
+}
+
+impl Related<super::user::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::user_role::Relation::User.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(super::user_role::Relation::Role.def().rev())
     }
 }
 

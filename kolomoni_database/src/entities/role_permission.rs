@@ -7,48 +7,47 @@ pub struct Entity;
 
 impl EntityName for Entity {
     fn table_name(&self) -> &str {
-        "permission"
+        "role_permission"
     }
 }
 
 #[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel, Eq)]
 pub struct Model {
-    pub id: i32,
-    pub name: String,
-    pub description: String,
+    pub role_id: i32,
+    pub permission_id: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
 pub enum Column {
-    Id,
-    Name,
-    Description,
+    RoleId,
+    PermissionId,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
 pub enum PrimaryKey {
-    Id,
+    PermissionId,
+    RoleId,
 }
 
 impl PrimaryKeyTrait for PrimaryKey {
-    type ValueType = i32;
+    type ValueType = (i32, i32);
     fn auto_increment() -> bool {
-        true
+        false
     }
 }
 
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    RolePermission,
+    Permission,
+    Role,
 }
 
 impl ColumnTrait for Column {
     type EntityName = Entity;
     fn def(&self) -> ColumnDef {
         match self {
-            Self::Id => ColumnType::Integer.def(),
-            Self::Name => ColumnType::String(None).def().unique(),
-            Self::Description => ColumnType::String(None).def(),
+            Self::RoleId => ColumnType::Integer.def(),
+            Self::PermissionId => ColumnType::Integer.def(),
         }
     }
 }
@@ -56,23 +55,27 @@ impl ColumnTrait for Column {
 impl RelationTrait for Relation {
     fn def(&self) -> RelationDef {
         match self {
-            Self::RolePermission => Entity::has_many(super::role_permission::Entity).into(),
+            Self::Permission => Entity::belongs_to(super::permission::Entity)
+                .from(Column::PermissionId)
+                .to(super::permission::Column::Id)
+                .into(),
+            Self::Role => Entity::belongs_to(super::role::Entity)
+                .from(Column::RoleId)
+                .to(super::role::Column::Id)
+                .into(),
         }
     }
 }
 
-impl Related<super::role_permission::Entity> for Entity {
+impl Related<super::permission::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::RolePermission.def()
+        Relation::Permission.def()
     }
 }
 
 impl Related<super::role::Entity> for Entity {
     fn to() -> RelationDef {
-        super::role_permission::Relation::Role.def()
-    }
-    fn via() -> Option<RelationDef> {
-        Some(super::role_permission::Relation::Permission.def().rev())
+        Relation::Role.def()
     }
 }
 

@@ -23,7 +23,7 @@ pub enum Role {
 }
 
 const ROLE_PK_CONSTRAINT_NAME: &str = "pk__role";
-const ROLE_UNIQUE_ON_NAME_CONSTRAINT_NAME: &str = "unique__role__on__name";
+const ROLE_UNIQUE_ON_NAME_CONSTRAINT_NAME: &str = "unique__role__name";
 
 
 

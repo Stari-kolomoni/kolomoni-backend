@@ -47,7 +47,7 @@ impl PrimaryKeyTrait for PrimaryKey {
 
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    UserPermission,
+    UserRole,
 }
 
 impl ColumnTrait for Column {
@@ -55,8 +55,8 @@ impl ColumnTrait for Column {
     fn def(&self) -> ColumnDef {
         match self {
             Self::Id => ColumnType::Integer.def(),
-            Self::Username => ColumnType::String(None).def().unique(),
-            Self::DisplayName => ColumnType::String(None).def().unique(),
+            Self::Username => ColumnType::String(None).def(),
+            Self::DisplayName => ColumnType::String(None).def(),
             Self::HashedPassword => ColumnType::String(None).def(),
             Self::JoinedAt => ColumnType::TimestampWithTimeZone.def(),
             Self::LastModifiedAt => ColumnType::TimestampWithTimeZone.def(),
@@ -68,23 +68,23 @@ impl ColumnTrait for Column {
 impl RelationTrait for Relation {
     fn def(&self) -> RelationDef {
         match self {
-            Self::UserPermission => Entity::has_many(super::user_permission::Entity).into(),
+            Self::UserRole => Entity::has_many(super::user_role::Entity).into(),
         }
     }
 }
 
-impl Related<super::user_permission::Entity> for Entity {
+impl Related<super::user_role::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::UserPermission.def()
+        Relation::UserRole.def()
     }
 }
 
-impl Related<super::permission::Entity> for Entity {
+impl Related<super::role::Entity> for Entity {
     fn to() -> RelationDef {
-        super::user_permission::Relation::Permission.def()
+        super::user_role::Relation::Role.def()
     }
     fn via() -> Option<RelationDef> {
-        Some(super::user_permission::Relation::User.def().rev())
+        Some(super::user_role::Relation::User.def().rev())
     }
 }
 
