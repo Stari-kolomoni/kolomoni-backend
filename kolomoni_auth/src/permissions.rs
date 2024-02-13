@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 ///
 /// **The defined permissions must match with the `*_seed_permissions.rs` file in `migrations`!**
 #[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone, Debug)]
-#[allow(clippy::enum_variant_names)]
 pub enum Permission {
     /// Allows the user to log in and view their account information.
     #[serde(rename = "user.self:read")]
@@ -26,17 +25,32 @@ pub enum Permission {
     /// give or remove their permissions.
     #[serde(rename = "user.any:write")]
     UserAnyWrite,
+
+    #[serde(rename = "word:create")]
+    WordCreate,
+
+    #[serde(rename = "word:read")]
+    WordRead,
+
+    #[serde(rename = "word:update")]
+    WordUpdate,
+
+    #[serde(rename = "word:delete")]
+    WordDelete,
 }
 
 impl Permission {
-    /// Attempt to parse a [`Permission`] from its name.
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "user.self:read" => Some(Self::UserSelfRead),
-            "user.self:write" => Some(Self::UserSelfWrite),
-            "user.any:read" => Some(Self::UserAnyRead),
-            "user.any:write" => Some(Self::UserAnyWrite),
-            _ => None,
+    pub fn from_id(internal_permission_id: i32) -> Option<Self> {
+        match internal_permission_id {
+            1 => Some(Permission::UserSelfRead),
+            2 => Some(Permission::UserSelfWrite),
+            3 => Some(Permission::UserAnyRead),
+            4 => Some(Permission::UserAnyWrite),
+            5 => Some(Permission::WordCreate),
+            6 => Some(Permission::WordRead),
+            7 => Some(Permission::WordUpdate),
+            8 => Some(Permission::WordDelete),
+            _ => None
         }
     }
 
@@ -48,6 +62,25 @@ impl Permission {
             Permission::UserSelfWrite => 2,
             Permission::UserAnyRead => 3,
             Permission::UserAnyWrite => 4,
+            Permission::WordCreate => 5,
+            Permission::WordRead => 6,
+            Permission::WordUpdate => 7,
+            Permission::WordDelete => 8,
+        }
+    }
+
+    /// Attempt to parse a [`Permission`] from its name.
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "user.self:read" => Some(Self::UserSelfRead),
+            "user.self:write" => Some(Self::UserSelfWrite),
+            "user.any:read" => Some(Self::UserAnyRead),
+            "user.any:write" => Some(Self::UserAnyWrite),
+            "word:create" => Some(Self::WordCreate),
+            "word:read" => Some(Self::WordRead),
+            "word:update" => Some(Self::WordUpdate),
+            "word:delete" => Some(Self::WordDelete),
+            _ => None,
         }
     }
 
@@ -58,45 +91,66 @@ impl Permission {
             Permission::UserSelfWrite => "user.self:write",
             Permission::UserAnyRead => "user.any:read",
             Permission::UserAnyWrite => "user.any:write",
+            Permission::WordCreate => "word:create",
+            Permission::WordRead => "word:read",
+            Permission::WordUpdate => "word:update",
+            Permission::WordDelete => "word:delete",
         }
     }
 
     /// Get the description of the given [`Permission`].
+    #[rustfmt::skip]
     pub fn description(&self) -> &'static str {
         match self {
-            Permission::UserSelfRead => {
-                "Allows the user to log in and view their account information."
-            }
-            Permission::UserSelfWrite => "Allows the user to update their account information.",
-            Permission::UserAnyRead => {
-                "Allows the user to view public account information of any other user."
-            }
-            Permission::UserAnyWrite => {
-                "Allows the user to update account information of any other user."
-            }
+            Permission::UserSelfRead => 
+                "Allows the user to log in and view their account information.",
+            Permission::UserSelfWrite => 
+                "Allows the user to update their account information.",
+            Permission::UserAnyRead =>
+                "Allows the user to view public account information of any other user.",
+            Permission::UserAnyWrite =>
+                "Allows the user to update account information of any other user.",
+            Permission::WordCreate => 
+                "Allows the user to create words in the dictionary.",
+            Permission::WordRead => 
+                "Allows the user to read words in the dictionary.",
+            Permission::WordUpdate =>
+                "Allows the user to update existing words in the dictionary (but not delete them).",
+            Permission::WordDelete => 
+                "Allows the user to delete words from the dictionary.",
         }
     }
 }
 
-/// List of user permissions given to newly-registered users.
-pub const DEFAULT_USER_PERMISSIONS: [Permission; 3] = [
-    Permission::UserSelfRead,
-    Permission::UserSelfWrite,
+/// List of permissions that are given to **ANY API CALLER**,
+/// authenticated or not.
+pub const BLANKET_ANY_USER_PERMISSION_GRANT: [Permission; 2] = [
+    Permission::WordRead,
     Permission::UserAnyRead,
 ];
-
-
 
 /// Set of permissions for a specific user.
 ///
 /// Not to be confused with `kolomoni_database::entities::UserPermission`,
 /// which is a raw database entity.
-pub struct UserPermissionSet {
+pub struct PermissionSet {
     /// Permission set.
     permissions: HashSet<Permission>,
 }
 
-impl UserPermissionSet {
+impl PermissionSet {
+    pub fn new_empty() -> Self {
+        Self {
+            permissions: HashSet::with_capacity(0)
+        }
+    }
+
+    pub fn from_permission_set(permission_set: HashSet<Permission>) -> Self {
+        Self {
+            permissions: permission_set
+        }
+    }
+
     /// Initialize [`UserPermissionSet`] given a `Vec` of permission names.
     /// Returns `Err` if a permission name doesn't resolve to a [`Permission`].
     pub fn from_permission_names<P>(permission_names: Vec<P>) -> Result<Self>
@@ -120,14 +174,31 @@ impl UserPermissionSet {
 
     /// Returns `true` if the user has the specified permission, `false` otherwise.
     pub fn has_permission(&self, permission: Permission) -> bool {
-        self.permissions.contains(&permission)
+        if BLANKET_ANY_USER_PERMISSION_GRANT.contains(&permission) {
+            return true;
+        }
+
+        if self.permissions.contains(&permission) {
+            return true;
+        }
+
+        false
     }
 
-    /// Returns a `Vec` of permission names (inverse of `from_permission_names`).
-    pub fn to_permission_names(&self) -> Vec<String> {
+    pub fn into_permissions(self) -> HashSet<Permission> {
+        self.permissions
+    }
+
+    /// Returns a set of permissions the associated user effectively has.
+    pub fn permissions(&self) -> &HashSet<Permission> {
+        &self.permissions
+    }
+
+    /// Returns a `Vec` of permission names the associated user effectively has.
+    pub fn permission_names(&self) -> Vec<&'static str> {
         self.permissions
             .iter()
-            .map(|permission| permission.name().to_string())
+            .map(|permission| permission.name())
             .collect()
     }
 }
@@ -139,7 +210,7 @@ mod test {
 
     #[test]
     fn parses_from_name() {
-        let permissions = UserPermissionSet::from_permission_names(vec![
+        let permissions = PermissionSet::from_permission_names(vec![
             "user.self:read",
             "user.self:write",
             "user.any:read",

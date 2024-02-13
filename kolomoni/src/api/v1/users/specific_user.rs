@@ -3,13 +3,13 @@
  */
 
 use actix_web::{delete, get, http::StatusCode, patch, post, web, HttpResponse};
-use kolomoni_auth::{Permission, UserPermissionSet};
+use kolomoni_auth::{Permission, Role};
 use kolomoni_database::{
     mutation,
-    query::{self, UserPermissionsExt},
+    query::{self, UserQuery, UserRoleQuery},
 };
 use sea_orm::TransactionTrait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
@@ -25,12 +25,14 @@ use crate::{
             UserPermissionsResponse,
         },
     },
-    authentication::UserAuth,
+    authentication::UserAuthenticationExtractor,
     error_response_with_reason,
+    impl_json_response_builder,
     require_authentication,
     require_permission,
     state::ApplicationState,
 };
+
 
 /// Get a specific user's information
 ///
@@ -87,12 +89,12 @@ use crate::{
 #[get("/{user_id}")]
 async fn get_specific_user_info(
     state: ApplicationState,
-    user_auth: UserAuth,
+    authentication_extractor: UserAuthenticationExtractor,
     path_info: web::Path<(i32,)>,
 ) -> EndpointResult {
     // Only authenticated users with the `user.any:read` permission can access this endpoint.
-    let (_, permissions) = require_authentication!(state, user_auth);
-    require_permission!(permissions, Permission::UserAnyRead);
+    let authenticated_user = require_authentication!(authentication_extractor);
+    require_permission!(state, authenticated_user, Permission::UserAnyRead);
 
 
     // Return information about the requested user.
@@ -112,22 +114,125 @@ async fn get_specific_user_info(
 
 
 
-/*
- * GET /users/{user_id}/permissions
- */
 
-/// Get a specific user's permissions
+#[derive(Serialize, Debug, ToSchema)]
+pub struct UserRolesResponse {
+    pub role_names: Vec<String>,
+}
+
+impl_json_response_builder!(UserRolesResponse);
+
+/// Get a user's roles
+///
+/// *This endpoint requires the `users.any:read` permission.*
+///
+#[utoipa::path(
+    get,
+    path = "/users/{user_id}/roles",
+    params(
+        ("user_id" = i32, Path, description = "ID of the user to query roles for.")
+    ),
+    responses(
+        (
+            status = 200,
+            description = "User role list.",
+            body = UpdatedUserRolesResponse,
+            example = json!({
+                "role_names": [
+                    "user",
+                    "administrator"
+                ]
+            })
+        ),
+        (
+            status = 400,
+            description = "Invalid role name.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "No such role: \"non-existent-role-name\"." })
+        ),
+        (
+            status = 401,
+            description = "Missing user authentication."
+        ),
+        (
+            status = 403,
+            description = "Not allowed to read other users' roles.",
+            body = ErrorReasonResponse,
+            examples(
+                ("Missing user.any:read permission" = (
+                    summary = "Missing user.any:read permission.",
+                    value = json!({ "reason": "Missing permission: user.any:read." })
+                ))
+            )
+        ),
+        (
+            status = 404,
+            description = "No user with provided ID."
+        ),
+        (
+            status = 500,
+            description = "Internal server error."
+        )
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
+#[get("/{user_id}/roles")]
+pub async fn get_specific_user_roles(
+    state: ApplicationState,
+    authentication_extractor: UserAuthenticationExtractor,
+    path_info: web::Path<(i32,)>,
+) -> EndpointResult {
+    // Only authenticated users with the `user.any:read` permission can access this endpoint.
+    let authenticated_user = require_authentication!(authentication_extractor);
+    require_permission!(state, authenticated_user, Permission::UserAnyRead);
+
+    let target_user_id = path_info.into_inner().0;
+    let target_user_exists = UserQuery::user_exists_by_user_id(&state.database, target_user_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    if !target_user_exists {
+        return Ok(HttpResponse::NotFound().finish());
+    }
+
+
+    let target_user_roles = UserRoleQuery::user_roles(&state.database, target_user_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    let target_user_role_names = target_user_roles
+        .into_roles()
+        .into_iter()
+        .map(|role| role.name().to_string())
+        .collect();
+
+
+    Ok(UserRolesResponse {
+        role_names: target_user_role_names,
+    }
+    .into_response())
+}
+
+
+
+
+/// Get a user's effective permissions
+///
+/// Returns a list of effective permissions (computed from user roles).
 ///
 /// This is a generic version of the `GET /users/me/permissions` endpoint, allowing you
 /// to see others' permissions.
 ///
+/// # Permissions
 /// *This endpoint requires the `users.any:read` permission.*
 #[utoipa::path(
     get,
     path = "/users/{user_id}/permissions",
     tag = "users",
     params(
-        ("user_id" = i32, Path, description = "ID of the user to get permissions for.")
+        ("user_id" = i32, Path, description = "ID of the user to get effective permissions for.")
     ),
     responses(
         (
@@ -166,39 +271,51 @@ async fn get_specific_user_info(
     )
 )]
 #[get("/{user_id}/permissions")]
-async fn get_specific_user_permissions(
+async fn get_specific_user_effective_permissions(
     state: ApplicationState,
-    user_auth: UserAuth,
+    authentication_extractor: UserAuthenticationExtractor,
     path_info: web::Path<(i32,)>,
 ) -> EndpointResult {
     // Only authenticated users with the `user.any:read` permission can access this endpoint.
-    let (_, permissions) = require_authentication!(state, user_auth);
-    require_permission!(permissions, Permission::UserAnyRead);
+    let authenticated_user = require_authentication!(authentication_extractor);
+    require_permission!(state, authenticated_user, Permission::UserAnyRead);
 
 
     // Get requested user's permissions.
-    let requested_user_id = path_info.into_inner().0;
+    let target_user_id = path_info.into_inner().0;
 
-    let optional_user_permissions =
-        query::UserPermissionQuery::get_user_permission_names_by_user_id(
-            &state.database,
-            requested_user_id,
-        )
-        .await
-        .map_err(APIError::InternalError)?;
+    let target_user_exists =
+        query::UserQuery::user_exists_by_user_id(&state.database, target_user_id)
+            .await
+            .map_err(APIError::InternalError)?;
 
-    let Some(permissions) = optional_user_permissions else {
+    if !target_user_exists {
         return Ok(HttpResponse::NotFound().finish());
-    };
+    }
 
-    Ok(UserPermissionsResponse { permissions }.into_response())
+
+    let target_user_permission_set = query::UserRoleQuery::effective_user_permissions_from_user_id(
+        &state.database,
+        target_user_id,
+    )
+    .await
+    .map_err(APIError::InternalError)?;
+
+    let permission_names = target_user_permission_set
+        .into_permissions()
+        .into_iter()
+        .map(|permission| permission.name().to_string())
+        .collect();
+
+
+    Ok(UserPermissionsResponse {
+        permissions: permission_names,
+    }
+    .into_response())
 }
 
 
 
-/*
- * PATCH /{user_id}/display_name
- */
 
 /// Update a specific user's display name
 ///
@@ -263,20 +380,25 @@ async fn get_specific_user_permissions(
 #[patch("/{user_id}/display_name")]
 async fn update_specific_user_display_name(
     state: ApplicationState,
-    user_auth: UserAuth,
+    authentication_extractor: UserAuthenticationExtractor,
     path_info: web::Path<(i32,)>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
     // Only authenticated users with the `user.any:write` permission can modify
     // others' display names. Intended for moderation tooling.
-    let (token, permissions) = require_authentication!(state, user_auth);
-    require_permission!(permissions, Permission::UserAnyWrite);
+    let authenticated_user = require_authentication!(authentication_extractor);
+    let authenticated_user_id = authenticated_user.user_id();
+    require_permission!(
+        state,
+        authenticated_user,
+        Permission::UserAnyWrite
+    );
 
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
     let requested_user_id = path_info.into_inner().0;
 
-    let current_user = query::UserQuery::get_user_by_username(&state.database, &token.username)
+    let current_user = query::UserQuery::get_user_by_id(&state.database, authenticated_user_id)
         .await
         .map_err(APIError::InternalError)?
         .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
@@ -337,7 +459,7 @@ async fn update_specific_user_display_name(
 
 
     info!(
-        operator = token.username,
+        operator_id = authenticated_user_id,
         target_user_id = requested_user_id,
         new_display_name = json_data.new_display_name,
         "User has updated another user's display name."
@@ -351,54 +473,49 @@ async fn update_specific_user_display_name(
 
 
 
-/*
- * POST /users/{user_id}/permissions
- */
 
-/// Request containing list of permissions to add.
-#[derive(Deserialize, ToSchema)]
-pub struct UserPermissionsAddRequest {
-    pub permissions_to_add: Vec<String>,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UserRoleAddRequest {
+    pub roles_to_add: Vec<String>,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UpdatedUserRolesResponse {
+    pub roles: Vec<String>,
+}
 
-/// Add permissions to user
-///
-/// This endpoint allows users with enough permissions to add specific permissions to others.
-/// You can add a specific permission to the requested user *only if you have that permission*.
-/// If you do not, your request will be denied with a `403 Forbidden`.
-///
-/// *This endpoint requires the `users.any:write` permission.*
+impl_json_response_builder!(UpdatedUserRolesResponse);
+
+
 #[utoipa::path(
     post,
-    path = "/users/{user_id}/permissions",
+    path = "/users/{user_id}/roles",
     params(
-        ("user_id" = i32, Path, description = "ID of the user to add permissions to.")
+        ("user_id" = i32, Path, description = "ID of the user to add roles to.")
     ),
     request_body(
-        content = inline(UserPermissionsAddRequest),
+        content = inline(UserRoleAddRequest),
         example = json!({
-            "permissions_to_add": ["user.any:read", "user.any:write"]
+            "roles_to_add": ["administrator"]
         })
     ),
     responses(
         (
             status = 200,
-            description = "Updated user permission list.",
-            body = UserPermissionsResponse,
+            description = "Updated user role list.",
+            body = UpdatedUserRolesResponse,
             example = json!({
                 "permissions": [
-                    "user.self:read",
-                    "user.self:write",
-                    "user.any:read"
+                    "user",
+                    "administrator"
                 ]
             })
         ),
         (
             status = 400,
-            description = "Invalid permission name.",
+            description = "Invalid role name.",
             body = ErrorReasonResponse,
-            example = json!({ "reason": "No such permission: \"non.existent:permission\"." })
+            example = json!({ "reason": "No such role: \"non-existent-role-name\"." })
         ),
         (
             status = 401,
@@ -406,16 +523,16 @@ pub struct UserPermissionsAddRequest {
         ),
         (
             status = 403,
-            description = "Not allowed to modify.",
+            description = "Not allowed to modify roles.",
             body = ErrorReasonResponse,
             examples(
                 ("Missing user.any:write permission" = (
                     summary = "Missing user.any:write permission.",
                     value = json!({ "reason": "Missing permission: user.any:write." })
                 )),
-                ("Can't give permission you don't have" = (
-                    summary = "Can't give permission you don't have.",
-                    value = json!({ "reason": "You are not allowed to add the user.any:read permission to other users." })
+                ("Can't give out roles you don't have" = (
+                    summary = "Can't give out roles you don't have.",
+                    value = json!({ "reason": "You cannot give out roles you do not have (missing role: administrator)." })
                 )),
                 ("Can't modify yourself" = (
                     summary = "You're not allowed to modify your own account.",
@@ -432,32 +549,36 @@ pub struct UserPermissionsAddRequest {
         ("access_token" = [])
     )
 )]
-#[post("/{user_id}/permissions")]
-async fn add_permissions_to_specific_user(
+#[post("/{user_id}/roles")]
+pub async fn add_roles_to_specific_user(
     state: ApplicationState,
-    user_auth: UserAuth,
+    authentication: UserAuthenticationExtractor,
     path_info: web::Path<(i32,)>,
-    json_data: web::Json<UserPermissionsAddRequest>,
+    json_data: web::Json<UserRoleAddRequest>,
 ) -> EndpointResult {
-    // Only authenticated users with the `user.any:write` permission can add permissions
-    // to other users, but only if they also have the requested permission.
+    // Only authenticated users with the `user.any:write` permission can add roles
+    // to other users, but only if they also have that role.
     // Intended for moderation tooling.
-    let (current_user_token, current_user_permissions) = require_authentication!(state, user_auth);
-    require_permission!(current_user_permissions, Permission::UserAnyWrite);
+    let authenticated_user = require_authentication!(authentication);
+    let authenticated_user_id = authenticated_user.user_id();
+    let authenticated_user_roles = authenticated_user
+        .roles(&state.database)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    require_permission!(
+        state,
+        authenticated_user,
+        Permission::UserAnyWrite
+    );
 
 
-    let requested_user_id = path_info.into_inner().0;
-    let json_data = json_data.into_inner();
+    let target_user_id = path_info.into_inner().0;
+    let request_data = json_data.into_inner();
 
 
-    // Disallow modifying your own account on these `/{user_id}/*` endpoints.
-    let current_user =
-        query::UserQuery::get_user_by_username(&state.database, &current_user_token.username)
-            .await
-            .map_err(APIError::InternalError)?
-            .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
-
-    if current_user.id == requested_user_id {
+    // Disallow modifying your own user account on this endpoint.
+    if authenticated_user_id == target_user_id {
         return Ok(error_response_with_reason!(
             StatusCode::FORBIDDEN,
             "Can't modify your own account on this endpoint."
@@ -465,116 +586,89 @@ async fn add_permissions_to_specific_user(
     }
 
 
-    let permissions_to_add_result: Result<Vec<Permission>, &str> = json_data
-        .permissions_to_add
-        .iter()
-        .map(|permission_name| {
-            Permission::from_name(permission_name.as_str()).ok_or(permission_name.as_str())
+    let parsed_roles_to_add_result = request_data
+        .roles_to_add
+        .into_iter()
+        .map(|role_name| {
+            Role::from_name(&role_name).ok_or_else(|| format!("No such role: \"{role_name}\"."))
         })
-        .collect::<Result<Vec<Permission>, &str>>();
+        .collect::<Result<Vec<_>, _>>();
 
-    let permissions_to_add = match permissions_to_add_result {
-        Ok(permissions_to_add) => permissions_to_add,
-        Err(non_existent_permission_name) => {
+    let roles_to_add = match parsed_roles_to_add_result {
+        Ok(roles) => roles,
+        Err(error_reason) => {
             return Ok(error_response_with_reason!(
                 StatusCode::BAD_REQUEST,
-                format!("No such permission: \"{non_existent_permission_name}\".")
-            ))
+                error_reason
+            ));
         }
     };
 
-    // Validate that the current user has all of the permissions
-    // they want to add to the other user. Not checking for this would essentially
-    // create a privilege escalation exploit once you had the `user.any:write` permission.
-    for permission in &permissions_to_add {
-        if !current_user_permissions.has_permission(*permission) {
+
+    // Validate that the authenticated user has all of the roles
+    // they wish to assign to other users. Not checking for this would
+    // be dangerous as it would essentially allow for privilege escalation.
+    for role in roles_to_add.iter() {
+        if !authenticated_user_roles.has_role(role) {
             return Ok(error_response_with_reason!(
                 StatusCode::FORBIDDEN,
                 format!(
-                    "You are not allowed to add the {} permission to other users.",
-                    permission.name()
+                    "You cannot give out roles you do not have (missing role: {}).",
+                    role.name()
                 )
             ));
         }
     }
 
 
-    // Add the permissions to the specified user.
-    mutation::UserPermissionMutation::add_permissions_to_user_by_user_id(
+    let updated_role_set = mutation::UserRoleMutation::add_roles_to_user(
         &state.database,
-        requested_user_id,
-        permissions_to_add,
+        target_user_id,
+        &roles_to_add,
     )
     .await
     .map_err(APIError::InternalError)?;
 
-    // Retrieve updated list of permission for the specified user.
-    let updated_permission_list =
-        UserPermissionSet::get_from_database_by_user_id(&state.database, requested_user_id)
-            .await
-            .map_err(APIError::InternalError)?
-            .ok_or_else(|| {
-                APIError::internal_reason(
-                    "BUG: Could not fetch updated permission list, user vanished from database?!",
-                )
-            })?;
-
-
-    Ok(UserPermissionsResponse {
-        permissions: updated_permission_list.to_permission_names(),
+    Ok(UpdatedUserRolesResponse {
+        roles: updated_role_set.role_names(),
     }
     .into_response())
 }
 
 
 
-/*
- * DELETE /users/{user_id}/permissions
- */
-
-/// Request to remove a list of permissions.
-#[derive(Deserialize, ToSchema)]
-pub struct UserPermissionsRemoveRequest {
-    pub permissions_to_remove: Vec<String>,
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UserRoleRemoveRequest {
+    pub roles_to_remove: Vec<String>,
 }
 
-/// Remove permissions from user
-///
-/// This endpoint allows user with enough permissions to remove specific permissions from others.
-/// You can remove a specific permission from the requested user *only if you also have that permission*.
-/// If you do not, your request will be denied with a `403 Forbidden`.
-///
-/// *This endpoint requires the `users.any:write` permission.*
+
 #[utoipa::path(
     delete,
-    path = "/users/{user_id}/permissions",
+    path = "/users/{user_id}/roles",
     params(
-        ("user_id" = i32, Path, description = "ID of the user to remove permissions from.")
+        ("user_id" = i32, Path, description = "ID of the user to remove roles from.")
     ),
     request_body(
-        content = inline(UserPermissionsRemoveRequest),
+        content = inline(UserRoleRemoveRequest),
         example = json!({
-            "permissions_to_remove": ["user.any:write"], 
+            "roles_to_remove": ["administrator"]
         })
     ),
     responses(
         (
             status = 200,
-            description = "Updated user permission list.",
-            body = UserPermissionsResponse,
+            description = "Updated user role list.",
+            body = UpdatedUserRolesResponse,
             example = json!({
-                "permissions": [
-                    "user.self:read",
-                    "user.self:write",
-                    "user.any:read"
-                ]
+                "permissions": ["user"]
             })
         ),
         (
             status = 400,
-            description = "Invalid permission name.",
+            description = "Invalid role name.",
             body = ErrorReasonResponse,
-            example = json!({ "reason": "No such permission: \"non.existent:permission\"." })
+            example = json!({ "reason": "No such role: \"non-existent-role-name\"." })
         ),
         (
             status = 401,
@@ -582,16 +676,16 @@ pub struct UserPermissionsRemoveRequest {
         ),
         (
             status = 403,
-            description = "Not allowed to modify.",
+            description = "Not allowed to modify roles.",
             body = ErrorReasonResponse,
             examples(
                 ("Missing user.any:write permission" = (
                     summary = "Missing user.any:write permission.",
                     value = json!({ "reason": "Missing permission: user.any:write." })
                 )),
-                ("Can't remove permission you don't have" = (
-                    summary = "Can't remove permission you don't have.",
-                    value = json!({ "reason": "You are not allowed to remove the user.any:read permission from other users." })
+                ("Can't remove others' roles you don't have" = (
+                    summary = "Can't give out roles you don't have.",
+                    value = json!({ "reason": "You cannot remove others' roles which you do not have (missing role: administrator)." })
                 )),
                 ("Can't modify yourself" = (
                     summary = "You're not allowed to modify your own account.",
@@ -608,32 +702,36 @@ pub struct UserPermissionsRemoveRequest {
         ("access_token" = [])
     )
 )]
-#[delete("/{user_id}/permissions")]
-async fn remove_permissions_from_specific_user(
+#[delete("/{user_id}/roles")]
+pub async fn remove_roles_from_specific_user(
     state: ApplicationState,
-    user_auth: UserAuth,
+    authentication: UserAuthenticationExtractor,
     path_info: web::Path<(i32,)>,
-    json_data: web::Json<UserPermissionsRemoveRequest>,
+    json_data: web::Json<UserRoleAddRequest>,
 ) -> EndpointResult {
-    // Only authenticated users with the `user.any:write` permission can remove permissions
-    // from other users, but not those that they themselves don't have.
+    // Only authenticated users with the `user.any:write` permission can remove roles
+    // from other users, but only if they also have that role.
     // Intended for moderation tooling.
-    let (current_user_token, current_user_permissions) = require_authentication!(state, user_auth);
-    require_permission!(current_user_permissions, Permission::UserAnyWrite);
+    let authenticated_user = require_authentication!(authentication);
+    let authenticated_user_id = authenticated_user.user_id();
+    let authenticated_user_roles = authenticated_user
+        .roles(&state.database)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    require_permission!(
+        state,
+        authenticated_user,
+        Permission::UserAnyWrite
+    );
 
 
-    let requested_user_id = path_info.into_inner().0;
-    let json_data = json_data.into_inner();
+    let target_user_id = path_info.into_inner().0;
+    let request_data = json_data.into_inner();
 
 
-    // Disallow modifying your own account on these `/{user_id}/*` endpoints.
-    let current_user =
-        query::UserQuery::get_user_by_username(&state.database, &current_user_token.username)
-            .await
-            .map_err(APIError::InternalError)?
-            .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
-
-    if current_user.id == requested_user_id {
+    // Disallow modifying your own user account on this endpoint.
+    if authenticated_user_id == target_user_id {
         return Ok(error_response_with_reason!(
             StatusCode::FORBIDDEN,
             "Can't modify your own account on this endpoint."
@@ -641,63 +739,50 @@ async fn remove_permissions_from_specific_user(
     }
 
 
-    let permissions_to_remove_result: Result<Vec<Permission>, &str> = json_data
-        .permissions_to_remove
-        .iter()
-        .map(|permission_name| {
-            Permission::from_name(permission_name.as_str()).ok_or(permission_name.as_str())
+    let parsed_roles_to_remove_result = request_data
+        .roles_to_add
+        .into_iter()
+        .map(|role_name| {
+            Role::from_name(&role_name).ok_or_else(|| format!("No such role: \"{role_name}\"."))
         })
-        .collect::<Result<Vec<Permission>, &str>>();
+        .collect::<Result<Vec<_>, _>>();
 
-    let permissions_to_remove = match permissions_to_remove_result {
-        Ok(permissions_to_remove) => permissions_to_remove,
-        Err(non_existent_permission_name) => {
+    let roles_to_remove = match parsed_roles_to_remove_result {
+        Ok(roles) => roles,
+        Err(error_reason) => {
             return Ok(error_response_with_reason!(
                 StatusCode::BAD_REQUEST,
-                format!("No such permission: {non_existent_permission_name}")
+                error_reason
             ));
         }
     };
 
-    // Validate that the current user has all of these permissions - if they don't, they can't
-    // remove them from the requested user. Otherwise anyone with `user.any:write` could take
-    // anything from anyone.
-    for permission in &permissions_to_remove {
-        if !current_user_permissions.has_permission(*permission) {
+
+    // Validate that the authenticated user (caller) has all of the roles
+    // they wish to remove from the target user. Not checking for this would
+    // be dangerous as it would essentially allow for privilege de-escalation.
+    for role in roles_to_remove.iter() {
+        if !authenticated_user_roles.has_role(role) {
             return Ok(error_response_with_reason!(
                 StatusCode::FORBIDDEN,
                 format!(
-                    "You are not allowed to remove the {} permission from other users.",
-                    permission.name()
+                    "You cannot remove others' roles which you do not have (missing role: {}).",
+                    role.name()
                 )
             ));
         }
     }
 
-
-    // Remove the permission from the specified user.
-    mutation::UserPermissionMutation::remove_permissions_from_user_by_user_id(
+    let updated_role_set = mutation::UserRoleMutation::remove_roles_from_user(
         &state.database,
-        requested_user_id,
-        permissions_to_remove,
+        target_user_id,
+        &roles_to_remove,
     )
     .await
     .map_err(APIError::InternalError)?;
 
-    // Retrieve updated list of permissions for the user we just modified.
-    let updated_permission_list =
-        UserPermissionSet::get_from_database_by_user_id(&state.database, requested_user_id)
-            .await
-            .map_err(APIError::InternalError)?
-            .ok_or_else(|| {
-                APIError::internal_reason(
-                    "BUG: Could not fetch updated permission list, user vanished from database?!",
-                )
-            })?;
-
-
-    Ok(UserPermissionsResponse {
-        permissions: updated_permission_list.to_permission_names(),
+    Ok(UpdatedUserRolesResponse {
+        roles: updated_role_set.role_names(),
     }
     .into_response())
 }

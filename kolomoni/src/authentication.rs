@@ -4,10 +4,11 @@ use actix_web::dev::Payload;
 use actix_web::http::{header, StatusCode};
 use actix_web::web::Data;
 use actix_web::{FromRequest, HttpRequest};
-use kolomoni_auth::UserPermissionSet;
-use kolomoni_auth::{JWTClaims, JWTValidationError};
-use kolomoni_database::query::UserPermissionsExt;
-use miette::{miette, Result};
+use chrono::{DateTime, Utc};
+use kolomoni_auth::{JWTClaims, JWTValidationError, RoleSet, BLANKET_ANY_USER_PERMISSION_GRANT};
+use kolomoni_auth::{Permission, PermissionSet};
+use kolomoni_database::query::UserRoleQuery;
+use miette::{Context, Result};
 use sea_orm::ConnectionTrait;
 use tracing::{debug, error, info};
 
@@ -23,6 +24,9 @@ use crate::state::ApplicationStateInner;
 /// `UserAuth` is in reality an [Actix extractor](https://actix.rs/docs/extractors).
 ///
 /// To use it, simply add a `user_auth: `[`UserAuth`] parameter to your endpoint handler.
+///
+/// FIXME The documentation below this is outdated, update.
+///
 /// Inside the handler body, you can then call any of e.g.
 /// [`Self::token_if_authenticated`], [`Self::permissions_if_authenticated`]
 /// or [`Self::token_and_permissions_if_authenticated`] that all return `Option`s and the requested
@@ -36,66 +40,25 @@ use crate::state::ApplicationStateInner;
 /// See their documentation for more information and examples.
 ///
 /// Note that getting permissions requires a database lookup.
-pub enum UserAuth {
+pub enum UserAuthenticationExtractor {
     Unauthenticated,
     Authenticated { token: JWTClaims },
 }
 
-impl UserAuth {
-    /// If authenticated, return a reference to the token's contents (claims).
-    #[inline]
-    #[allow(dead_code)]
-    pub fn token_if_authenticated(&self) -> Option<&JWTClaims> {
+
+
+impl UserAuthenticationExtractor {
+    pub fn authenticated_user(&self) -> Option<AuthenticatedUser> {
         match self {
-            UserAuth::Unauthenticated => None,
-            UserAuth::Authenticated { token } => Some(token),
-        }
-    }
-
-    /// If authenticated, look up the user's permissions and return them.
-    #[inline]
-    #[allow(dead_code)]
-    pub async fn permissions_if_authenticated<C: ConnectionTrait>(
-        &self,
-        database: &C,
-    ) -> Result<Option<UserPermissionSet>> {
-        match self {
-            UserAuth::Unauthenticated => Ok(None),
-            UserAuth::Authenticated { token } => {
-                let user_permissions =
-                    UserPermissionSet::get_from_database_by_username(database, &token.username)
-                        .await?;
-
-                Ok(user_permissions)
-            }
-        }
-    }
-
-    /// If authenticated, return a tuple:
-    /// - [`&JWTClaims`][JWTClaims] --- a reference to the token's contents, and
-    /// - [`UserPermissionSet`] --- the permission list of the user.
-    ///
-    /// This requires a database lookup (if authenticated).
-    #[inline]
-    pub async fn token_and_permissions_if_authenticated<C: ConnectionTrait>(
-        &self,
-        database: &C,
-    ) -> Result<Option<(&JWTClaims, UserPermissionSet)>> {
-        match self {
-            UserAuth::Unauthenticated => Ok(None),
-            UserAuth::Authenticated { token } => {
-                let user_permissions =
-                    UserPermissionSet::get_from_database_by_username(database, &token.username)
-                        .await?
-                        .ok_or_else(|| miette!("User is missing from the database."))?;
-
-                Ok(Some((token, user_permissions)))
-            }
+            UserAuthenticationExtractor::Unauthenticated => None,
+            UserAuthenticationExtractor::Authenticated { token } => Some(AuthenticatedUser {
+                token: token.clone(),
+            }),
         }
     }
 }
 
-impl FromRequest for UserAuth {
+impl FromRequest for UserAuthenticationExtractor {
     type Error = actix_web::Error;
     type Future = Ready<Result<Self, Self::Error>>;
 
@@ -138,7 +101,7 @@ impl FromRequest for UserAuth {
                         return match error {
                             JWTValidationError::Expired(token) => {
                                 debug!(
-                                    username = token.username,
+                                    user_id = token.user_id,
                                     "User tried authenticating with expired token."
                                 );
 
@@ -164,5 +127,63 @@ impl FromRequest for UserAuth {
             }
             None => future::ok(Self::Unauthenticated),
         }
+    }
+}
+
+
+pub struct AuthenticatedUser {
+    token: JWTClaims,
+}
+
+impl AuthenticatedUser {
+    #[allow(dead_code)]
+    pub fn logged_in_at(&self) -> &DateTime<Utc> {
+        &self.token.iat
+    }
+
+    #[allow(dead_code)]
+    pub fn login_expires_at(&self) -> &DateTime<Utc> {
+        &self.token.exp
+    }
+
+    pub fn user_id(&self) -> i32 {
+        self.token.user_id
+    }
+
+    /// Returns a permission set of this user.
+    /// This requires one round-trip to the database.
+    ///
+    /// Prefer using [`Self::has_permission`] if you'll be checking for a single permission,
+    /// and this method if you're checking for multiple or doing advanced permission logic.
+    pub async fn permissions<C: ConnectionTrait>(&self, database: &C) -> Result<PermissionSet> {
+        let permission_set =
+            UserRoleQuery::effective_user_permissions_from_user_id(database, self.token.user_id)
+                .await
+                .wrap_err("Could not query effective permissions for user.")?;
+
+        Ok(permission_set)
+    }
+
+    /// Returns a boolean indicating whether the authenticated user has the provided permission.
+    pub async fn has_permission<C: ConnectionTrait>(
+        &self,
+        database: &C,
+        permission: Permission,
+    ) -> Result<bool> {
+        if BLANKET_ANY_USER_PERMISSION_GRANT.contains(&permission) {
+            return Ok(true);
+        }
+
+        UserRoleQuery::user_has_permission(database, self.token.user_id, permission)
+            .await
+            .wrap_err("Could not query whether the user has a specific permission.")
+    }
+
+    pub async fn roles<C: ConnectionTrait>(&self, database: &C) -> Result<RoleSet> {
+        let role_set = UserRoleQuery::user_roles(database, self.token.user_id)
+            .await
+            .wrap_err("Could not query roles for user.")?;
+
+        Ok(role_set)
     }
 }

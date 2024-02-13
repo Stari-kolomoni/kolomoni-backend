@@ -64,10 +64,10 @@ pub struct JWTClaims {
     #[serde_as(as = "TimestampSeconds<i64>")]
     pub exp: DateTime<Utc>,
 
-    /// JWT private claim: Username
+    /// JWT private claim: Internal user ID
     ///
-    /// Username of the user that this token belongs to.
-    pub username: String,
+    /// Internal ID the user was given upon registration.
+    pub user_id: i32,
 
     /// JWT private claim: Token type (access or refresh token)
     ///
@@ -83,7 +83,7 @@ impl JWTClaims {
     /// Note that the `issued_at` timestamp will have its sub-second content truncated
     /// (see [`trunc_subsecs`][chrono::round::SubsecRound::trunc_subsecs]).
     pub fn create(
-        username: String,
+        user_id: i32,
         issued_at: DateTime<Utc>,
         valid_for: Duration,
         token_type: JWTTokenType,
@@ -96,7 +96,7 @@ impl JWTClaims {
             sub: JWT_SUBJECT.to_string(),
             iat: issued_at,
             exp: expires_on,
-            username,
+            user_id,
             token_type,
         }
     }
@@ -184,12 +184,7 @@ mod test {
         let issued_at = Utc::now().trunc_subsecs(0);
         let valid_for = chrono::Duration::from_std(std::time::Duration::from_secs(60)).unwrap();
 
-        let claims = JWTClaims::create(
-            "mock-username".to_string(),
-            issued_at,
-            valid_for,
-            JWTTokenType::Access,
-        );
+        let claims = JWTClaims::create(1, issued_at, valid_for, JWTTokenType::Access);
 
         let encoded_token = manager.create_token(claims).unwrap();
 
@@ -200,7 +195,7 @@ mod test {
         assert_eq!(decoded_claims.sub, JWT_SUBJECT);
         assert_eq!(decoded_claims.iat, issued_at);
         assert_eq!(decoded_claims.exp, issued_at + valid_for);
-        assert_eq!(&decoded_claims.username, "mock-username");
+        assert_eq!(decoded_claims.user_id, 1);
         assert_eq!(decoded_claims.token_type, JWTTokenType::Access);
     }
 }

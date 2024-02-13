@@ -1,4 +1,4 @@
-use actix_web::{post, web, HttpResponse};
+use actix_web::{post, web, HttpResponse, Scope};
 use chrono::{Duration, Utc};
 use kolomoni_auth::{JWTClaims, JWTTokenType, JWTValidationError};
 use kolomoni_database::query;
@@ -85,13 +85,13 @@ impl_json_response_builder!(UserLoginResponse);
         )
     )
 )]
-#[post("/login")]
+#[post("")]
 pub async fn login(
     state: ApplicationState,
     login_info: web::Json<UserLoginRequest>,
 ) -> EndpointResult {
     // Validate user login credentials.
-    let is_valid_login = query::UserQuery::validate_user_credentials(
+    let login_result_details = query::UserQuery::validate_user_credentials(
         &state.database,
         &state.hasher,
         &login_info.username,
@@ -100,25 +100,25 @@ pub async fn login(
     .await
     .map_err(APIError::InternalError)?;
 
-    if !is_valid_login {
+    let Some(logged_in_user) = login_result_details else {
         return Ok(
             HttpResponse::Forbidden().json(ErrorReasonResponse::custom_reason(
                 "Invalid login credentials.",
             )),
         );
-    }
+    };
 
 
     // Generate access and refresh token.
     let access_token_claims = JWTClaims::create(
-        login_info.username.clone(),
+        logged_in_user.id,
         Utc::now(),
         Duration::days(1),
         JWTTokenType::Access,
     );
 
     let refresh_token_claims = JWTClaims::create(
-        login_info.username.clone(),
+        logged_in_user.id,
         Utc::now(),
         Duration::days(7),
         JWTTokenType::Refresh,
@@ -225,7 +225,7 @@ impl_json_response_builder!(UserLoginRefreshResponse);
         )
     )
 )]
-#[post("/login/refresh")]
+#[post("/refresh")]
 pub async fn refresh_login(
     state: ApplicationState,
     refresh_info: web::Json<UserLoginRefreshRequest>,
@@ -237,7 +237,7 @@ pub async fn refresh_login(
             return match error {
                 JWTValidationError::Expired(token_claims) => {
                     debug!(
-                        username = token_claims.username,
+                        user_id = token_claims.user_id,
                         "Refusing to refresh expired token.",
                     );
 
@@ -270,7 +270,7 @@ pub async fn refresh_login(
 
     // Refresh token is valid, create new access token.
     let access_token_claims = JWTClaims::create(
-        refresh_token_claims.username.clone(),
+        refresh_token_claims.user_id,
         Utc::now(),
         Duration::days(1),
         JWTTokenType::Access,
@@ -282,10 +282,18 @@ pub async fn refresh_login(
 
 
     debug!(
-        username = refresh_token_claims.username,
+        user_id = refresh_token_claims.user_id,
         "User has successfully refreshed access token."
     );
 
 
     Ok(UserLoginRefreshResponse { access_token }.into_response())
+}
+
+
+#[rustfmt::skip]
+pub fn login_router() -> Scope {
+    web::scope("/login")
+        .service(login)
+        .service(refresh_login)
 }

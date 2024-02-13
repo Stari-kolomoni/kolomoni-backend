@@ -1,7 +1,7 @@
 use argon2::password_hash::SaltString;
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use chrono::{DateTime, Utc};
-use kolomoni_auth::DEFAULT_USER_PERMISSIONS;
+use kolomoni_auth::DEFAULT_USER_ROLE;
 use kolomoni_configuration::Configuration;
 use miette::{miette, Context, IntoDiagnostic, Result};
 use sea_orm::{
@@ -16,7 +16,7 @@ use sea_orm::{
 };
 
 use super::super::entities::user;
-use crate::entities::user_permission;
+use crate::entities::user_role;
 use crate::query;
 
 pub struct ArgonHasher {
@@ -108,17 +108,21 @@ impl UserMutation {
         .into_diagnostic()
         .wrap_err("Failed to save user into database.")?;
 
-        // Give the default permissions to the new user.
-        for permission in DEFAULT_USER_PERMISSIONS {
-            user_permission::ActiveModel {
-                user_id: ActiveValue::Set(user.id),
-                permission_id: ActiveValue::Set(permission.id()),
-            }
-            .insert(&transaction)
-            .await
-            .into_diagnostic()
-            .wrap_err("Failed to add default permissions to user.")?;
+
+        user_role::ActiveModel {
+            role_id: ActiveValue::Set(DEFAULT_USER_ROLE.id()),
+            user_id: ActiveValue::Set(user.id),
         }
+        .insert(&transaction)
+        .await
+        .into_diagnostic()
+        .wrap_err_with(|| {
+            miette!(
+                "Failed to add the default role ({}) to user.",
+                DEFAULT_USER_ROLE.name()
+            )
+        })?;
+
 
         transaction
             .commit()

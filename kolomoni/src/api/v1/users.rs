@@ -6,16 +6,18 @@ use utoipa::ToSchema;
 
 use self::all_users::get_all_registered_users;
 use self::current_user::{
+    get_current_user_effective_permissions,
     get_current_user_info,
-    get_current_user_permissions,
     update_current_user_display_name,
 };
 use self::register::register_user;
 use self::specific_user::{
-    add_permissions_to_specific_user,
+    // add_permissions_to_specific_user,
+    add_roles_to_specific_user,
+    get_specific_user_effective_permissions,
     get_specific_user_info,
-    get_specific_user_permissions,
-    remove_permissions_from_specific_user,
+    get_specific_user_roles,
+    remove_roles_from_specific_user,
     update_specific_user_display_name,
 };
 use crate::impl_json_response_builder;
@@ -142,16 +144,18 @@ impl_json_response_builder!(UserPermissionsResponse);
 
 /// Router for all user-related operations.
 /// Lives under `/api/v1/users`.
+#[rustfmt::skip]
 pub fn users_router() -> Scope {
     web::scope("users")
         .service(get_all_registered_users)
         .service(register_user)
         .service(get_current_user_info)
-        .service(get_current_user_permissions)
+        .service(get_current_user_effective_permissions)
         .service(update_current_user_display_name)
         .service(get_specific_user_info)
-        .service(get_specific_user_permissions)
+        .service(get_specific_user_effective_permissions)
+        .service(get_specific_user_roles)
+        .service(add_roles_to_specific_user)
+        .service(remove_roles_from_specific_user)
         .service(update_specific_user_display_name)
-        .service(add_permissions_to_specific_user)
-        .service(remove_permissions_from_specific_user)
 }

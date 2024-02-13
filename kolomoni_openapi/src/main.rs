@@ -26,13 +26,14 @@ use utoipa_rapidoc::RapiDoc;
         users::all_users::get_all_registered_users,
         users::register::register_user,
         users::current_user::get_current_user_info,
-        users::current_user::get_current_user_permissions,
+        users::current_user::get_current_user_effective_permissions,
         users::current_user::update_current_user_display_name,
         users::specific_user::get_specific_user_info,
-        users::specific_user::get_specific_user_permissions,
+        users::specific_user::get_specific_user_effective_permissions,
+        users::specific_user::get_specific_user_roles,
+        users::specific_user::add_roles_to_specific_user,
+        users::specific_user::remove_roles_from_specific_user,
         users::specific_user::update_specific_user_display_name,
-        users::specific_user::add_permissions_to_specific_user,
-        users::specific_user::remove_permissions_from_specific_user,
     ),
     components(
         schemas(

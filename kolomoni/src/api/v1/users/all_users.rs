@@ -10,7 +10,7 @@ use crate::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
     },
-    authentication::UserAuth,
+    authentication::UserAuthenticationExtractor,
     impl_json_response_builder,
     require_authentication,
     require_permission,
@@ -75,11 +75,14 @@ impl_json_response_builder!(RegisteredUsersListResponse);
     )
 )]
 #[get("")]
-async fn get_all_registered_users(state: ApplicationState, user_auth: UserAuth) -> EndpointResult {
+async fn get_all_registered_users(
+    state: ApplicationState,
+    authentication_extractor: UserAuthenticationExtractor,
+) -> EndpointResult {
     // User must provide the authentication token and
     // have the `user.any:read` permission to access this endpoint.
-    let (_, permissions) = require_authentication!(state, user_auth);
-    require_permission!(permissions, Permission::UserAnyRead);
+    let authenticated_user = require_authentication!(authentication_extractor);
+    require_permission!(state, authenticated_user, Permission::UserAnyRead);
 
 
     // Load all users from the database and parse them info `UserInformation` instances.

@@ -311,13 +311,23 @@ macro_rules! error_response_with_reason {
 /// }
 /// ```
 #[macro_export]
-macro_rules! require_authentication {
+#[deprecated]
+macro_rules! require_authentication_OLD {
     ($state:expr, $user_auth:expr) => {
         $user_auth
             .token_and_permissions_if_authenticated(&$state.database)
             .await
             .map_err($crate::api::errors::APIError::InternalError)?
             .ok_or_else(|| $crate::api::errors::APIError::NotAuthenticated)?
+    };
+}
+
+#[macro_export]
+macro_rules! require_authentication {
+    ($user_auth_extractor:expr) => {
+        $user_auth_extractor
+            .authenticated_user()
+            .ok_or($crate::api::errors::APIError::NotAuthenticated)?
     };
 }
 
@@ -334,9 +344,33 @@ macro_rules! require_authentication {
 /// The second argument must be the permission you require
 /// (a [`Permission`][kolomoni_auth::Permission]).
 #[macro_export]
-macro_rules! require_permission {
+#[deprecated]
+macro_rules! require_permission_OLD {
     ($user_permissions:expr, $required_permission:expr) => {
         if !$user_permissions.has_permission($required_permission) {
+            return Err(
+                $crate::api::errors::APIError::missing_specific_permission($required_permission),
+            );
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! require_permission {
+    ($permission_set:expr, $required_permission:expr) => {
+        if !$permission_set.has_permission($required_permission) {
+            return Err(
+                $crate::api::errors::APIError::missing_specific_permission($required_permission),
+            );
+        }
+    };
+
+    ($state:expr, $authenticated_user:expr, $required_permission:expr) => {
+        if !$authenticated_user
+            .has_permission(&$state.database, $required_permission)
+            .await
+            .map_err($crate::api::errors::APIError::InternalError)?
+        {
             return Err(
                 $crate::api::errors::APIError::missing_specific_permission($required_permission),
             );

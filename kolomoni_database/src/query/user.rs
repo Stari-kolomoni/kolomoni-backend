@@ -1,5 +1,13 @@
 use miette::{Context, IntoDiagnostic, Result};
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter};
+use sea_orm::sea_query::Expr;
+use sea_orm::{
+    ColumnTrait,
+    ConnectionTrait,
+    EntityTrait,
+    FromQueryResult,
+    QueryFilter,
+    QuerySelect,
+};
 
 use super::super::entities::prelude::User;
 use super::super::entities::user;
@@ -35,6 +43,34 @@ impl UserQuery {
             .wrap_err("Failed while searching database for user by username.")
     }
 
+    pub async fn user_exists_by_user_id<C: ConnectionTrait>(
+        database: &C,
+        user_id: i32,
+    ) -> Result<bool> {
+        #[derive(Debug, FromQueryResult, PartialEq, Eq, Hash)]
+        struct UserExistenceCount {
+            count: i64,
+        }
+
+        let mut user_exists_query = User::find().select_only();
+
+        user_exists_query.expr_as(Expr::val(1).count(), "count");
+
+        let count_result = user_exists_query
+            .filter(user::Column::Id.eq(user_id))
+            .into_model::<UserExistenceCount>()
+            .one(database)
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed while looking up whether the user exists by ID.")?;
+
+
+        match count_result {
+            Some(user_count) => Ok(user_count.count == 1),
+            None => Ok(false),
+        }
+    }
+
     /// Check whether a user exists (by their username).
     pub async fn user_exists_by_username<C: ConnectionTrait>(
         database: &C,
@@ -67,7 +103,7 @@ impl UserQuery {
         hasher: &ArgonHasher,
         username: &str,
         password: &str,
-    ) -> Result<bool> {
+    ) -> Result<Option<user::Model>> {
         let user = User::find()
             .filter(user::Column::Username.eq(username))
             .one(database)
@@ -80,9 +116,13 @@ impl UserQuery {
                 .verify_password_against_hash(password, &user.hashed_password)
                 .wrap_err("Errored while validating password against hash.")?;
 
-            Ok(is_valid_password)
+            if is_valid_password {
+                Ok(Some(user))
+            } else {
+                Ok(None)
+            }
         } else {
-            Ok(false)
+            Ok(None)
         }
     }
 
