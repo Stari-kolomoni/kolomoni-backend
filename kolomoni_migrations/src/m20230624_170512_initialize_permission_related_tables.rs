@@ -1,7 +1,5 @@
 use sea_orm_migration::prelude::*;
 
-use crate::m20230624_133941_create_users_table::User;
-
 
 
 /// Learn more at <https://docs.rs/sea-query#iden>.
