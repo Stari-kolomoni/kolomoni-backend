@@ -9,6 +9,7 @@ use tracing_subscriber::{
     Layer,
 };
 
+
 /// Initialize console and file logging via [`tracing`](../../tracing/index.html).
 ///
 /// The `console_level_filter` and `log_file_level_filter` specify the logging levels for

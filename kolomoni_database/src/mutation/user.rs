@@ -19,6 +19,7 @@ use super::super::entities::user;
 use crate::entities::user_role;
 use crate::query;
 
+
 pub struct ArgonHasher {
     salt_string: SaltString,
     argon_hasher: Argon2<'static>,
@@ -61,6 +62,7 @@ impl ArgonHasher {
             .is_ok())
     }
 }
+
 
 
 pub struct UserRegistrationInfo {

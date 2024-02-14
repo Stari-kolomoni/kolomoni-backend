@@ -6,6 +6,8 @@ use crate::api::errors::EndpointResult;
 use crate::api::macros::ContextlessResponder;
 use crate::impl_json_response_builder;
 
+
+
 #[derive(Serialize, ToSchema)]
 pub struct PingResponse {
     ok: bool,

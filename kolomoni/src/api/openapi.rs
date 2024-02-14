@@ -4,11 +4,20 @@
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use utoipa::{
-    openapi::{ContentBuilder, Ref, RefOr, Response, ResponseBuilder, ResponsesBuilder},
+    openapi::{
+        example::ExampleBuilder,
+        ContentBuilder,
+        Ref,
+        RefOr,
+        Response,
+        ResponseBuilder,
+        ResponsesBuilder,
+    },
     ToSchema,
 };
 
 use super::errors::ErrorReasonResponse;
+
 
 pub trait RequiredPermission {
     fn name() -> &'static str;
@@ -48,7 +57,6 @@ generate_standalone_requirement_struct!(WordDelete);
 
 
 
-
 pub struct FailedAuthenticationResponses<P: RequiredPermission> {
     _marker: PhantomData<P>,
 }
@@ -60,7 +68,6 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
                 "Missing user authentication, provide an `Authorization: Bearer your_token_here` header."
             )
             .build();
-
 
         let missing_user_permission_decription = format!("Missing the `{}` permission.", P::name());
 
@@ -75,16 +82,20 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
             .content(
                 mime::APPLICATION_JSON.to_string(),
                 ContentBuilder::new()
-                    .example(Some(serde_json::Value::Object(
-                        missing_user_permission_example,
-                    )))
+                    .examples_from_iter(vec![(
+                        "Missing permissions.",
+                        ExampleBuilder::new()
+                            .value(Some(serde_json::Value::Object(
+                                missing_user_permission_example,
+                            )))
+                            .build(),
+                    )])
                     .schema(RefOr::Ref(Ref::from_schema_name(
                         ErrorReasonResponse::schema().0,
                     )))
                     .build(),
             )
             .build();
-
 
         ResponsesBuilder::new()
             .response("401", missing_user_auth_response)
@@ -116,9 +127,9 @@ impl utoipa::IntoResponses for UnmodifiedConditionalResponse {
 
 
 
-pub struct InternalErrorResponse;
+pub struct InternalServerErrorResponse;
 
-impl utoipa::IntoResponses for InternalErrorResponse {
+impl utoipa::IntoResponses for InternalServerErrorResponse {
     fn responses() -> BTreeMap<String, utoipa::openapi::RefOr<utoipa::openapi::response::Response>> {
         let internal_error_response = ResponseBuilder::new()
             .description("Internal server error.")

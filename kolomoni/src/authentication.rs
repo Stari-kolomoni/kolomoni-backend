@@ -15,7 +15,6 @@ use tracing::{debug, error, info};
 use crate::state::ApplicationStateInner;
 
 
-
 /// User authentication state (actix extractor).
 /// **Holding this struct doesn't automatically mean the user is authenticated!**
 ///
@@ -44,8 +43,6 @@ pub enum UserAuthenticationExtractor {
     Unauthenticated,
     Authenticated { token: JWTClaims },
 }
-
-
 
 impl UserAuthenticationExtractor {
     pub fn authenticated_user(&self) -> Option<AuthenticatedUser> {
@@ -129,6 +126,7 @@ impl FromRequest for UserAuthenticationExtractor {
         }
     }
 }
+
 
 
 pub struct AuthenticatedUser {

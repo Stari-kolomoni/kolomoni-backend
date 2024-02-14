@@ -69,7 +69,7 @@ use crate::{
             status = 404,
             description = "The user no longer exists."
         ),
-        openapi::InternalErrorResponse,
+        openapi::InternalServerErrorResponse,
         openapi::UnmodifiedConditionalResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresUserSelfRead>,
     ),
@@ -122,8 +122,6 @@ pub async fn get_current_user_info(
 }
 
 
-
-
 /// Get current user's permissions
 ///
 /// # Required permissions
@@ -145,20 +143,8 @@ pub async fn get_current_user_info(
                 ]
             })
         ),
-        (
-            status = 401,
-            description = "Missing user authentication."
-        ),
-        (
-            status = 403,
-            description = "Missing `user.self:read` permission.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Missing permission: user.self:read." })
-        ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserSelfRead>,
+        openapi::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])
@@ -226,25 +212,13 @@ async fn get_current_user_effective_permissions(
             })
         ),
         (
-            status = 401,
-            description = "Missing user authentication."
-        ),
-        (
-            status = 403,
-            description = "Missing `user.self:write` permission.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Missing permission: user.self:write." })
-        ),
-        (
             status = 409,
             description = "User with given display name already exists.",
             body = ErrorReasonResponse,
             example = json!({ "reason": "User with given display name already exists." })
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserSelfWrite>,
+        openapi::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])

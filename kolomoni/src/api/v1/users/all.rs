@@ -9,6 +9,7 @@ use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
+        openapi,
     },
     authentication::UserAuthenticationExtractor,
     impl_json_response_builder,
@@ -56,20 +57,8 @@ impl_json_response_builder!(RegisteredUsersListResponse);
             description = "List of registered users.",
             body = RegisteredUsersListResponse
         ),
-        (
-            status = 401,
-            description = "Missing user authentication."
-        ),
-        (
-            status = 403,
-            description = "Missing `user.any:read` permission.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Missing permission: user.any:read." })
-        ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
+        openapi::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])

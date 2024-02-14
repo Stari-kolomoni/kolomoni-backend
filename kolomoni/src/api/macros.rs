@@ -16,6 +16,8 @@ pub fn construct_last_modified_header_value(
     HeaderValue::from_str(date_time_formatter.to_string().as_str())
 }
 
+
+
 pub struct KolomoniResponseBuilder {
     status_code: StatusCode,
     body: String,
@@ -88,11 +90,10 @@ impl ContextlessResponder for KolomoniResponseBuilder {
     }
 }
 
-
-
 pub trait IntoKolomoniResponseBuilder: Serialize {
     fn into_response_builder(self) -> Result<KolomoniResponseBuilder, APIError>;
 }
+
 
 
 /// Simple responder trait (similar to [`actix_web::Responder`]).
@@ -112,7 +113,7 @@ pub trait ContextlessResponder {
 }
 
 
-pub(crate) fn generate_simple_http_ok_response<S>(value: S) -> HttpResponse<BoxBody>
+pub fn generate_simple_http_ok_response<S>(value: S) -> HttpResponse<BoxBody>
 where
     S: Serialize,
 {
@@ -135,6 +136,90 @@ where
 }
 
 
+
+/// A macro that, given some struct type, implements the following two traits on it:
+/// - [`ContextlessResponder`], allowing you to make a struct instance and call
+///   [`into_response`][ContextlessResponder::into_response] on it, turning it into a
+///   [`HttpResponse`][actix_web::HttpResponse] that just returns a `200 OK` with the struct serialized as JSON.
+/// - [`IntoKolomoniResponseBuilder`], which is similar to [`ContextlessResponder`], but allows for more advanced operations
+///   compared to above. As a user of a struct with this impl you need to call
+///   [`.into_response_builder()`][IntoKolomoniResponseBuilder::into_response_builder] to get the builder.
+///   You may then set the last modification header and other attributes.
+///   Finally, to turn the builder into a response, call [`into_response`][ContextlessResponder::into_response].
+///
+/// # Example
+///
+/// ## Simple `200 OK` response with JSON-encoded body
+/// ```
+/// use actix_web::get;
+/// use serde::Serialize;
+/// use kolomoni::impl_json_response_builder;
+/// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::api::macros::ContextlessResponder;
+///
+/// #[derive(Serialize)]
+/// struct SomeResponse {
+///     value: i32,
+/// }
+///
+/// impl_json_response_builder!(SomeResponse);
+///
+///
+/// #[get("/some/path")]
+/// async fn example_handler() -> EndpointResult {
+///     // ...
+///     
+///     Ok(SomeResponse { value: 42 }.into_response())
+///     //                           ^^^^^^^^^^^^^^^^
+///     // By calling the implementor macro we gained the ability to call
+///     // the `into_response` method, allowing us to ergonomically build
+///     // an HTTP response with a JSON-encoded body.
+/// }
+/// ```
+///
+/// ## Advanced response with custom status code and other attributes
+/// ```
+/// use actix_web::get;
+/// use actix_web::http::StatusCode;
+/// use serde::Serialize;
+/// use chrono::Utc;
+/// use kolomoni::impl_json_response_builder;
+/// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::api::macros::{
+///     IntoKolomoniResponseBuilder,
+///     ContextlessResponder
+/// };
+///
+/// #[derive(Serialize)]
+/// struct SomeResponse {
+///     value: i32,
+/// }
+///
+/// impl_json_response_builder!(SomeResponse);
+///
+///
+/// #[get("/some/path")]
+/// async fn example_handler() -> EndpointResult {
+///     // ...
+///     
+///     Ok(
+///         SomeResponse { value: 42 }
+///             .into_response_builder()?
+///     //       ^^^^^^^^^^^^^^^^^^^^^
+///     // By calling the implementor macro we gained the ability to call
+///     // the `into_response_builder` method, allowing us to ergonomically build
+///     // an HTTP response with a JSON-encoded body.
+///             .status_code(StatusCode::IM_A_TEAPOT)
+///             .last_modified_at(Utc::now())?
+///     //       ^^^^^^^^^^^^^^^^
+///     // We can use the methods on `KolomoniResponseBuilder` to specify
+///     // advanced parameters, such as a different status code or a `Last-Modified` header.
+///             .into_response()
+///     //       ^^^^^^^^^^^^^
+///     // Finally, call `into_response` to build a HTTP response you can return from the function.
+///     )
+/// }
+/// ```
 #[macro_export]
 macro_rules! impl_json_response_builder {
     ($struct:ty) => {
@@ -158,66 +243,7 @@ macro_rules! impl_json_response_builder {
     };
 }
 
-/// Macro that implements two traits for the given struct:
-/// - [`actix_web::Responder`], allowing you to return this struct in an actix endpoint handler, and
-/// - [`ContextlessResponder`], which is a simpler internal trait that has the `into_response` method that
-///   does basically the same as [`actix_web::Responder::respond_to`], but without having to provide
-///   a reference to [`HttpRequest`][actix_web::HttpRequest], making code cleaner.
-///
-/// The provided struct must already implement [`Serialize`][serde::Serialize].
-///
-///
-/// # Example
-/// ```
-/// use actix_web::get;
-/// use serde::Serialize;
-/// use kolomoni::impl_json_responder;
-/// use kolomoni::api::errors::EndpointResult;
-/// use kolomoni::api::macros::ContextlessResponder;
-///
-/// #[derive(Serialize)]
-/// struct SomeResponse {
-///     value: i32,
-/// }
-///
-/// impl_json_responder!(SomeResponse);
-///
-///
-/// #[get("/some/path")]
-/// async fn example_handler() -> EndpointResult {
-///     // ...
-///     
-///     Ok(SomeResponse { value: 42 }.into_response())
-///     //                           ^^^^^^^^^^^^^^^^
-///     // By calling the implementor macro we gained the ability to call
-///     // the `into_response` method, allowing us to ergonomically build
-///     // an HTTP response with a JSON-encoded body.
-/// }
-/// ```
-#[macro_export]
-#[deprecated]
-macro_rules! impl_json_responder {
-    ($struct:ty) => {
-        impl actix_web::Responder for $struct {
-            type Body = actix_web::body::BoxBody;
 
-            fn respond_to(
-                self,
-                _req: &actix_web::HttpRequest,
-            ) -> actix_web::HttpResponse<Self::Body> {
-                actix_web::HttpResponse::Ok().json(&self)
-            }
-        }
-
-        impl $crate::api::macros::ContextlessResponder for $struct {
-            type Body = actix_web::body::BoxBody;
-
-            fn into_response(self) -> actix_web::HttpResponse<Self::Body> {
-                actix_web::HttpResponse::Ok().json(&self)
-            }
-        }
-    };
-}
 
 /// A macro for generating a [`HttpResponse`]
 /// with a given status code and a JSON body containing the `reason` field
@@ -235,7 +261,7 @@ macro_rules! impl_json_responder {
 /// use actix_web::http::StatusCode;
 /// use kolomoni::api::macros::ContextlessResponder;
 /// use kolomoni::api::errors::EndpointResult;
-/// use kolomoni::response_with_reason;
+/// use kolomoni::error_response_with_reason;
 ///
 /// #[post("/here")]
 /// async fn here_endpoint() -> EndpointResult {
@@ -243,7 +269,7 @@ macro_rules! impl_json_responder {
 ///     # let some_condition = true;
 ///
 ///     if some_condition {
-///         return Ok(response_with_reason!(
+///         return Ok(error_response_with_reason!(
 ///             StatusCode::CONFLICT,
 ///             "Here is a reason."
 ///         ));
@@ -262,66 +288,53 @@ macro_rules! error_response_with_reason {
 }
 
 
-/// A macro that takes an [`ApplicationState`][crate::state::ApplicationState]
-/// and a [`UserAuth`][`crate::authentication::UserAuth`] and attempts to look up the
-/// authenticated user's permissions.
+
+/// A macro that takes a [`UserAuthenticationExtractor`][`crate::authentication::UserAuthenticationExtractor`]
+/// and verifies that the user did authenticate on the request.
 ///
-/// The resulting expression is a tuple
-/// `(`[`&JWTClaims`][kolomoni_auth::JWTClaims]`, `[`UserPermissionSet`][kolomoni_auth::UserPermissionSet]`)`.
+/// The resulting expression, which you can, for example, assign to a variable,
+/// is of type [`AuthenticatedUser`][crate::authentication::AuthenticatedUser].
+///
+/// Note that calling this will not perform any database lookups yet.
 ///
 ///
 /// # Early-return values
-/// If there is no authentication, the macro early-returns a
-/// `Err(`[`APIError::NotAuthenticated`][crate::api::errors::APIError::NotAuthenticated]`)`,
-/// which results in a `401 Unauthorized` HTTP status code, indicating to the API caller
-/// that authentication is required.
-///
-/// If the macro fails to look up the authenticated user's permissions, it early-returns a
-/// `Err(`[`APIError::InternalError`][crate::api::errors::APIError::InternalError]`)`,
-/// which results in a `500 Internal Server Error` HTTP status code, indicating that something
-/// went wrong on our side, not the caller's.
+/// If there is no authentication provided in the request, this macro early-returns a
+/// `Err(`[`APIError::NotAuthenticated`][crate::api::errors::APIError::NotAuthenticated]`)`
+/// from the caller function. This results in a `401 Unauthorized` HTTP response,
+/// indicating to the API caller that authentication is required on the endpoint.
 ///
 ///
-/// # Examples
+/// # Example
 /// ```
 /// use actix_web::get;
 /// use kolomoni::state::ApplicationState;
-/// use kolomoni::authentication::UserAuth;
+/// use kolomoni::authentication::{
+///     AuthenticatedUser,
+///     UserAuthenticationExtractor
+/// };
 /// use kolomoni::api::errors::{EndpointResult, APIError};
 /// use kolomoni::{require_permission, require_authentication};
-/// use kolomoni_auth::{UserPermissionSet, Permission, JWTClaims};
+/// use kolomoni_auth::Permission;
 ///
 /// #[get("")]
 /// async fn get_all_registered_users(
 ///     state: ApplicationState,
-///     user_auth: UserAuth,
+///     authentication: UserAuthenticationExtractor,
 /// ) -> EndpointResult {
-///     // This will ensure the user is authenticated.
-///     // `permissions` will contain the user's permissions
-///     // (this will perform a database lookup).
-///     let (token, permissions): (JWTClaims, UserPermissionSet)
-///         = require_authentication!(state, user_auth);
+///     // This will ensure the user provided a valid authentication token
+///     // with the request.
+///     let authenticated_user: AuthenticatedUser = require_authentication!(authentication);
 ///
-///     // This will ensure the user has the `user.any:read` permission by early-returning
+///     // The following will ensure the user has the `user.any:read` permission by early-returning
 ///     // an `APIError::NotEnoughPermissions` if the user does not have it.
-///     require_permission!(permissions, Permission::UserAnyRead);
+///     // This call performs a database lookup (*the previous one did not*).
+///     require_permission!(state, authenticated_user, Permission::UserAnyRead);
 ///     
 ///     // ...
 ///     # todo!();
 /// }
 /// ```
-#[macro_export]
-#[deprecated]
-macro_rules! require_authentication_OLD {
-    ($state:expr, $user_auth:expr) => {
-        $user_auth
-            .token_and_permissions_if_authenticated(&$state.database)
-            .await
-            .map_err($crate::api::errors::APIError::InternalError)?
-            .ok_or_else(|| $crate::api::errors::APIError::NotAuthenticated)?
-    };
-}
-
 #[macro_export]
 macro_rules! require_authentication {
     ($user_auth_extractor:expr) => {
@@ -332,29 +345,98 @@ macro_rules! require_authentication {
 }
 
 
+
 /// A macro that early-returns an
 /// `Err(`[`APIError::NotEnoughPermissions`][crate::api::errors::APIError::NotEnoughPermissions]`)`
-/// if the given permissions struct doesn't have the required permission.
-/// This essentially generates a `403 Forbidden` with JSON-encoded reasons
+/// if the user doesn't have the required permission.
+///
+/// The early return essentially generates a `403 Forbidden` with a JSON-encoded reason
 /// in the body of the response (see [`APIError`][crate::api::errors::APIError] for more information).
 ///
-/// The first argument must be the
-/// [`UserPermissionSet`][kolomoni_auth::UserPermissionSet] struct.
+/// # Arguments and examples
+/// ## Variant 1 (three arguments, most common)
+/// - The first argument must be the [`ApplicationState`][crate::state::ApplicationState].
+/// - The second argument must be an
+///   [`AuthenticatedUser`][crate::authentication::AuthenticatedUser] instance.
+/// - The third argument must be the [`Permission`][kolomoni_auth::Permission]
+///   you wish to check for.
 ///
-/// The second argument must be the permission you require
-/// (a [`Permission`][kolomoni_auth::Permission]).
-#[macro_export]
-#[deprecated]
-macro_rules! require_permission_OLD {
-    ($user_permissions:expr, $required_permission:expr) => {
-        if !$user_permissions.has_permission($required_permission) {
-            return Err(
-                $crate::api::errors::APIError::missing_specific_permission($required_permission),
-            );
-        }
-    };
-}
-
+/// ```
+/// use actix_web::get;
+/// use kolomoni::state::ApplicationState;
+/// use kolomoni::authentication::{
+///     AuthenticatedUser,
+///     UserAuthenticationExtractor
+/// };
+/// use kolomoni::api::errors::{EndpointResult, APIError};
+/// use kolomoni::{require_permission, require_authentication};
+/// use kolomoni_auth::Permission;
+///
+/// #[get("")]
+/// async fn get_all_registered_users(
+///     state: ApplicationState,
+///     authentication: UserAuthenticationExtractor,
+/// ) -> EndpointResult {
+///     // This will ensure the user provided a valid authentication token
+///     // with the request.
+///     let authenticated_user: AuthenticatedUser = require_authentication!(authentication);
+///
+///     // The following will ensure the user has the `user.any:read` permission by early-returning
+///     // an `APIError::NotEnoughPermissions` if the user does not have it.
+///     // This call performs a database lookup (*the previous one did not*).
+///     require_permission!(state, authenticated_user, Permission::UserAnyRead);
+///     
+///     // ...
+///     # todo!();
+/// }
+/// ```
+///
+/// ## Variant 2 (two arguments)
+/// This variant comes in handy when you already have a set of user permissions
+/// ([`PermissionSet`][kolomoni_auth::PermissionSet]) and wish to assert that
+/// the user has a certain permission by looking in that set instead of
+/// going to the database again.
+///
+/// - The first argument must be the [`PermissionSet`][kolomoni_auth::PermissionSet].
+/// - THe second argument must be the [`Permission`][kolomoni_auth::Permission]
+///   you wish to check for.
+///
+/// ```
+/// use actix_web::get;
+/// use kolomoni::state::ApplicationState;
+/// use kolomoni::authentication::{
+///     AuthenticatedUser,
+///     UserAuthenticationExtractor
+/// };
+/// use kolomoni::api::errors::{EndpointResult, APIError};
+/// use kolomoni::{require_permission, require_authentication};
+/// use kolomoni_auth::{Permission, PermissionSet};
+///
+/// #[get("")]
+/// async fn get_all_registered_users(
+///     state: ApplicationState,
+///     authentication: UserAuthenticationExtractor,
+/// ) -> EndpointResult {
+///     // This will ensure the user provided a valid authentication token
+///     // with the request.
+///     let authenticated_user: AuthenticatedUser
+///         = require_authentication!(authentication);
+///     let authenticated_user_permissions: PermissionSet
+///         = authenticated_user
+///             .permissions(&state.database)
+///             .await
+///             .map_err(APIError::InternalError)?;
+///
+///     // The following will ensure the user has the `user.any:read` permission by early-returning
+///     // an `APIError::NotEnoughPermissions` if the user does not have it.
+///     // Unlike the three-argument variant, this call does not perform a database lookup.
+///     require_permission!(authenticated_user_permissions, Permission::UserAnyRead);
+///     
+///     // ...
+///     # todo!();
+/// }
+/// ```
+///
 #[macro_export]
 macro_rules! require_permission {
     ($permission_set:expr, $required_permission:expr) => {

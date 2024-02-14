@@ -4,6 +4,7 @@ use kolomoni_database::mutation::ArgonHasher;
 use sea_orm::DatabaseConnection;
 
 
+
 /// Central application state.
 ///
 /// Use [`ApplicationState`] instead as it already wraps this struct
@@ -42,6 +43,7 @@ pub struct ApplicationStateInner {
     /// Authentication token manager (JSON Web Token).
     pub jwt_manager: JsonWebTokenManager,
 }
+
 
 /// An [`actix_web::web::Data`] wrapper for [`ApplicationStateInner`].
 ///

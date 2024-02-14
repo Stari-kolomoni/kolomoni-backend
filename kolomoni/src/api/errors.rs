@@ -11,6 +11,7 @@ use thiserror::Error;
 use tracing::error;
 use utoipa::ToSchema;
 
+
 /// Simple JSON-encodable response containing a single field: a `reason`.
 ///
 /// This is useful for specifying reasons when returning a HTTP status code
@@ -76,6 +77,7 @@ impl ErrorReasonResponse {
 }
 
 
+
 /// General-purpose Stari Kolomoni API error type.
 ///
 /// Use this type alongside an [`EndpointResult`] return type in your actix endpoint handlers
@@ -100,7 +102,7 @@ impl ErrorReasonResponse {
 /// # use miette::miette;
 /// # use serde::Serialize;
 /// # use actix_web::get;
-/// # use kolomoni::impl_json_responder;
+/// # use kolomoni::impl_json_response_builder;
 /// # use kolomoni::api::errors::APIError;
 /// # use kolomoni::api::macros::ContextlessResponder;
 /// # use kolomoni::api::errors::EndpointResult;
@@ -109,7 +111,7 @@ impl ErrorReasonResponse {
 ///     value: i32,
 /// }
 ///
-/// impl_json_responder!(RandomValueResponse);
+/// impl_json_response_builder!(RandomValueResponse);
 ///
 ///
 /// #[get("/some/path")]
@@ -167,27 +169,22 @@ impl ErrorReasonResponse {
 /// be authenticated and have the `user.self:read` permission.
 ///
 /// ```
-/// # use actix_web::{post, web};
-/// # use kolomoni::require_permission;
-/// # use kolomoni::authentication::UserAuth;
-/// # use kolomoni::state::ApplicationState;
-/// # use kolomoni_auth::Permission;
-/// # use kolomoni::api::errors::{APIError, EndpointResult};
-/// # use kolomoni::api::macros::ContextlessResponder;
+/// use actix_web::post;
+/// use kolomoni::{require_permission, require_authentication};
+/// use kolomoni::authentication::UserAuthenticationExtractor;
+/// use kolomoni::state::ApplicationState;
+/// use kolomoni_auth::Permission;
+/// use kolomoni::api::errors::{APIError, EndpointResult};
+///
 /// #[post("/some/path")]
 /// async fn example_auth(
 ///     state: ApplicationState,
-///     user_auth: UserAuth,
+///     authentication: UserAuthenticationExtractor,
 /// ) -> EndpointResult {
-///     let (token, permissions) = user_auth
-///         .token_and_permissions_if_authenticated(&state.database)
-///         .await
-///         .map_err(APIError::InternalError)?
-///         .ok_or_else(|| APIError::NotAuthenticated)?;
+///     let authenticated_user = require_authentication!(authentication);
+///     require_permission!(state, authenticated_user, Permission::UserSelfRead);
 ///
-///     require_permission!(permissions, Permission::UserSelfRead);
-///
-///     // [the rest of the function]
+///     // ... the rest of the function ...
 ///     # todo!();
 /// }
 /// ```
@@ -248,7 +245,6 @@ impl APIError {
             missing_permission: None,
         }
     }
-
 
     /// Initialize a new API error, clarifying that the user is missing
     /// some permission.
@@ -373,6 +369,7 @@ impl ResponseError for APIError {
         }
     }
 }
+
 
 /// Short for [`Result`]`<`[`HttpResponse`]`, `[`APIError`]`>`, intended to be used in most
 /// places in handlers of the Stari Kolomoni API.

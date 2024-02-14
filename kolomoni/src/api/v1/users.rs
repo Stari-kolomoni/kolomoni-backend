@@ -78,6 +78,7 @@ impl UserInformation {
 }
 
 
+
 /// Information about one user in particular.
 ///
 /// This struct is used as a response in the public API.
@@ -112,6 +113,11 @@ impl_json_response_builder!(UserInfoResponse);
 ///
 /// This struct is used as a request in the public API.
 #[derive(Deserialize, Clone, Debug, ToSchema)]
+#[schema(
+    example = json!({
+        "new_display_name": "Janez Novak Veliki"
+    })
+)]
 pub struct UserDisplayNameChangeRequest {
     /// Display name to change to.
     pub new_display_name: String,
@@ -136,6 +142,15 @@ impl_json_response_builder!(UserDisplayNameChangeResponse);
 ///
 /// This struct is used as a response in the public API.
 #[derive(Serialize, Debug, ToSchema)]
+#[schema(
+    example = json!({
+        "permissions": [
+            "user.self:read",
+            "user.self:write",
+            "user.any:read"
+        ]
+    })
+)]
 pub struct UserPermissionsResponse {
     pub permissions: Vec<String>,
 }

@@ -41,7 +41,6 @@ impl OptionalIfModifiedSince {
     }
 }
 
-
 impl FromRequest for OptionalIfModifiedSince {
     type Error = actix_web::Error;
     type Future = Ready<Result<Self, Self::Error>>;
@@ -64,6 +63,7 @@ impl FromRequest for OptionalIfModifiedSince {
         }
     }
 }
+
 
 
 /// Router for the entire public API.

@@ -22,6 +22,7 @@ use crate::logging::initialize_tracing;
 use crate::state::ApplicationStateInner;
 
 
+
 /// Connect to PostgreSQL database as specified in the configuration file
 /// and apply any pending migrations.
 pub async fn connect_and_set_up_database(config: &Configuration) -> Result<DatabaseConnection> {
@@ -48,6 +49,7 @@ pub async fn connect_and_set_up_database(config: &Configuration) -> Result<Datab
 
     Ok(database)
 }
+
 
 
 #[tokio::main]

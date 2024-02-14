@@ -9,15 +9,20 @@ use utoipa::ToSchema;
 
 use crate::api::errors::{APIError, EndpointResult, ErrorReasonResponse};
 use crate::api::macros::ContextlessResponder;
+use crate::api::openapi;
 use crate::impl_json_response_builder;
 use crate::state::ApplicationState;
 
-/*
- * POST /login
- */
+
 
 /// User login information.
 #[derive(Deserialize, Debug, ToSchema)]
+#[schema(
+    example = json!({
+        "username": "sample_user",
+        "password": "verysecurepassword" 
+    })
+)]
 pub struct UserLoginRequest {
     /// Username to log in as.
     pub username: String,
@@ -35,8 +40,21 @@ pub struct UserLoginRequest {
 ///
 /// This works because the `refresh_token` has a longer expiration time.
 #[derive(Serialize, Debug, ToSchema)]
+#[schema(
+    example = json!({
+        "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1Y\
+                         iI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzIyLCJ1c2VybmF\
+                         tZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.ZnuhEVacQD_pYzkW9h6aX3eoRNOAs\
+                         2-y3EngGBglxkk",
+        "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1\
+                          YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTIyLCJ1c2Vyb\
+                          mFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCJ9.Ze6DI5EZ-swXRQrMW3NIppYej\
+                          clGbyI9D6zmYBWJMLk"
+    })
+)]
 pub struct UserLoginResponse {
     /// JWT access token.
+    /// Provide in subsequent requests in the `Authorization` header as `Bearer your_token_here`.
     pub access_token: String,
 
     /// JWT refresh token.
@@ -44,6 +62,7 @@ pub struct UserLoginResponse {
 }
 
 impl_json_response_builder!(UserLoginResponse);
+
 
 
 /// Create an access token.
@@ -60,18 +79,13 @@ impl_json_response_builder!(UserLoginResponse);
     path = "/login",
     tag = "login",
     request_body(
-        content = inline(UserLoginRequest),
-        example = json!({ "username": "sample_user", "password": "verysecurepassword" })
+        content = UserLoginRequest
     ),
     responses(
         (
             status = 200,
             description = "Login successful.",
-            body = inline(UserLoginResponse),
-            example = json!({
-                "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.ZnuhEVacQD_pYzkW9h6aX3eoRNOAs2-y3EngGBglxkk",
-                "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCJ9.Ze6DI5EZ-swXRQrMW3NIppYejclGbyI9D6zmYBWJMLk"
-            })
+            body = UserLoginResponse
         ),
         (
             status = 403,
@@ -79,10 +93,7 @@ impl_json_response_builder!(UserLoginResponse);
             body = ErrorReasonResponse,
             example = json!({ "reason": "Invalid login credentials." })
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::InternalServerErrorResponse,
     )
 )]
 #[post("")]
@@ -153,12 +164,17 @@ pub async fn login(
 
 
 
-/*
- * POST /login/refresh
- */
 
 /// Information with which to refresh a user's login, generating a new access token.
 #[derive(Deserialize, ToSchema)]
+#[schema(
+    example = json!({
+        "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN\
+                          1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTIyLCJ1c2V\
+                          ybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCJ9.Ze6DI5EZ-swXRQrMW3NIpp\
+                          YejclGbyI9D6zmYBWJMLk"
+    })
+)]
 pub struct UserLoginRefreshRequest {
     /// Refresh token to use to generate an access token.
     ///
@@ -168,12 +184,21 @@ pub struct UserLoginRefreshRequest {
 
 /// Response on successful login refresh.
 #[derive(Serialize, Debug, ToSchema)]
+#[schema(
+    example = json!({
+        "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1\
+                         YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzIyLCJ1c2Vyb\
+                         mFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.ZnuhEVacQD_pYzkW9h6aX3eoRN\
+                         OAs2-y3EngGBglxkk"
+    })
+)]
 pub struct UserLoginRefreshResponse {
     /// Newly-generated access token to use in future requests.
     pub access_token: String,
 }
 
 impl_json_response_builder!(UserLoginRefreshResponse);
+
 
 
 /// Refresh a user's access
@@ -188,15 +213,13 @@ impl_json_response_builder!(UserLoginRefreshResponse);
     path = "/login/refresh",
     tag = "login",
     request_body(
-        content = inline(UserLoginRefreshRequest),
-        example = json!({ "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCJ9.Ze6DI5EZ-swXRQrMW3NIppYejclGbyI9D6zmYBWJMLk" })
+        content = UserLoginRefreshRequest,
     ),
     responses(
         (
             status = 200,
             description = "Login refresh successful.",
-            body = inline(UserLoginRefreshResponse),
-            example = json!({ "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzIyLCJ1c2VybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.ZnuhEVacQD_pYzkW9h6aX3eoRNOAs2-y3EngGBglxkk" })
+            body = UserLoginRefreshResponse
         ),
         (
             status = 403,
@@ -219,10 +242,7 @@ impl_json_response_builder!(UserLoginRefreshResponse);
                 ))
             )
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::InternalServerErrorResponse,
     )
 )]
 #[post("/refresh")]
@@ -289,6 +309,7 @@ pub async fn refresh_login(
 
     Ok(UserLoginRefreshResponse { access_token }.into_response())
 }
+
 
 
 #[rustfmt::skip]

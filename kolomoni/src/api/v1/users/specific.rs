@@ -1,7 +1,3 @@
-/*
- * GET /users/{user_id}
- */
-
 use actix_web::{delete, get, http::StatusCode, patch, post, web, HttpResponse};
 use kolomoni_auth::{Permission, Role};
 use kolomoni_database::{
@@ -17,6 +13,7 @@ use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
+        openapi,
         v1::users::{
             UserDisplayNameChangeRequest,
             UserDisplayNameChangeResponse,
@@ -32,6 +29,7 @@ use crate::{
     require_permission,
     state::ApplicationState,
 };
+
 
 
 /// Get a specific user's information
@@ -64,23 +62,11 @@ use crate::{
             })
         ),
         (
-            status = 401,
-            description = "Missing user authentication."
-        ),
-        (
-            status = 403,
-            description = "Missing `user.any:read` permission.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Missing permission: user.any:read." })
-        ),
-        (
             status = 404,
             description = "Requested user does not exist."
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
+        openapi::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])
@@ -114,13 +100,21 @@ async fn get_specific_user_info(
 
 
 
-
 #[derive(Serialize, Debug, ToSchema)]
+#[schema(
+    example = json!({
+        "role_names": [
+            "user",
+            "administrator"
+        ]
+    })
+)]
 pub struct UserRolesResponse {
     pub role_names: Vec<String>,
 }
 
 impl_json_response_builder!(UserRolesResponse);
+
 
 /// Get a user's roles
 ///
@@ -130,19 +124,17 @@ impl_json_response_builder!(UserRolesResponse);
     get,
     path = "/users/{user_id}/roles",
     params(
-        ("user_id" = i32, Path, description = "ID of the user to query roles for.")
+        (
+            "user_id" = i32,
+            Path,
+            description = "ID of the user to query roles for."
+        )
     ),
     responses(
         (
             status = 200,
             description = "User role list.",
-            body = UpdatedUserRolesResponse,
-            example = json!({
-                "role_names": [
-                    "user",
-                    "administrator"
-                ]
-            })
+            body = UpdatedUserRolesResponse
         ),
         (
             status = 400,
@@ -151,28 +143,11 @@ impl_json_response_builder!(UserRolesResponse);
             example = json!({ "reason": "No such role: \"non-existent-role-name\"." })
         ),
         (
-            status = 401,
-            description = "Missing user authentication."
-        ),
-        (
-            status = 403,
-            description = "Not allowed to read other users' roles.",
-            body = ErrorReasonResponse,
-            examples(
-                ("Missing user.any:read permission" = (
-                    summary = "Missing user.any:read permission.",
-                    value = json!({ "reason": "Missing permission: user.any:read." })
-                ))
-            )
-        ),
-        (
             status = 404,
             description = "No user with provided ID."
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
+        openapi::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])
@@ -215,9 +190,6 @@ pub async fn get_specific_user_roles(
     .into_response())
 }
 
-
-
-
 /// Get a user's effective permissions
 ///
 /// Returns a list of effective permissions (computed from user roles).
@@ -232,39 +204,24 @@ pub async fn get_specific_user_roles(
     path = "/users/{user_id}/permissions",
     tag = "users",
     params(
-        ("user_id" = i32, Path, description = "ID of the user to get effective permissions for.")
+        (
+            "user_id" = i32,
+            Path,
+            description = "ID of the user to get effective permissions for."
+        )
     ),
     responses(
         (
             status = 200,
             description = "User permissions.",
             body = UserPermissionsResponse,
-            example = json!({
-                "permissions": [
-                    "user.self:read",
-                    "user.self:write",
-                    "user.any:read"
-                ]
-            })
-        ),
-        (
-            status = 401,
-            description = "Missing user authentication."
-        ),
-        (
-            status = 403,
-            description = "Missing `user.any:read` permission.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Missing permission: user.any:read." })
         ),
         (
             status = 404,
             description = "Requested user does not exist."
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
+        openapi::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])
@@ -316,7 +273,6 @@ async fn get_specific_user_effective_permissions(
 
 
 
-
 /// Update a specific user's display name
 ///
 /// This is generic version of the `PATCH /users/me/display_name` endpoint, allowing a user
@@ -328,13 +284,14 @@ async fn get_specific_user_effective_permissions(
     path = "/users/{user_id}/display_name",
     tag = "users",
     params(
-        ("user_id" = i32, Path, description = "User ID.")
+        (
+            "user_id" = i32,
+            Path,
+            description = "User ID."
+        )
     ),
     request_body(
-        content = UserDisplayNameChangeRequest,
-        example = json!({
-            "new_display_name": "Janez Novak Veliki"
-        })
+        content = UserDisplayNameChangeRequest
     ),
     responses(
         (
@@ -353,25 +310,13 @@ async fn get_specific_user_effective_permissions(
             })
         ),
         (
-            status = 401,
-            description = "Missing user authentication."
-        ),
-        (
-            status = 403,
-            description = "Missing `user.any:write` permission.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Missing permission: user.any:write." })
-        ),
-        (
             status = 409,
             description = "User with given display name already exists.",
             body = ErrorReasonResponse,
             example = json!({ "reason": "User with given display name already exists." })
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
+        openapi::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])
@@ -475,11 +420,24 @@ async fn update_specific_user_display_name(
 
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(
+    example = json!({
+        "roles_to_add": ["administrator"]
+    })
+)]
 pub struct UserRoleAddRequest {
     pub roles_to_add: Vec<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
+#[schema(
+    example = json!({
+        "roles": [
+            "user",
+            "administrator"
+        ]
+    })
+)]
 pub struct UpdatedUserRolesResponse {
     pub roles: Vec<String>,
 }
@@ -491,25 +449,20 @@ impl_json_response_builder!(UpdatedUserRolesResponse);
     post,
     path = "/users/{user_id}/roles",
     params(
-        ("user_id" = i32, Path, description = "ID of the user to add roles to.")
+        (
+            "user_id" = i32,
+            Path,
+            description = "ID of the user to add roles to."
+        )
     ),
     request_body(
-        content = inline(UserRoleAddRequest),
-        example = json!({
-            "roles_to_add": ["administrator"]
-        })
+        content = UserRoleAddRequest
     ),
     responses(
         (
             status = 200,
             description = "Updated user role list.",
-            body = UpdatedUserRolesResponse,
-            example = json!({
-                "permissions": [
-                    "user",
-                    "administrator"
-                ]
-            })
+            body = UpdatedUserRolesResponse
         ),
         (
             status = 400,
@@ -518,18 +471,10 @@ impl_json_response_builder!(UpdatedUserRolesResponse);
             example = json!({ "reason": "No such role: \"non-existent-role-name\"." })
         ),
         (
-            status = 401,
-            description = "Missing user authentication."
-        ),
-        (
             status = 403,
             description = "Not allowed to modify roles.",
             body = ErrorReasonResponse,
             examples(
-                ("Missing user.any:write permission" = (
-                    summary = "Missing user.any:write permission.",
-                    value = json!({ "reason": "Missing permission: user.any:write." })
-                )),
                 ("Can't give out roles you don't have" = (
                     summary = "Can't give out roles you don't have.",
                     value = json!({ "reason": "You cannot give out roles you do not have (missing role: administrator)." })
@@ -540,10 +485,8 @@ impl_json_response_builder!(UpdatedUserRolesResponse);
                 ))
             )
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
+        openapi::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])
@@ -637,7 +580,13 @@ pub async fn add_roles_to_specific_user(
 
 
 
+
 #[derive(Debug, Deserialize, ToSchema)]
+#[schema(
+    example = json!({
+        "roles_to_remove": ["administrator"]
+    })
+)]
 pub struct UserRoleRemoveRequest {
     pub roles_to_remove: Vec<String>,
 }
@@ -647,22 +596,20 @@ pub struct UserRoleRemoveRequest {
     delete,
     path = "/users/{user_id}/roles",
     params(
-        ("user_id" = i32, Path, description = "ID of the user to remove roles from.")
+        (
+            "user_id" = i32,
+            Path,
+            description = "ID of the user to remove roles from."
+        )
     ),
     request_body(
-        content = inline(UserRoleRemoveRequest),
-        example = json!({
-            "roles_to_remove": ["administrator"]
-        })
+        content = UserRoleRemoveRequest
     ),
     responses(
         (
             status = 200,
             description = "Updated user role list.",
-            body = UpdatedUserRolesResponse,
-            example = json!({
-                "permissions": ["user"]
-            })
+            body = UpdatedUserRolesResponse
         ),
         (
             status = 400,
@@ -671,18 +618,10 @@ pub struct UserRoleRemoveRequest {
             example = json!({ "reason": "No such role: \"non-existent-role-name\"." })
         ),
         (
-            status = 401,
-            description = "Missing user authentication."
-        ),
-        (
             status = 403,
             description = "Not allowed to modify roles.",
             body = ErrorReasonResponse,
             examples(
-                ("Missing user.any:write permission" = (
-                    summary = "Missing user.any:write permission.",
-                    value = json!({ "reason": "Missing permission: user.any:write." })
-                )),
                 ("Can't remove others' roles you don't have" = (
                     summary = "Can't give out roles you don't have.",
                     value = json!({ "reason": "You cannot remove others' roles which you do not have (missing role: administrator)." })
@@ -693,10 +632,8 @@ pub struct UserRoleRemoveRequest {
                 ))
             )
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
+        openapi::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])

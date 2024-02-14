@@ -11,6 +11,7 @@ use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
+        openapi,
     },
     error_response_with_reason,
     impl_json_response_builder,
@@ -19,6 +20,11 @@ use crate::{
 
 /// User registration request provided by an API caller.
 #[derive(Deserialize, Clone, Debug, ToSchema)]
+#[schema(example = json!({
+    "username": "janeznovak",
+    "display_name": "Janez Novak",
+    "password": "perica_reže_raci_rep"
+}))]
 pub struct UserRegistrationRequest {
     /// Username to register as (not the same as the display name).
     pub username: String,
@@ -45,11 +51,24 @@ impl From<UserRegistrationRequest> for UserRegistrationInfo {
 /// API-serializable response upon successful user registration.
 /// Contains the newly-created user's information.
 #[derive(Serialize, Debug, ToSchema)]
+#[schema(
+    example = json!({
+        "user": {
+            "id": 1,
+            "username": "janeznovak",
+            "display_name": "Janez Novak",
+            "joined_at": "2023-06-27T20:33:53.078789Z",
+            "last_modified_at": "2023-06-27T20:34:27.217273Z",
+            "last_active_at": "2023-06-27T20:34:27.253746Z"
+        }
+    })
+)]
 pub struct UserRegistrationResponse {
     pub user: UserInformation,
 }
 
 impl_json_response_builder!(UserRegistrationResponse);
+
 
 
 /// Register a new user
@@ -63,28 +82,13 @@ impl_json_response_builder!(UserRegistrationResponse);
     path = "/users",
     tag = "users",
     request_body(
-        content = inline(UserRegistrationRequest),
-        example = json!({
-            "username": "janeznovak",
-            "display_name": "Janez Novak",
-            "password": "perica_reže_raci_rep"
-        })
+        content = UserRegistrationRequest
     ),
     responses(
         (
             status = 200,
             description = "Registration successful.",
-            body = inline(UserRegistrationResponse),
-            example = json!({
-                "user": {
-                    "id": 1,
-                    "username": "janeznovak",
-                    "display_name": "Janez Novak",
-                    "joined_at": "2023-06-27T20:33:53.078789Z",
-                    "last_modified_at": "2023-06-27T20:34:27.217273Z",
-                    "last_active_at": "2023-06-27T20:34:27.253746Z"
-                }
-            })
+            body = UserRegistrationResponse
         ),
         (
             status = 409,
@@ -101,10 +105,7 @@ impl_json_response_builder!(UserRegistrationResponse);
                 )),
             )
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::InternalServerErrorResponse,
     )
 )]
 #[post("")]
