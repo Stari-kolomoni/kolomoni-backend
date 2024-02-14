@@ -39,6 +39,7 @@ pub enum Permission {
     WordDelete,
 }
 
+
 impl Permission {
     pub fn from_id(internal_permission_id: i32) -> Option<Self> {
         match internal_permission_id {
@@ -50,7 +51,7 @@ impl Permission {
             6 => Some(Permission::WordRead),
             7 => Some(Permission::WordUpdate),
             8 => Some(Permission::WordDelete),
-            _ => None
+            _ => None,
         }
     }
 
@@ -102,21 +103,21 @@ impl Permission {
     #[rustfmt::skip]
     pub fn description(&self) -> &'static str {
         match self {
-            Permission::UserSelfRead => 
+            Permission::UserSelfRead =>
                 "Allows the user to log in and view their account information.",
-            Permission::UserSelfWrite => 
+            Permission::UserSelfWrite =>
                 "Allows the user to update their account information.",
             Permission::UserAnyRead =>
                 "Allows the user to view public account information of any other user.",
             Permission::UserAnyWrite =>
                 "Allows the user to update account information of any other user.",
-            Permission::WordCreate => 
+            Permission::WordCreate =>
                 "Allows the user to create words in the dictionary.",
-            Permission::WordRead => 
+            Permission::WordRead =>
                 "Allows the user to read words in the dictionary.",
             Permission::WordUpdate =>
                 "Allows the user to update existing words in the dictionary (but not delete them).",
-            Permission::WordDelete => 
+            Permission::WordDelete =>
                 "Allows the user to delete words from the dictionary.",
         }
     }
@@ -124,10 +125,8 @@ impl Permission {
 
 /// List of permissions that are given to **ANY API CALLER**,
 /// authenticated or not.
-pub const BLANKET_ANY_USER_PERMISSION_GRANT: [Permission; 2] = [
-    Permission::WordRead,
-    Permission::UserAnyRead,
-];
+pub const BLANKET_ANY_USER_PERMISSION_GRANT: [Permission; 2] =
+    [Permission::WordRead, Permission::UserAnyRead];
 
 /// Set of permissions for a specific user.
 ///
@@ -141,13 +140,13 @@ pub struct PermissionSet {
 impl PermissionSet {
     pub fn new_empty() -> Self {
         Self {
-            permissions: HashSet::with_capacity(0)
+            permissions: HashSet::with_capacity(0),
         }
     }
 
     pub fn from_permission_set(permission_set: HashSet<Permission>) -> Self {
         Self {
-            permissions: permission_set
+            permissions: permission_set,
         }
     }
 

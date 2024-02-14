@@ -4,6 +4,7 @@ use chrono::{DateTime, SubsecRound, Utc};
 
 pub mod errors;
 pub mod macros;
+pub mod openapi;
 pub mod v1;
 
 

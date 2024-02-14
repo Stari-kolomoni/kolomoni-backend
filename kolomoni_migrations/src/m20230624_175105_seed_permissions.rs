@@ -4,12 +4,12 @@ use crate::m20230624_170512_initialize_permission_related_tables::Permission;
 
 
 /// This is the list of available permissions.
-/// 
-/// **IMPORTANT: This permission list (or on related migrations) should be kept in sync 
+///
+/// **IMPORTANT: This permission list (or on related migrations) should be kept in sync
 /// with `./kolomoni_auth/src/permissions.rs`.**
-/// 
+///
 /// We don't keep them in sync automatically because that would mean a migration would
-/// not stay the same. We can modify the migration sanely if any only if we're still in 
+/// not stay the same. We can modify the migration sanely if any only if we're still in
 /// the unstable prototyping phase. Otherwise, opt for a new migration that adds the new permissions.
 #[derive(Clone, Copy, Debug)]
 pub enum StandardPermission {
@@ -66,21 +66,21 @@ impl StandardPermission {
     #[rustfmt::skip]
     pub fn description(&self) -> &'static str {
         match self {
-            StandardPermission::UserSelfRead => 
+            StandardPermission::UserSelfRead =>
                 "Allows the user to log in and view their account information.",
-            StandardPermission::UserSelfWrite => 
+            StandardPermission::UserSelfWrite =>
                 "Allows the user to update their account information.",
-            StandardPermission::UserAnyRead => 
+            StandardPermission::UserAnyRead =>
                 "Allows the user to view public account information of any other user.",
-            StandardPermission::UserAnyWrite => 
+            StandardPermission::UserAnyWrite =>
                 "Allows the user to update account information of any other user.",
-            StandardPermission::WordCreate => 
+            StandardPermission::WordCreate =>
                 "Allows the user to create words in the dictionary.",
-            StandardPermission::WordRead => 
+            StandardPermission::WordRead =>
                 "Allows the user to read words in the dictionary.",
-            StandardPermission::WordUpdate => 
+            StandardPermission::WordUpdate =>
                 "Allows the user to update existing words in the dictionary (but not delete them).",
-            StandardPermission::WordDelete => 
+            StandardPermission::WordDelete =>
                 "Allows the user to delete words from the dictionary.",
         }
     }
@@ -122,7 +122,13 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         for permission in StandardPermission::all_permissions() {
-            insert_permission(manager, permission.id(), permission.name(), permission.description()).await?;
+            insert_permission(
+                manager,
+                permission.id(),
+                permission.name(),
+                permission.description(),
+            )
+            .await?;
         }
 
         Ok(())

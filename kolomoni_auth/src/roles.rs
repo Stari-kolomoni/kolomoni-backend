@@ -16,7 +16,7 @@ impl Role {
         match role_id {
             1 => Some(Role::User),
             2 => Some(Role::Administrator),
-            _ => None
+            _ => None,
         }
     }
 
@@ -45,9 +45,9 @@ impl Role {
     #[rustfmt::skip]
     pub fn description(&self) -> &'static str {
         match self {
-            Role::User => 
+            Role::User =>
                 "Normal user with most read permissions.",
-            Role::Administrator => 
+            Role::Administrator =>
                 "Administrator with almost all permission, including deletions.",
         }
     }
@@ -58,14 +58,12 @@ pub const DEFAULT_USER_ROLE: Role = Role::User;
 
 
 pub struct RoleSet {
-    roles: HashSet<Role>
+    roles: HashSet<Role>,
 }
 
 impl RoleSet {
     pub fn from_role_set(role_set: HashSet<Role>) -> Self {
-        Self {
-            roles: role_set
-        }
+        Self { roles: role_set }
     }
 
     pub fn has_role(&self, role: &Role) -> bool {
@@ -83,7 +81,8 @@ impl RoleSet {
 
     /// Returns a set of role names the associated user effectively has.
     pub fn role_names(&self) -> Vec<String> {
-        self.roles.iter()
+        self.roles
+            .iter()
             .map(|role| role.name().to_string())
             .collect()
     }

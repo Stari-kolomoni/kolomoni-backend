@@ -53,6 +53,7 @@ uuid = { version = "1.7.0", features = ["v7"] }
 governor = "0.6.0"
 httpdate = "1.0.3"
 futures-util = "0.3.30"
+paste = "1.0.14"
 
 
 [workspace.dependencies.sea-orm]
@@ -121,4 +122,4 @@ itertools = { workspace = true }
 mime = { workspace = true }
 httpdate = { workspace = true }
 futures-util = { workspace = true }
-
+paste = { workspace = true }

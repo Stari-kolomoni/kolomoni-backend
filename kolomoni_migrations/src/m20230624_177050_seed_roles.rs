@@ -1,14 +1,17 @@
 use sea_orm_migration::prelude::*;
 
-use crate::{m20230624_175105_seed_permissions::StandardPermission, m20230624_177000_initialize_role_related_tables::{Role, RolePermission}};
+use crate::{
+    m20230624_175105_seed_permissions::StandardPermission,
+    m20230624_177000_initialize_role_related_tables::{Role, RolePermission},
+};
 
 /// This is the list of available roles.
-/// 
-/// **IMPORTANT: This role list (or roles on related migrations) should be kept in sync 
+///
+/// **IMPORTANT: This role list (or roles on related migrations) should be kept in sync
 /// with `./kolomoni_auth/src/roles.rs`.**
-/// 
+///
 /// We don't keep them in sync automatically because that would mean a migration would
-/// not stay the same. We can modify the migration sanely if any only if we're still in 
+/// not stay the same. We can modify the migration sanely if any only if we're still in
 /// the unstable prototyping phase. Otherwise, opt for a new migration that adds the new permissions.
 #[derive(Clone, Copy, Debug)]
 pub enum StandardRole {
@@ -38,9 +41,9 @@ impl StandardRole {
     #[rustfmt::skip]
     pub fn description(&self) -> &'static str {
         match self {
-            StandardRole::User => 
+            StandardRole::User =>
                 "Normal user with most read permissions.",
-            StandardRole::Administrator => 
+            StandardRole::Administrator =>
                 "Administrator with almost all permission, including deletions.",
         }
     }
@@ -51,7 +54,7 @@ impl StandardRole {
                 StandardPermission::UserSelfRead,
                 StandardPermission::UserSelfWrite,
                 StandardPermission::UserAnyRead,
-                StandardPermission::WordRead
+                StandardPermission::WordRead,
             ],
             StandardRole::Administrator => vec![
                 StandardPermission::UserAnyWrite,
@@ -119,8 +122,9 @@ impl MigrationTrait for Migration {
                 role.id(),
                 role.name(),
                 role.description(),
-                &role.permission_list()
-            ).await?;
+                &role.permission_list(),
+            )
+            .await?;
         }
 
         Ok(())

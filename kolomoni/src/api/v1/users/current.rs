@@ -19,6 +19,7 @@ use crate::{
             ContextlessResponder,
             IntoKolomoniResponseBuilder,
         },
+        openapi,
         v1::users::{
             UserDisplayNameChangeRequest,
             UserDisplayNameChangeResponse,
@@ -48,60 +49,29 @@ use crate::{
     path = "/users/me",
     tag = "self",
     params(
-        (
-            "If-Modified-Since" = Option<String>,
-            Header,
-            description = "If specified, this header makes the server return `304 Not Modified` if \
-                           the user's data hasn't changed since the specified timestamp. \
-                           See [this article on MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Modified-Since) \
-                           for more information about this conditional header.",
-            example = "Wed, 21 Oct 2015 07:28:00 GMT"
-        )
+        openapi::IfModifiedSinceParameter
     ),
     responses(
         (
             status = 200,
-            description = "Information about the current user (i.e. the user who owns the authentication token used in the request).",
+            description
+                = "Information about the current user \
+                  (i.e. the user who owns the authentication token used in the request).",
             body = UserInfoResponse,
             headers(
-                ("Last-Modified" = String, description = "Last user modification time. Use this value for caching.")
-            ),
-            example = json!({
-                "user": {
-                    "id": 1,
-                    "username": "janeznovak",
-                    "display_name": "Janez Novak",
-                    "joined_at": "2023-06-27T20:33:53.078789Z",
-                    "last_modified_at": "2023-06-27T20:34:27.217273Z",
-                    "last_active_at": "2023-06-27T20:34:27.253746Z"
-                }
-            })
-        ),
-        (
-            status = 304,
-            description = "User hasn't been modified since the timestamp specified in the `If-Modified-Since` header. \
-                           As such, this status code can only be returned if that header is provided in the request."
-        ),
-        (
-            status = 401,
-            description = "Missing authentication. Include an `Authorization: Bearer <token>` header \
-                           with your request to access this endpoint."
-        ),
-        (
-            status = 403,
-            description = "Missing the `user.self:read` permission.",
-            content_type = "application/json",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Missing permission: user.self:read." })
+                (
+                    "Last-Modified" = String,
+                    description = "Last user modification time. Use this value for caching."
+                )
+            )
         ),
         (
             status = 404,
             description = "The user no longer exists."
         ),
-        (
-            status = 500,
-            description = "Internal server error."
-        )
+        openapi::InternalErrorResponse,
+        openapi::UnmodifiedConditionalResponse,
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserSelfRead>,
     ),
     security(
         ("access_token" = [])

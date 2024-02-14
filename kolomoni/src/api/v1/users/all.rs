@@ -19,6 +19,19 @@ use crate::{
 
 /// List of registered users.
 #[derive(Serialize, Debug, ToSchema)]
+#[schema(title = "RegisteredUsersListResponse")]
+#[schema(example = json!({
+    "users": [
+        {
+            "id": 1,
+            "username": "janeznovak",
+            "display_name": "Janez Novak",
+            "joined_at": "2023-06-27T20:33:53.078789Z",
+            "last_modified_at": "2023-06-27T20:34:27.217273Z",
+            "last_active_at": "2023-06-27T20:34:27.253746Z"
+        },
+    ]
+}))]
 pub struct RegisteredUsersListResponse {
     pub users: Vec<UserInformation>,
 }
@@ -31,7 +44,7 @@ impl_json_response_builder!(RegisteredUsersListResponse);
 /// This endpoint returns a list of all registered users.
 ///
 ///
-/// # Required permissions
+/// # Permissions
 /// This endpoint requires the `users.any:read` permission.
 #[utoipa::path(
     get,
@@ -41,19 +54,7 @@ impl_json_response_builder!(RegisteredUsersListResponse);
         (
             status = 200,
             description = "List of registered users.",
-            body = inline(RegisteredUsersListResponse),
-            example = json!({
-                "users": [
-                    {
-                        "id": 1,
-                        "username": "janeznovak",
-                        "display_name": "Janez Novak",
-                        "joined_at": "2023-06-27T20:33:53.078789Z",
-                        "last_modified_at": "2023-06-27T20:34:27.217273Z",
-                        "last_active_at": "2023-06-27T20:34:27.253746Z"
-                    },
-                ]
-            }),
+            body = RegisteredUsersListResponse
         ),
         (
             status = 401,
@@ -75,13 +76,13 @@ impl_json_response_builder!(RegisteredUsersListResponse);
     )
 )]
 #[get("")]
-async fn get_all_registered_users(
+pub async fn get_all_registered_users(
     state: ApplicationState,
-    authentication_extractor: UserAuthenticationExtractor,
+    authentication: UserAuthenticationExtractor,
 ) -> EndpointResult {
-    // User must provide the authentication token and
+    // User must provide their authentication token and
     // have the `user.any:read` permission to access this endpoint.
-    let authenticated_user = require_authentication!(authentication_extractor);
+    let authenticated_user = require_authentication!(authentication);
     require_permission!(state, authenticated_user, Permission::UserAnyRead);
 
 

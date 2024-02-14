@@ -11,9 +11,17 @@ pub mod login;
 pub mod ping;
 pub mod users;
 
+use std::{collections::BTreeMap, marker::PhantomData};
+
 use actix_web::{web, Scope};
+use kolomoni_auth::Permission;
+use utoipa::{
+    openapi::{ContentBuilder, Ref, RefOr, ResponseBuilder, ResponsesBuilder},
+    ToSchema,
+};
 
 use self::{dictionary::dictionary_router, login::login_router, users::users_router};
+use super::errors::ErrorReasonResponse;
 
 
 /// Router for the entire V1 API.

@@ -4,14 +4,14 @@ use kolomoni_database::entities;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use self::all_users::get_all_registered_users;
-use self::current_user::{
+use self::all::get_all_registered_users;
+use self::current::{
     get_current_user_effective_permissions,
     get_current_user_info,
     update_current_user_display_name,
 };
-use self::register::register_user;
-use self::specific_user::{
+use self::registration::register_user;
+use self::specific::{
     // add_permissions_to_specific_user,
     add_roles_to_specific_user,
     get_specific_user_effective_permissions,
@@ -22,10 +22,10 @@ use self::specific_user::{
 };
 use crate::impl_json_response_builder;
 
-pub mod all_users;
-pub mod current_user;
-pub mod register;
-pub mod specific_user;
+pub mod all;
+pub mod current;
+pub mod registration;
+pub mod specific;
 
 
 
@@ -33,6 +33,14 @@ pub mod specific_user;
 ///
 /// This struct is used as part of a response in the public API.
 #[derive(Serialize, Debug, ToSchema)]
+#[schema(example = json!({
+    "id": 1,
+    "username": "janeznovak",
+    "display_name": "Janez Novak",
+    "joined_at": "2023-06-27T20:33:53.078789Z",
+    "last_modified_at": "2023-06-27T20:34:27.217273Z",
+    "last_active_at": "2023-06-27T20:34:27.253746Z"
+}))]
 pub struct UserInformation {
     /// Internal user ID.
     pub id: i32,
@@ -56,9 +64,6 @@ pub struct UserInformation {
 impl UserInformation {
     /// Convert a user database model into a [`UserInformation`]
     /// that can be safely exposed through the API.
-    ///
-    /// You may also use the less explicit `From<`[`user::Model`][entities::user::Model]`>`
-    /// implementation on [`UserInformation`] if you like.
     #[inline]
     pub fn from_user_model(model: entities::user::Model) -> Self {
         Self {
@@ -72,17 +77,21 @@ impl UserInformation {
     }
 }
 
-impl From<entities::user::Model> for UserInformation {
-    fn from(value: entities::user::Model) -> Self {
-        UserInformation::from_user_model(value)
-    }
-}
-
 
 /// Information about one user in particular.
 ///
 /// This struct is used as a response in the public API.
 #[derive(Serialize, Debug, ToSchema)]
+#[schema(example = json!({
+    "user": {
+        "id": 1,
+        "username": "janeznovak",
+        "display_name": "Janez Novak",
+        "joined_at": "2023-06-27T20:33:53.078789Z",
+        "last_modified_at": "2023-06-27T20:34:27.217273Z",
+        "last_active_at": "2023-06-27T20:34:27.253746Z"
+    }
+}))]
 pub struct UserInfoResponse {
     pub user: UserInformation,
 }
