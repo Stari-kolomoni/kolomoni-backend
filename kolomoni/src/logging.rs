@@ -1,3 +1,5 @@
+//! Logging-related code (via [`tracing`]).
+
 use std::path::Path;
 
 use miette::Result;

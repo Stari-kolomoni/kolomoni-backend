@@ -1,10 +1,12 @@
+//! The entire Stari Kolomoni API surface.
+//!
 //! # Development note
+//! We use "" instead of "/" in many places (e.g. `#[get("")`, etc.).
+//! This allows the user to request e.g. `GET /api/v1/users` **OR** `GET /api/v1/users/` and
+//! get the same (correct) endpoint both times.
 //!
-//! We use "" instead of "/" in many places (e.g. `#[get("")`, etc.)
-//! because this allows the user to request e.g. `GET /api/v1/users` OR `GET /api/v1/users/` and
-//! get the correct endpoint both times.
-//!
-//! For more information, see `actix_web::middleware::NormalizePath` (trim mode).
+//! For more information, see [`NormalizePath`][actix_web::middleware::NormalizePath]
+//! (in trim mode).
 
 pub mod dictionary;
 pub mod login;

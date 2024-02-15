@@ -9,6 +9,9 @@ use serde_with::serde_as;
 use serde_with::TimestampSeconds;
 use thiserror::Error;
 
+
+// TODO Consider making this dynamic (for example through an environment variable).
+
 /// JSON Web Token issuer.
 const JWT_ISSUER: &str = "Stari Kolomoni";
 
@@ -27,17 +30,25 @@ pub enum JWTValidationError {
     InvalidToken(String),
 }
 
-/// Type of one of our JSON Web Tokens.
+
+/// Type of one of our JSON Web Tokens, meaning either an access or a refresh token.
+///
+/// Access tokens can be used to authenticate on some API request,
+/// and refresh tokens can be used to obtain a new access token.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum JWTTokenType {
+    /// Access token.
     #[serde(rename = "access")]
     Access,
 
+    /// Refresh token.
     #[serde(rename = "refresh")]
     Refresh,
 }
 
-/// JSON Web Token data ("claims").
+
+/// JSON Web Token data (also called "claims").
+///
 /// Can be either an access token or a refresh token.
 ///
 /// More information:
@@ -102,11 +113,19 @@ impl JWTClaims {
     }
 }
 
-/// Central JSON Web Token manager (encoder and decoder).
+
+/// JSON Web Token manager --- encoder and decoder.
 pub struct JsonWebTokenManager {
+    /// Token header.
     header: Header,
+
+    /// JSON Web Token encoding key, derived from the provided secret.
     encoding_key: EncodingKey,
+
+    /// JSON Web Token decoding key, derived from the provided secret.
     decoding_key: DecodingKey,
+
+    /// A token subject and issuer validator.
     validation: Validation,
 }
 
@@ -122,7 +141,8 @@ impl JsonWebTokenManager {
         validation.set_issuer(&[JWT_ISSUER]);
         validation.sub = Some(JWT_SUBJECT.to_string());
 
-        // Disable "expiry" and "not before" validation, we'll do it ourselves (as we use `chrono`).
+        // Disable "expiry" and "not before" validation, we'll do it ourselves
+        // (we use `chrono`, which this doesn't support).
         validation.validate_exp = false;
         validation.validate_nbf = false;
 
@@ -134,14 +154,14 @@ impl JsonWebTokenManager {
         }
     }
 
-    /// Create (encode) a new token into a string.
+    /// Create (encode) a new token. Returns a string with the encoded content.
     pub fn create_token(&self, claims: JWTClaims) -> Result<String> {
         jsonwebtoken::encode(&self.header, &claims, &self.encoding_key)
             .into_diagnostic()
             .wrap_err("Failed to create JWT token.")
     }
 
-    /// Decode a token from a string.
+    /// Decode a JSON Web Token from a string.
     pub fn decode_token(&self, token: &str) -> Result<JWTClaims, JWTValidationError> {
         let token_data =
             jsonwebtoken::decode::<JWTClaims>(token, &self.decoding_key, &self.validation)

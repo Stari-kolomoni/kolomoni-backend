@@ -1,3 +1,5 @@
+//! Macros to avoid repeating code (JSON response builders, authentication-related macros).
+
 use actix_web::body::{BoxBody, MessageBody};
 use actix_web::http::header::{self, HeaderValue, InvalidHeaderValue};
 use actix_web::http::StatusCode;
@@ -9,6 +11,12 @@ use serde::Serialize;
 use super::errors::APIError;
 
 
+/// Given a `last_modification_time`, this function tries to construct
+/// a [`HeaderValue`] corresponding to the `Last-Modified` header name.
+///
+/// The reason this function exists is because the date and time format is a bit peculiar.
+///
+/// See [Last-Modified documentation on MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified).
 pub fn construct_last_modified_header_value(
     last_modification_time: &DateTime<Utc>,
 ) -> Result<HeaderValue, InvalidHeaderValue> {
@@ -18,13 +26,32 @@ pub fn construct_last_modified_header_value(
 
 
 
+/// A builder struct for a HTTP response with a JSON body.
+///
+/// Most commonly obtained by implementing [`IntoKolomoniResponseBuilder`] on
+/// a [`Serialize`]-implementing struct and calling
+/// [`into_response_builder`][IntoKolomoniResponseBuilder::into_response_builder] on it.
+/// **Use [`impl_json_response_builder`][crate::impl_json_response_builder]
+/// instead of manually implementing this trait.**
+///
+/// See documentation of [`impl_json_response_builder`][crate::impl_json_response_builder] for more info.
 pub struct KolomoniResponseBuilder {
+    /// Status code to respond with.
     status_code: StatusCode,
+
+    /// Serialized HTTP response body.
     body: String,
+
+    /// Additional headers to append to the HTTP response.
     additional_headers: http::header::HeaderMap,
 }
 
 impl KolomoniResponseBuilder {
+    /// Construct a new [`KolomoniResponseBuilder`] by providing
+    /// a [`Serialize`]-implementing `value` (e.g. a struct).
+    ///
+    /// The value will be serialized as JSON and prepared to be included
+    /// in the body of the HTTP response.
     pub fn new_json<S>(value: S) -> Result<Self>
     where
         S: Serialize,
@@ -46,6 +73,7 @@ impl KolomoniResponseBuilder {
         })
     }
 
+    /// Set the response status code. If not called, this will default to `200 OK`.
     #[allow(dead_code)]
     pub fn status_code(mut self, status_code: StatusCode) -> Self {
         self.status_code = status_code;
@@ -53,6 +81,9 @@ impl KolomoniResponseBuilder {
         self
     }
 
+    /// Set the `Last-Modified` HTTP response header to some date and time.
+    /// This has no default --- the header will not be included in the response
+    /// if this is not called.
     pub fn last_modified_at(mut self, last_modified_at: DateTime<Utc>) -> Result<Self, APIError> {
         // See <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified#directives>
         self.additional_headers.append(
@@ -65,6 +96,7 @@ impl KolomoniResponseBuilder {
         Ok(self)
     }
 
+    /// Build the [`HttpResponse`].
     pub fn build(self) -> HttpResponse<BoxBody> {
         self.into_response()
     }
@@ -90,6 +122,14 @@ impl ContextlessResponder for KolomoniResponseBuilder {
     }
 }
 
+/// A trait that allows a [`Serialize`]-implementing type
+/// to be serialized as JSON body and obtain a [`KolomoniResponseBuilder`]
+/// to further customize the response.
+///
+/// If you do not need further customization of the response and
+/// are instead satisfied with a simple `200 OK` with a JSON body,
+/// look at [`ContextlessResponder`] and the documentation provided in
+/// [`impl_json_response_builder`][crate::impl_json_response_builder].
 pub trait IntoKolomoniResponseBuilder: Serialize {
     fn into_response_builder(self) -> Result<KolomoniResponseBuilder, APIError>;
 }
@@ -103,7 +143,7 @@ pub trait IntoKolomoniResponseBuilder: Serialize {
 /// i.e. the response must be built without a request when using this trait.
 /// This can make the call signature more sensible in certain cases.
 ///
-/// See documentation for [`impl_json_responder`][crate::impl_json_responder] for reasoning.
+/// See documentation for [`impl_json_response_builder`][crate::impl_json_response_builder] for reasoning.
 pub trait ContextlessResponder {
     type Body: MessageBody + 'static;
 
@@ -113,6 +153,11 @@ pub trait ContextlessResponder {
 }
 
 
+/// Generates a simple HTTP `200 OK` response. The body
+/// will contain the `value` serialized as JSON.
+///
+/// If the value can not be serialized due to some error,
+/// an HTTP `500 Internal Server Error` is generated.
 pub fn generate_simple_http_ok_response<S>(value: S) -> HttpResponse<BoxBody>
 where
     S: Serialize,
@@ -140,7 +185,7 @@ where
 /// A macro that, given some struct type, implements the following two traits on it:
 /// - [`ContextlessResponder`], allowing you to make a struct instance and call
 ///   [`into_response`][ContextlessResponder::into_response] on it, turning it into a
-///   [`HttpResponse`][actix_web::HttpResponse] that just returns a `200 OK` with the struct serialized as JSON.
+///   [`HttpResponse`] that just returns a `200 OK` with the struct serialized as JSON.
 /// - [`IntoKolomoniResponseBuilder`], which is similar to [`ContextlessResponder`], but allows for more advanced operations
 ///   compared to above. As a user of a struct with this impl you need to call
 ///   [`.into_response_builder()`][IntoKolomoniResponseBuilder::into_response_builder] to get the builder.
@@ -249,7 +294,7 @@ macro_rules! impl_json_response_builder {
 /// with a given status code and a JSON body containing the `reason` field
 /// that describes the issue.
 ///
-/// The first argument must be the [`StatusCode`][actix_web::http::StatusCode]
+/// The first argument must be the [`StatusCode`]
 /// to use in the response.
 ///
 /// The second argument must be the value of the `reason` field to include.
@@ -300,7 +345,7 @@ macro_rules! error_response_with_reason {
 ///
 /// # Early-return values
 /// If there is no authentication provided in the request, this macro early-returns a
-/// `Err(`[`APIError::NotAuthenticated`][crate::api::errors::APIError::NotAuthenticated]`)`
+/// `Err(`[`APIError::NotAuthenticated`]`)`
 /// from the caller function. This results in a `401 Unauthorized` HTTP response,
 /// indicating to the API caller that authentication is required on the endpoint.
 ///
@@ -347,11 +392,11 @@ macro_rules! require_authentication {
 
 
 /// A macro that early-returns an
-/// `Err(`[`APIError::NotEnoughPermissions`][crate::api::errors::APIError::NotEnoughPermissions]`)`
+/// `Err(`[`APIError::NotEnoughPermissions`]`)`
 /// if the user doesn't have the required permission.
 ///
 /// The early return essentially generates a `403 Forbidden` with a JSON-encoded reason
-/// in the body of the response (see [`APIError`][crate::api::errors::APIError] for more information).
+/// in the body of the response (see [`APIError`] for more information).
 ///
 /// # Arguments and examples
 /// ## Variant 1 (three arguments, most common)

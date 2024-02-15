@@ -1,5 +1,5 @@
-//! This module defines commonly used OpenAPI parameters and responses
-//! to be used in conjunction with the [`utiopa::path`] proc macro on actix handlers.
+//! Defines commonly used OpenAPI parameters and responses
+//! to be used in conjunction with the [`utiopa::path`][utoipa::path] proc macro on actix handlers.
 
 use std::{collections::BTreeMap, marker::PhantomData};
 
@@ -19,13 +19,46 @@ use utoipa::{
 use super::errors::ErrorReasonResponse;
 
 
+/// A "required permission" trait.
 pub trait RequiredPermission {
     fn name() -> &'static str;
 }
 
+/// Given a variant name for [`Permission`], this macro will generate
+/// an empty struct with the name `RequiredPermissionNameHere`.
+///
+/// For example, calling `generate_standalone_requirement_struct!(UserSelfRead)`
+/// will result in the following code:
+///
+/// ```
+/// # use kolomoni::api::openapi::RequiredPermission;
+/// # use kolomoni_auth::Permission;
+/// pub struct RequiresUserSelfRead;
+/// impl RequiredPermission for RequiresUserSelfRead {
+///     fn name() -> &'static str {
+///         Permission::UserSelfRead.name()
+///     }
+/// }
+/// ```
 macro_rules! generate_standalone_requirement_struct {
     ($permission_variant:ident) => {
         ::paste::paste! {
+            #[doc = concat!(
+                "Corresponds to the [`Permission::",
+                stringify!($permission_variant),
+                "`][kolomoni_auth::Permission::",
+                stringify!($permission_variant),
+                "] permission.")
+            ]
+            #[doc =
+                "Use in conjunction with [`FailedAuthenticationResponses`][crate::api::openapi::FailedAuthenticationResponses] \
+                to indicate that the permission is required."
+            ]
+            #[doc = ""]
+            #[doc =
+                "See documentation on [`FailedAuthenticationResponses`][crate::api::openapi::FailedAuthenticationResponses] \
+                for more information on usage."
+            ]
             pub struct [< Requires $permission_variant >];
             impl RequiredPermission for [< Requires $permission_variant >] {
                 fn name() -> &'static str {
@@ -36,15 +69,8 @@ macro_rules! generate_standalone_requirement_struct {
     };
 }
 
-// The generated structs and implementations look like the following:
-//
-// pub struct RequiresUserSelfRead;
-// impl RequiredPermission for RequiresUserSelfRead {
-//     fn name() -> &'static str {
-//         Permission::UserSelfRead.name()
-//     }
-// }
-//
+// The macro calls below generate empty structs for all available permissions,
+// making them usable as a parameter for the [`FailedAuthenticationResponses`] generic.
 
 generate_standalone_requirement_struct!(UserSelfRead);
 generate_standalone_requirement_struct!(UserSelfWrite);
@@ -57,6 +83,79 @@ generate_standalone_requirement_struct!(WordDelete);
 
 
 
+/// A `utoipa` response for when an endpoint requires authentication and some permission.
+///
+/// Specifying [`FailedAuthenticationResponses`]`<`[`RequiresUserSelfRead`]`>` semantically means that:
+/// - Your endpoint function requires the user to provide an authentication token in the request,
+///   and that it will return a `401 Unauthorized` response if not.
+/// - Your endpoint function requires the user to have the `user.self:read` permission,
+///   and that it will return a `403 Forbidden` response if not.
+///
+/// **It is, however, up to your function to ensure this happens. Adding this annotation only means
+/// that the above will appear in the OpenAPI documentation.**
+///
+///
+/// </br>
+///
+/// # Example
+/// ```no_run
+/// use actix_web::get;
+/// use kolomoni::api::openapi;
+/// use kolomoni::api::errors::EndpointResult;
+///
+/// #[utoipa::path(
+///     get,
+///     path = "/hello-world",
+///     responses(
+///         openapi::FailedAuthenticationResponses<openapi::RequiresUserSelfRead>
+///     )
+/// )]
+/// #[get("/hello-world")]
+/// pub async fn some_endpoint_function() -> EndpointResult {
+///     // This route requires the `user.self:read` permission
+///     // (which means it also requires authentication in general)!
+///
+///     // ... and so on ...
+///     # todo!();
+/// }
+/// ```
+///
+/// The above is basically equivalent to specifying the following manual responses:
+///
+/// ```no_run
+/// # use actix_web::get;
+/// # use kolomoni::api::openapi;
+/// # use kolomoni::api::errors::{EndpointResult, ErrorReasonResponse};
+/// #[utoipa::path(
+///     get,
+///     path = "/hello-world",
+///     responses(
+///         (
+///             status = 401,
+///             description = "Missing authentication. Include an `Authorization: Bearer <token>` \
+///                            header with your request to access this endpoint."
+///         ),
+///         (
+///             status = 403,
+///             description = "Missing the `user.self:read` permission.",
+///             content_type = "application/json",
+///             body = ErrorReasonResponse,
+///             example = json!({ "reason": "Missing permission: user.self:read." })
+///         ),
+///     )
+/// )]
+/// #[get("/hello-world")]
+/// pub async fn some_endpoint_function() -> EndpointResult {
+///     // This route requires the `user.self:read` permission
+///     // (which means it also requires authentication in general)!
+///
+///     // ... and so on ...
+///     # todo!();
+/// }
+/// ```
+///
+/// [FailedAuthenticationResponses]: crate::api::openapi::FailedAuthenticationResponses
+/// [RequiresUserSelfRead]: crate::api::openapi::RequiresUserSelfRead
 pub struct FailedAuthenticationResponses<P: RequiredPermission> {
     _marker: PhantomData<P>,
 }
@@ -106,14 +205,105 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
 }
 
 
-
+/// A `utoipa` response for when an endpoint may return
+/// a `304 Not Modified` HTTP response indicating that the resource did not change.
+///
+/// **However: as with all other structures in this module it is fully up to
+/// your function to ensure this can happen. Adding this annotation only means
+/// that the above will appear in the OpenAPI documentation.**
+///
+/// # Example
+/// ```
+/// use actix_web::{get, http::{header, StatusCode}};
+/// use actix_web::HttpResponse;
+/// use chrono::Utc;
+/// use miette::IntoDiagnostic;
+/// use kolomoni::api::openapi;
+/// use kolomoni::api::errors::{
+///     APIError,
+///     EndpointResult,
+///     ErrorReasonResponse
+/// };
+/// use kolomoni::api::macros::construct_last_modified_header_value;
+///
+/// #[utoipa::path(
+///     get,
+///     path = "/hello-world",
+///     responses(
+///         openapi::UnmodifiedConditionalResponse,
+///     )
+/// )]
+/// #[get("/hello-world")]
+/// pub async fn some_endpoint_function() -> EndpointResult {
+///     # let unmodified = false;
+///     # let some_modification_time = Utc::now();
+///     if unmodified {
+///         let mut response = HttpResponse::new(StatusCode::NOT_MODIFIED);
+///         
+///         response.headers_mut().append(
+///             header::LAST_MODIFIED,
+///             construct_last_modified_header_value(&some_modification_time)
+///                 .into_diagnostic()
+///                 .map_err(APIError::InternalError)?
+///         );
+///
+///         return Ok(response);
+///     }
+///
+///     // ... and so on ...
+///     # todo!();
+/// }
+/// ```
+///
+/// The above is basically equivalent to specifying the following manual responses:
+///
+/// ```
+/// # use actix_web::{get, http::{header, StatusCode}};
+/// # use actix_web::HttpResponse;
+/// # use chrono::Utc;
+/// # use miette::IntoDiagnostic;
+/// # use kolomoni::api::openapi;
+/// # use kolomoni::api::errors::{
+/// #     APIError,
+/// #     EndpointResult,
+/// #     ErrorReasonResponse
+/// # };
+/// # use kolomoni::api::macros::construct_last_modified_header_value;
+///
+/// #[utoipa::path(
+///     get,
+///     path = "/hello-world",
+///     responses(
+///         (
+///             status = 304,
+///             description =
+///                 "Resource hasn't been modified since the timestamp specified \
+///                 in the `If-Modified-Since` header. As such, this status code \
+///                 can only be returned if that header is provided in the request."
+///         ),
+///     )
+/// )]
+/// #[get("/hello-world")]
+/// pub async fn some_endpoint_function() -> EndpointResult {
+///     # let unmodified = false;
+///     # let some_modification_time = Utc::now();
+///     if unmodified {
+///         // ...
+///         # todo!();
+///     }
+///
+///     // ... and so on ...
+///     # todo!();
+/// }
+/// ```
+///
 pub struct UnmodifiedConditionalResponse;
 
 impl utoipa::IntoResponses for UnmodifiedConditionalResponse {
     fn responses() -> BTreeMap<String, utoipa::openapi::RefOr<utoipa::openapi::response::Response>> {
         let unmodified_data_response = ResponseBuilder::new()
             .description(
-                "User hasn't been modified since the timestamp specified in the `If-Modified-Since` header. \
+                "Resource hasn't been modified since the timestamp specified in the `If-Modified-Since` header. \
                 As such, this status code can only be returned if that header is provided in the request."
             )
             .build();

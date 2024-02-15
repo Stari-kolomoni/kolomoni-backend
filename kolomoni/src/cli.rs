@@ -1,3 +1,5 @@
+//! Command-line interface definitions for the server binary.
+
 use std::path::PathBuf;
 
 use clap::Parser;

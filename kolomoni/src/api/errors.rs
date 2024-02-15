@@ -1,3 +1,7 @@
+//! Provides ways of handling errors in API endpoint functions
+//! and ways to have those errors automatically turned into correct
+//! HTTP error responses when returned as `Err(error)` from those functions.
+
 use std::fmt::{Display, Formatter};
 
 use actix_web::body::BoxBody;

@@ -4,9 +4,17 @@ use miette::{miette, Result};
 use serde::{Deserialize, Serialize};
 
 
-/// User permissions that we have (inspired by the scope system in OAuth).
+/// Permissions that we have (inspired by the scope system in OAuth).
 ///
-/// **The defined permissions must match with the `*_seed_permissions.rs` file in `migrations`!**
+/// **Note that permissions can be assigned to roles, not users.**
+/// If you wish to assign certain permissions to a user, assign them
+/// a matching role instead.
+///
+/// See also [`Role`][super::roles::Role].
+///
+/// # Maintenance
+/// **The defined permissions must match with the `*_seed_permissions.rs` file
+/// in `kolomoni_migrations`!**
 #[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Permission {
     /// Allows the user to log in and view their account information.
@@ -128,22 +136,23 @@ impl Permission {
 pub const BLANKET_ANY_USER_PERMISSION_GRANT: [Permission; 2] =
     [Permission::WordRead, Permission::UserAnyRead];
 
-/// Set of permissions for a specific user.
-///
-/// Not to be confused with `kolomoni_database::entities::UserPermission`,
-/// which is a raw database entity.
+
+
+/// Set of permissions, usually associated with some user.
 pub struct PermissionSet {
-    /// Permission set.
+    /// Set of permissions.
     permissions: HashSet<Permission>,
 }
 
 impl PermissionSet {
+    /// Initialize an empty permission set.
     pub fn new_empty() -> Self {
         Self {
             permissions: HashSet::with_capacity(0),
         }
     }
 
+    /// Initialize a permission set from a [`HashSet`] of [`Permission`]s.
     pub fn from_permission_set(permission_set: HashSet<Permission>) -> Self {
         Self {
             permissions: permission_set,
@@ -172,6 +181,10 @@ impl PermissionSet {
     }
 
     /// Returns `true` if the user has the specified permission, `false` otherwise.
+    ///
+    /// This will also check the blanket permission grant (see `BLANKET_ANY_USER_PERMISSION_GRANT`)
+    /// and return `true` regardless of the user's effective permissions (if the required permission
+    /// has a blanket grant).
     pub fn has_permission(&self, permission: Permission) -> bool {
         if BLANKET_ANY_USER_PERMISSION_GRANT.contains(&permission) {
             return true;
@@ -184,16 +197,17 @@ impl PermissionSet {
         false
     }
 
+    /// Consumes the [`PermissionSet`] and returns a raw [`HashSet`] of [`Permission`]s.
     pub fn into_permissions(self) -> HashSet<Permission> {
         self.permissions
     }
 
-    /// Returns a set of permissions the associated user effectively has.
+    /// Returns a reference to the set of permissions.
     pub fn permissions(&self) -> &HashSet<Permission> {
         &self.permissions
     }
 
-    /// Returns a `Vec` of permission names the associated user effectively has.
+    /// Returns a `Vec` of permission names.
     pub fn permission_names(&self) -> Vec<&'static str> {
         self.permissions
             .iter()

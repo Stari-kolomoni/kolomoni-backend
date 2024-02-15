@@ -1,3 +1,5 @@
+//! Authentication-related code.
+
 use actix_utils::future;
 use actix_utils::future::Ready;
 use actix_web::dev::Payload;
@@ -15,36 +17,36 @@ use tracing::{debug, error, info};
 use crate::state::ApplicationStateInner;
 
 
-/// User authentication state (actix extractor).
+/// User authentication extractor.
+///
 /// **Holding this struct doesn't automatically mean the user is authenticated!**
 ///
-/// ## Usage with Actix
-/// To easily extract authentication and permission data on an endpoint handler,
-/// `UserAuth` is in reality an [Actix extractor](https://actix.rs/docs/extractors).
+/// # Usage with Actix
+/// To easily extract authentication data on an endpoint function,
+/// [`UserAuthenticationExtractor`] is actually an [Actix extractor](https://actix.rs/docs/extractors).
 ///
-/// To use it, simply add a `user_auth: `[`UserAuth`] parameter to your endpoint handler.
+/// To use it, simply add a `authentication: `[`UserAuthenticationExtractor`] parameter
+/// to your endpoint function parameters.
 ///
-/// FIXME The documentation below this is outdated, update.
+/// Then, inside the handler body, you can all e.g. [`UserAuthenticationExtractor::authenticated_user`]
+/// to get an `Option<`[`AuthenticatedUser`]`>`. In reality, you may want to use the
+/// [`require_authentication`][crate::require_authentication] macro that directly returns
+/// an [`AuthenticatedUser`], early-returning from the function with a `401 Unauthorized`
+/// if the caller did not provide authentication.
 ///
-/// Inside the handler body, you can then call any of e.g.
-/// [`Self::token_if_authenticated`], [`Self::permissions_if_authenticated`]
-/// or [`Self::token_and_permissions_if_authenticated`] that all return `Option`s and the requested
-/// information, depending on your use-case.
-///
-/// Even better, use the following macros to further reduce boilerplate code:
-/// - [`require_authentication`][crate::require_authentication] --- ensures the user is authenticated
-///   and looks up the user's permissions, and
-/// - [`require_permission`][crate::require_permission] --- ensures the user holds a specific permission.
-///
-/// See their documentation for more information and examples.
-///
-/// Note that getting permissions requires a database lookup.
+/// See documentation of [`require_authentication`][crate::require_authentication]
+/// for usage examples.
 pub enum UserAuthenticationExtractor {
+    /// No user authentication provided.
     Unauthenticated,
+
+    /// Valid JWT token provided as authentication.
     Authenticated { token: JWTClaims },
 }
 
 impl UserAuthenticationExtractor {
+    /// Returns an `Some(`[`AuthenticatedUser`]`)` if the API caller
+    /// provided a JWT authentication token with the request.
     pub fn authenticated_user(&self) -> Option<AuthenticatedUser> {
         match self {
             UserAuthenticationExtractor::Unauthenticated => None,
@@ -129,27 +131,36 @@ impl FromRequest for UserAuthenticationExtractor {
 
 
 
+/// An authenticated user with a valid JWT token.
 pub struct AuthenticatedUser {
     token: JWTClaims,
 }
 
 impl AuthenticatedUser {
+    /// Returns the date and time the user's access token was created,
+    /// i.e. when the user logged in.
     #[allow(dead_code)]
     pub fn logged_in_at(&self) -> &DateTime<Utc> {
         &self.token.iat
     }
 
+    /// Returns the date and time the user's access token will expire.
     #[allow(dead_code)]
     pub fn login_expires_at(&self) -> &DateTime<Utc> {
         &self.token.exp
     }
 
+    /// Returns the ID of the user who owns the token.
     pub fn user_id(&self) -> i32 {
         self.token.user_id
     }
 
-    /// Returns a permission set of this user.
-    /// This requires one round-trip to the database.
+    /// Returns a list of permissions this user effectively has.
+    /// The permissions are computed by doing a union of all permissions
+    /// for each role the user has (since standalone permissions don't exist,
+    /// only in combination with roles).
+    ///
+    /// This operation performs a database lookup.
     ///
     /// Prefer using [`Self::has_permission`] if you'll be checking for a single permission,
     /// and this method if you're checking for multiple or doing advanced permission logic.
@@ -163,6 +174,8 @@ impl AuthenticatedUser {
     }
 
     /// Returns a boolean indicating whether the authenticated user has the provided permission.
+    ///
+    /// This operation performs a database lookup.
     pub async fn has_permission<C: ConnectionTrait>(
         &self,
         database: &C,
@@ -177,6 +190,9 @@ impl AuthenticatedUser {
             .wrap_err("Could not query whether the user has a specific permission.")
     }
 
+    /// Returns a list of roles the user has.
+    ///
+    /// This operation performs a database lookup.
     pub async fn roles<C: ConnectionTrait>(&self, database: &C) -> Result<RoleSet> {
         let role_set = UserRoleQuery::user_roles(database, self.token.user_id)
             .await

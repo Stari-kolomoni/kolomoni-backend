@@ -1,3 +1,5 @@
+//! API definitions and annotations for Stari Kolomoni.
+
 use actix_utils::future::{self, Ready};
 use actix_web::{http::header, web, FromRequest, HttpRequest, Scope};
 use chrono::{DateTime, SubsecRound, Utc};
