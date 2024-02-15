@@ -81,7 +81,7 @@ use crate::{
 pub async fn get_current_user_info(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    modified_since_conditional: OptionalIfModifiedSince,
+    if_modified_since: OptionalIfModifiedSince,
 ) -> EndpointResult {
     // User must provide an authentication token and
     // have the `user.self:read` permission to access this endpoint.
@@ -102,7 +102,7 @@ pub async fn get_current_user_info(
 
     let last_modification_time = user.last_modified_at.to_utc();
 
-    if modified_since_conditional.is_unchanged(&last_modification_time) {
+    if if_modified_since.has_not_changed_since(&last_modification_time) {
         let mut unchanged_response = HttpResponse::new(StatusCode::NOT_MODIFIED);
 
         unchanged_response.headers_mut().append(

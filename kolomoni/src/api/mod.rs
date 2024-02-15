@@ -28,7 +28,7 @@ impl OptionalIfModifiedSince {
     }
 
     #[inline]
-    pub fn is_unchanged(&self, real_last_modification_time: &DateTime<Utc>) -> bool {
+    pub fn has_not_changed_since(&self, real_last_modification_time: &DateTime<Utc>) -> bool {
         match self {
             OptionalIfModifiedSince::Unspecified => false,
             OptionalIfModifiedSince::Specified(user_provided_conditional_time) => {

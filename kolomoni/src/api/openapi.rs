@@ -20,6 +20,7 @@ use super::errors::ErrorReasonResponse;
 
 
 /// A "required permission" trait.
+/// Relates to [`FailedAuthenticationResponses`].
 pub trait RequiredPermission {
     fn name() -> &'static str;
 }
@@ -83,7 +84,7 @@ generate_standalone_requirement_struct!(WordDelete);
 
 
 
-/// A `utoipa` response for when an endpoint requires authentication and some permission.
+/// A `utoipa` endpoint response for when an endpoint requires authentication and some permission.
 ///
 /// Specifying [`FailedAuthenticationResponses`]`<`[`RequiresUserSelfRead`]`>` semantically means that:
 /// - Your endpoint function requires the user to provide an authentication token in the request,
@@ -205,7 +206,7 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
 }
 
 
-/// A `utoipa` response for when an endpoint may return
+/// A `utoipa` endpoint response for when an endpoint may return
 /// a `304 Not Modified` HTTP response indicating that the resource did not change.
 ///
 /// **However: as with all other structures in this module it is fully up to
@@ -317,6 +318,58 @@ impl utoipa::IntoResponses for UnmodifiedConditionalResponse {
 
 
 
+/// A `utoipa` endpoint response for when and endpoint may return a `500 Internal Server Error` HTTP response
+/// indicating that something went wrong internally.
+///
+/// This should be present on basically all routes, as even most extractors
+/// can cause this to happen.
+///
+/// # Example
+/// ```
+/// use actix_web::get;
+/// use actix_web::HttpResponse;
+/// use kolomoni::state::ApplicationState;
+/// use kolomoni::api::openapi;
+/// use kolomoni::api::errors::{APIError, EndpointResult};
+/// use kolomoni_database::query::UserQuery;
+///
+/// #[utoipa::path(
+///     get,
+///     path = "/hello-world",
+///     responses(
+///         (
+///             status = 404,
+///             description = "The user could not be found."
+///         ),
+///         openapi::InternalServerErrorResponse,
+///     )
+/// )]
+/// #[get("/hello-world")]
+/// pub async fn some_endpoint_function(
+///     state: ApplicationState,
+/// ) -> EndpointResult {
+///     # let user_id: i32 = 1;
+///     let user_data = UserQuery::get_user_by_id(
+///         &state.database,
+///         user_id
+///     )
+///         .await
+///         .map_err(APIError::InternalError)?
+///     //           ^^^^^^^^^^^^^^^^^^^^^^^
+///     // The query above can cause a database error, which we map
+///     // into an `APIError::InternalError`. When this error is
+///     // returned, the error is automatically converted into
+///     // a `500 Internal Server Error` response.
+///     //
+///     // As such, we can annotate our endpoint with `InternalServerErrorResponse`
+///     // like this is done above to make the OpenAPI schema correctly list
+///     // it as a possible response.
+///         .ok_or_else(APIError::not_found)?;
+///
+///     // ... and so on
+///     # todo!();
+/// }
+/// ```
 pub struct InternalServerErrorResponse;
 
 impl utoipa::IntoResponses for InternalServerErrorResponse {
@@ -334,6 +387,64 @@ impl utoipa::IntoResponses for InternalServerErrorResponse {
 
 
 
+/// A `utoipa` endpoint parameter for when an endpoint supports specifying
+/// the [`If-Modified-Since` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Modified-Since).
+///
+/// For a real-life example, see the [`get_current_user_info`][crate::api::v1::users::current::get_current_user_info]
+/// endpoint function.
+///
+/// # Example
+/// This example uses the `If-Modified-Since` extractor, see
+/// [`OptionalIfModifiedSince`][kolomoni::api::OptionalIfModifiedSince]
+/// for more info.
+///
+/// ```
+/// use miette::IntoDiagnostic;
+/// use actix_web::{get, http::{StatusCode, header}};
+/// use actix_web::HttpResponse;
+/// use kolomoni::state::ApplicationState;
+/// use kolomoni::api::OptionalIfModifiedSince;
+/// use kolomoni::api::openapi;
+/// use kolomoni::api::errors::{APIError, EndpointResult};
+/// use kolomoni::api::macros::construct_last_modified_header_value;
+///
+/// #[utoipa::path(
+///     get,
+///     path = "/hello-world",
+///     params(
+///         openapi::IfModifiedSinceParameter,
+///     ),
+///     responses(
+///         openapi::InternalServerErrorResponse,
+///     )
+/// )]
+/// #[get("/hello-world")]
+/// pub async fn some_endpoint_function(
+///     state: ApplicationState,
+///     if_modified_since: OptionalIfModifiedSince,
+/// ) -> EndpointResult {
+///     # let last_modification_time = chrono::Utc::now();
+///     // ...
+///
+///     if if_modified_since.has_not_changed_since(&last_modification_time) {
+///         let mut unchanged_response = HttpResponse::new(StatusCode::NOT_MODIFIED);
+///
+///         unchanged_response
+///             .headers_mut()
+///             .append(
+///                 header::LAST_MODIFIED,
+///                 construct_last_modified_header_value(&last_modification_time)
+///                     .into_diagnostic()
+///                     .map_err(APIError::InternalError)?,
+///             );
+///         
+///         return Ok(unchanged_response);
+///     }
+///
+///     // ... and so on
+///     # todo!();
+/// }
+/// ```
 pub struct IfModifiedSinceParameter;
 
 impl utoipa::IntoParams for IfModifiedSinceParameter {
