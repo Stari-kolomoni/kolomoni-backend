@@ -485,6 +485,12 @@ impl_json_response_builder!(UpdatedUserRolesResponse);
                 ))
             )
         ),
+        (
+            status = 404,
+            description = "The specified user does not exist.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "The specified user does not exist." })
+        ),
         openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
         openapi::InternalServerErrorResponse,
     ),
@@ -564,13 +570,25 @@ pub async fn add_roles_to_specific_user(
     }
 
 
-    let updated_role_set = mutation::UserRoleMutation::add_roles_to_user(
-        &state.database,
-        target_user_id,
-        &roles_to_add,
-    )
-    .await
-    .map_err(APIError::InternalError)?;
+    let user_exists = query::UserQuery::user_exists_by_user_id(&state.database, target_user_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    if !user_exists {
+        return Err(APIError::not_found_with_reason(
+            "The specified user does not exist.",
+        ));
+    }
+
+
+    mutation::UserRoleMutation::add_roles_to_user(&state.database, target_user_id, &roles_to_add)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    let updated_role_set = query::UserRoleQuery::user_roles(&state.database, target_user_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
 
     Ok(UpdatedUserRolesResponse {
         roles: updated_role_set.role_names(),
@@ -631,6 +649,12 @@ pub struct UserRoleRemoveRequest {
                     value = json!({ "reason": "Can't modify your own account on this endpoint." })
                 ))
             )
+        ),
+        (
+            status = 404,
+            description = "The specified user does not exist.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "The specified user does not exist." })
         ),
         openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
         openapi::InternalServerErrorResponse,
@@ -710,13 +734,30 @@ pub async fn remove_roles_from_specific_user(
         }
     }
 
-    let updated_role_set = mutation::UserRoleMutation::remove_roles_from_user(
+
+    let user_exists = query::UserQuery::user_exists_by_user_id(&state.database, target_user_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    if !user_exists {
+        return Err(APIError::not_found_with_reason(
+            "The specified user does not exist.",
+        ));
+    }
+
+
+    mutation::UserRoleMutation::remove_roles_from_user(
         &state.database,
         target_user_id,
         &roles_to_remove,
     )
     .await
     .map_err(APIError::InternalError)?;
+
+    let updated_role_set = query::UserRoleQuery::user_roles(&state.database, target_user_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
 
     Ok(UpdatedUserRolesResponse {
         roles: updated_role_set.role_names(),
