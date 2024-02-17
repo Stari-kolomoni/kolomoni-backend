@@ -46,8 +46,17 @@ async fn main() -> Result<()> {
 
     // Load configuration.
     let configuration = match arguments.configuration_file_path.as_ref() {
-        Some(path) => Configuration::load_from_path(path),
-        None => Configuration::load_from_default_path(),
+        Some(path) => {
+            println!(
+                "Loading configuration: {}",
+                arguments.configuration_file_path
+            );
+            Configuration::load_from_path(path)
+        }
+        None => {
+            println!("Loading configuration at default path.");
+            Configuration::load_from_default_path()
+        }
     }
     .with_context(|| "Failed to load configuration file.")?;
 

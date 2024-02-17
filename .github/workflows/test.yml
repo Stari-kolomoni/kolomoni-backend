@@ -57,7 +57,8 @@ jobs:
       - name: "Initialize API server"
         run: |
           mkdir -p logs
-          nohup cargo run --verbose --release --features with_test_facilities > logs/server.log 2>&1 &
+          nohup cargo run --verbose --release --features with_test_facilities \
+            -- --configurationFilePath ./kolomoni_test_assets/configuration.TESTING.toml > logs/server.log 2>&1 &
           echo $! > server.pid
       - name: "Run end-to-end tests"
         env:
@@ -75,7 +76,7 @@ jobs:
         run: |
           SERVER_PID=$(<server.pid)
           echo "Killing API server with PID $SERVER_PID."
-          kill --signal SIGTERM "$SERVER_PID"
+          kill -s SIGTERM "$SERVER_PID"
           echo "API server killed."
       - name: "Stop PostgreSQL database"
         if: ${{ always() }}
