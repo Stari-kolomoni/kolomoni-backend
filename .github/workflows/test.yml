@@ -60,6 +60,8 @@ jobs:
           nohup cargo run --verbose --release --features with_test_facilities \
             -- --configurationFilePath ./kolomoni_test_assets/configuration.TESTING.toml > logs/server.log 2>&1 &
           echo $! > server.pid
+      - name: "Build end-to-end tests"
+        run: cd kolomoni_test && cargo test --no-run
       - name: "Run end-to-end tests"
         env:
           TEST_API_SERVER_URL: "http://127.0.0.1:8866"
