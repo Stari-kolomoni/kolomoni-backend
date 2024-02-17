@@ -59,6 +59,7 @@ jobs:
       - name: "Compile and start API server"
         timeout-minutes: 60
         run: |
+          set -e
           echo "Creating log directory."
           mkdir -p logs
           
@@ -80,6 +81,8 @@ jobs:
           echo "File ./logs/server.log exists, waiting until server is ready."
           while true
           do
+            echo "Checking readiness..."
+
             (tail -n100 ./logs/server.log | grep -q "server initialized and running")
             if [ $? -eq 0 ]
             then
@@ -94,7 +97,7 @@ jobs:
               exit 1
             fi
 
-            sleep 4
+            sleep 5
           done
       - name: "Run end-to-end tests"
         env:
