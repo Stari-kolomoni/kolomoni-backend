@@ -1,0 +1,54 @@
+name: "Run backend tests"
+
+on:
+  push:
+    branches:
+      - "master"
+  workflow_dispatch: 
+
+jobs:
+  run-unit-tests:
+    runs-on: ["self-hosted"]
+    name: "Run doc- and unit tests"
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4.1.1
+      - name: "Install stable Rust"
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - name: "Run unit tests"
+        # Excludes the end-to-end testing crate (tested separately).
+        # This one also doesn't execute doctests due to --all-targets.
+        run: cargo test --workspace --exclude kolomoni_test --all-features --all-targets --verbose
+      - name: "Run doctests"
+        # Excludes the end-to-end testing crate (tested separately).
+        run: cargo test --workspace --exclude kolomoni_test --all-features --doc --verbose
+  run-end-to-end-tests:
+    runs-on: ["self-hoted"]
+    name: "Run end-to-end tests"
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4.1.1
+      - name: "Install stable Rust"
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - name: "Initialize PostgreSQL database"
+        run: |
+          docker run --name kolomoni-e2e-test-database --expose 5432 \
+            --env POSTGRES_PASSWORD=postgres --env POSTGRES_USER=postgres \
+            --env POSTGRES_HOST_AUTH_METHOD=trust --env POSTGRES_DB=kolomoni \
+            -v ./kolomoni_test/assets/postgres-initialization-script.sh:/docker-entrypoint-initdb.d/postgres-initialization-script.sh \
+            --rm --detach postgres:16.2-alpine
+      - name: "Initialize API server"
+        run: cargo build --release --features with_test_facilities && cargo run --release --features with_test_facilities &
+      - name: "Run end-to-end tests"
+        env:
+          TEST_API_SERVER_URL: "http://127.0.0.1:8866"
+        run: cd kolomoni_test && cargo test --jobs 1
+      - name: "Stop API server"
+        # Kills the most recent background task.
+        run: kill %%
+      - name: "Stop PostgreSQL database"
+        run: docker stop kolomoni-e2e-test-database
