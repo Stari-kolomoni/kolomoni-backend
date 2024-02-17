@@ -95,7 +95,7 @@ jobs:
             fi
 
             sleep 4
-          end
+          done
       - name: "Run end-to-end tests"
         env:
           TEST_API_SERVER_URL: "http://127.0.0.1:8866"
