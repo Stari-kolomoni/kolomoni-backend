@@ -55,7 +55,10 @@ jobs:
       - name: "Build API server"
         run: cargo build --release --features with_test_facilities --verbose
       - name: "Initialize API server"
-        run: cargo run --verbose --release --features with_test_facilities &
+        run: |
+          mkdir -p logs
+          nohup cargo run --verbose --release --features with_test_facilities > logs/server.log 2>&1 &
+          echo $! > server.pid
       - name: "Run end-to-end tests"
         env:
           TEST_API_SERVER_URL: "http://127.0.0.1:8866"
@@ -63,14 +66,20 @@ jobs:
       - name: "Output API server log"
         if: ${{ always() }}
         run: |
-          if [ -d "logs" ]; then
-            echo "Logs directory exists, echoing logs."
-            find . -type f -exec cat {} +
-          fi
+          echo "-- server log START --"
+          cat ./logs/server.log
+          echo "-- server log END --"
       - name: "Stop API server"
         # Kills the most recent background task.
         if: ${{ always() }}
-        run: kill %%
+        run: |
+          SERVER_PID=$(<server.pid)
+          echo "Killing API server with PID $SERVER_PID."
+          kill --signal SIGTERM "$SERVER_PID"
+          echo "API server killed."
       - name: "Stop PostgreSQL database"
         if: ${{ always() }}
-        run: docker stop kolomoni-e2e-test-database
+        run: |
+          echo "Stopping PostgreSQL database container."
+          docker stop kolomoni-e2e-test-database
+          echo "PostgreSQL database container stopped."
