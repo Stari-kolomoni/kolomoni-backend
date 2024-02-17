@@ -12,7 +12,9 @@ jobs:
     name: "Run doc and unit tests"
     steps:
       - name: "Set up required tools"
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
+        run: |
+          sudo apt-get update \
+            && sudo apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
       - name: "Checkout repository"
         uses: actions/checkout@v4.1.1
       - name: "Install stable Rust"
@@ -21,21 +23,21 @@ jobs:
           toolchain: stable
       - name: Cache
         uses: Swatinem/rust-cache@v2
-      - name: "Compile tests"
-        run: cargo test --workspace --exclude kolomoni_test --verbose --no-run
       - name: "Run unit tests"
         # Excludes the end-to-end testing crate (tested separately).
         # This one also doesn't execute doctests due to --all-targets.
-        run: cargo test --workspace --exclude kolomoni_test --all-features --all-targets --verbose
+        run: cargo test --verbose --workspace --exclude kolomoni_test --all-features --all-targets
       - name: "Run doctests"
         # Excludes the end-to-end testing crate (tested separately).
-        run: cargo test --workspace --exclude kolomoni_test --all-features --doc --verbose
+        run: cargo test --verbose --workspace --exclude kolomoni_test --all-features --doc
   run-end-to-end-tests:
     runs-on: "self-hosted"
     name: "Run end-to-end tests"
     steps:
       - name: "Set up required tools"
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
+        run: |
+          sudo apt-get update \
+            && sudo apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
       - name: "Checkout repository"
         uses: actions/checkout@v4.1.1
       - name: "Install stable Rust"
@@ -46,43 +48,51 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: "Initialize PostgreSQL database"
         run: |
-          docker stop kolomoni-e2e-test-database || true
+          docker stop --time 30 kolomoni-e2e-test-database || true
+          docker rm --volumes kolomoni-e2e-test-database || true
           docker run --name kolomoni-e2e-test-database --expose 5432 \
             --env POSTGRES_PASSWORD=postgres --env POSTGRES_USER=postgres \
             --env POSTGRES_HOST_AUTH_METHOD=trust --env POSTGRES_DB=kolomoni \
             -v ./kolomoni_test/assets/postgres-initialization-script.sh:/docker-entrypoint-initdb.d/postgres-initialization-script.sh \
             --rm --detach postgres:16.2-alpine
-      - name: "Build API server"
-        run: cargo build --release --features with_test_facilities --verbose
-      - name: "Initialize API server"
+      - name: "Compile and start API server"
         run: |
+          echo "Creating log directory."
           mkdir -p logs
+          
+          echo "Compiling and running server in the background."
           nohup cargo run --verbose --release --features with_test_facilities \
-            -- --configurationFilePath ./kolomoni_test_assets/configuration.TESTING.toml > logs/server.log 2>&1 &
+            -- --configurationFilePath ./kolomoni_test/assets/configuration.TESTING.toml > logs/server.log 2>&1 &
           echo $! > server.pid
-      - name: "Build end-to-end tests"
-        run: cd kolomoni_test && cargo test --no-run
+
+          echo "Waiting until ./logs/server.log exists..."
+          until [ -f logs/server.log ]
+          do
+              sleep 1
+          done
+
+          echo "File ./logs/server.log exists, waiting until server is ready."
+          tail --follow logs/server.log | grep -q "HTTP server initialized and running"
       - name: "Run end-to-end tests"
         env:
           TEST_API_SERVER_URL: "http://127.0.0.1:8866"
         run: cd kolomoni_test && cargo test --verbose -- --test-threads 1
-      - name: "Output API server log"
-        if: ${{ always() }}
-        run: |
-          echo "-- server log START --"
-          cat ./logs/server.log
-          echo "-- server log END --"
       - name: "Stop API server"
-        # Kills the most recent background task.
         if: ${{ always() }}
         run: |
           SERVER_PID=$(<server.pid)
           echo "Killing API server with PID $SERVER_PID."
           kill -s SIGTERM "$SERVER_PID"
           echo "API server killed."
+      - name: "Output API server log"
+        if: ${{ always() }}
+        run: |
+          echo "-- SERVER LOG START --"
+          cat ./logs/server.log
+          echo "-- SERVER LOG END --"
       - name: "Stop PostgreSQL database"
         if: ${{ always() }}
         run: |
           echo "Stopping PostgreSQL database container."
-          docker stop kolomoni-e2e-test-database
+          docker stop --time 60 kolomoni-e2e-test-database
           echo "PostgreSQL database container stopped."
