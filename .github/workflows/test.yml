@@ -44,17 +44,18 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: "Initialize PostgreSQL database"
         run: |
+          docker stop kolomoni-e2e-test-database || true
           docker run --name kolomoni-e2e-test-database --expose 5432 \
             --env POSTGRES_PASSWORD=postgres --env POSTGRES_USER=postgres \
             --env POSTGRES_HOST_AUTH_METHOD=trust --env POSTGRES_DB=kolomoni \
             -v ./kolomoni_test/assets/postgres-initialization-script.sh:/docker-entrypoint-initdb.d/postgres-initialization-script.sh \
             --rm --detach postgres:16.2-alpine
       - name: "Initialize API server"
-        run: cargo build --release --features with_test_facilities && cargo run --release --features with_test_facilities &
+        run: cargo build --release --features with_test_facilities --verbose && cargo run --verbose --release --features with_test_facilities &
       - name: "Run end-to-end tests"
         env:
           TEST_API_SERVER_URL: "http://127.0.0.1:8866"
-        run: cd kolomoni_test && cargo test --jobs 1
+        run: cd kolomoni_test && cargo test --jobs 1 --verbose
       - name: "Stop API server"
         # Kills the most recent background task.
         run: kill %%
