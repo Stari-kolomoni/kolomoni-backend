@@ -21,6 +21,8 @@ jobs:
           toolchain: stable
       - name: Cache
         uses: Swatinem/rust-cache@v2
+      - name: "Compile tests"
+        run: cargo test --workspace --exclude kolomoni_test --verbose --no-run
       - name: "Run unit tests"
         # Excludes the end-to-end testing crate (tested separately).
         # This one also doesn't execute doctests due to --all-targets.
@@ -50,14 +52,25 @@ jobs:
             --env POSTGRES_HOST_AUTH_METHOD=trust --env POSTGRES_DB=kolomoni \
             -v ./kolomoni_test/assets/postgres-initialization-script.sh:/docker-entrypoint-initdb.d/postgres-initialization-script.sh \
             --rm --detach postgres:16.2-alpine
+      - name: "Build API server"
+        run: cargo build --release --features with_test_facilities --verbose
       - name: "Initialize API server"
-        run: cargo build --release --features with_test_facilities --verbose && cargo run --verbose --release --features with_test_facilities &
+        run: cargo run --verbose --release --features with_test_facilities &
       - name: "Run end-to-end tests"
         env:
           TEST_API_SERVER_URL: "http://127.0.0.1:8866"
         run: cd kolomoni_test && cargo test --verbose -- --test-threads 1
+      - name: "Output API server log"
+        if: ${{ always() }}
+        run: |
+          if [ -d "logs" ]; then
+            echo "Logs directory exists, echoing logs."
+            find . -type f -exec cat {} +
+          fi
       - name: "Stop API server"
         # Kills the most recent background task.
+        if: ${{ always() }}
         run: kill %%
       - name: "Stop PostgreSQL database"
+        if: ${{ always() }}
         run: docker stop kolomoni-e2e-test-database
