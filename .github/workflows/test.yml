@@ -66,10 +66,13 @@ jobs:
           nohup cargo run --verbose --release --features with_test_facilities \
             -- --configurationFilePath ./kolomoni_test/assets/configuration.TESTING.toml > logs/server.log 2>&1 &
           SERVER_PID=$!
+
+          echo "Server compiling and starting with PID $SERVER_PID."
+          rm -f -- server.pid
           echo $SERVER_PID > server.pid
 
           echo "Waiting until ./logs/server.log exists..."
-          until [ -f logs/server.log ]
+          until [ -f ./logs/server.log ]
           do
               sleep 1
           done
@@ -84,7 +87,7 @@ jobs:
               break
             end
 
-            ps -ef | grep $SERVER_PID | grep -v "grep" -q
+            ps -ef | grep "$SERVER_PID" | grep -v "grep" -q
             if [ $? -eq 0 ]
             then
               echo "Server process exited without success."
