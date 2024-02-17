@@ -1,8 +1,11 @@
-use actix_cors::Cors;
+use actix_web::{web, HttpServer};
+use clap::Parser;
+use kolomoni::connect_and_set_up_database;
 use kolomoni_auth::JsonWebTokenManager;
 use kolomoni_configuration::Configuration;
 use kolomoni_database::mutation::ArgonHasher;
 use miette::{Context, IntoDiagnostic, Result};
+use tracing::info;
 
 mod api;
 mod authentication;
@@ -10,50 +13,34 @@ mod cli;
 mod logging;
 mod state;
 
-use actix_web::{middleware, web, App, HttpServer};
-use clap::Parser;
-use kolomoni_migrations::{Migrator, MigratorTrait};
-use sea_orm::{Database, DatabaseConnection};
-use tracing::info;
-use tracing_actix_web::TracingLogger;
+#[cfg(feature = "with_test_facilities")]
+mod testing;
 
+use crate::api::api_router;
 use crate::cli::CLIArgs;
 use crate::logging::initialize_tracing;
 use crate::state::ApplicationStateInner;
 
 
 
-/// Connect to PostgreSQL database as specified in the configuration file
-/// and apply any pending migrations.
-pub async fn connect_and_set_up_database(config: &Configuration) -> Result<DatabaseConnection> {
-    let database = Database::connect(format!(
-        "postgres://{}:{}@{}:{}/{}",
-        config.database.username,
-        config.database.password,
-        config.database.host,
-        config.database.port,
-        config.database.database_name,
-    ))
-    .await
-    .into_diagnostic()
-    .wrap_err("Could not initialize connection to PostgreSQL database.")?;
-
-    info!("Database connection established.");
-
-    Migrator::up(&database, None)
-        .await
-        .into_diagnostic()
-        .wrap_err("Could not apply database migration.")?;
-
-    info!("Migrations applied.");
-
-    Ok(database)
-}
-
-
-
 #[tokio::main]
 async fn main() -> Result<()> {
+    #[cfg(feature = "with_test_facilities")]
+    {
+        println!("-------------------------------------");
+        println!("THIS IS AN INCREDIBLY IMPORTANT ERROR");
+        println!("-------------------------------------");
+        println!(
+            "THIS BINARY HAS BEEN COMPILED WITH THE with_test_facilities FEATURE FLAG, \n\
+            WHICH MEANS IT SHOULD ONLY BE USED FOR TESTING. IF YOU USE THIS IN PRODUCTION, \n\
+            ANYONE CAN WIPE YOUR DATABASE REMOTELY. YOU HAVE BEEN WARNED"
+        );
+        println!("-------------------------------------");
+        println!("THIS IS AN INCREDIBLY IMPORTANT ERROR");
+        println!("-------------------------------------");
+    }
+
+
     // Parse CLI arguments.
     let arguments = CLIArgs::parse();
 
@@ -96,23 +83,33 @@ async fn main() -> Result<()> {
 
     // Initialize and start the actix HTTP server.
     #[rustfmt::skip]
-    let server = HttpServer::new(
-        move || {
-            let json_extractor_config = web::JsonConfig::default();
+    #[allow(clippy::let_and_return)]
+    let server = HttpServer::new(move || {
+        let json_extractor_config = actix_web::web::JsonConfig::default();
 
-            // FIXME Modify permissive CORS to something more safe in production.
-            let cors = Cors::permissive()
-                .expose_headers(vec!["Date", "Content-Type", "Last-Modified", "Content-Length"]);
+        // FIXME Modify permissive CORS to something more safe in production.
+        let cors = actix_cors::Cors::permissive().expose_headers(vec![
+            "Date",
+            "Content-Type",
+            "Last-Modified",
+            "Content-Length",
+        ]);
 
-            App::new()
-                .wrap(middleware::NormalizePath::trim())
-                .wrap(cors)
-                .wrap(TracingLogger::default())
-                .service(api::api_router())
-                .app_data(json_extractor_config)
-                .app_data(state.clone())
+        let mut app = actix_web::App::new()
+            .wrap(actix_web::middleware::NormalizePath::trim())
+            .wrap(cors)
+            .wrap(tracing_actix_web::TracingLogger::default())
+            .app_data(json_extractor_config)
+            .app_data(state.clone())
+            .service(api_router());
+
+        #[cfg(feature = "with_test_facilities")]
+        {
+            app = app.service(testing::testing_router());
         }
-    )
+
+        app
+    })
         .bind((
             configuration.http.host.as_str(),
             configuration.http.port as u16,

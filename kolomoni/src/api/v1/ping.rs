@@ -8,9 +8,10 @@ use crate::impl_json_response_builder;
 
 
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Debug, PartialEq, Eq, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(serde::Deserialize))]
 pub struct PingResponse {
-    ok: bool,
+    pub ok: bool,
 }
 
 impl_json_response_builder!(PingResponse);

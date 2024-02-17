@@ -1,0 +1,69 @@
+###
+# Logging
+###
+[logging]
+# The console log output level.
+# This value can be overriden with the RUST_LOG environment variable.
+# 
+# For more details about setting up this logging level and a guide on more granular settings, 
+# see <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives>).
+console_output_level_filter = "debug,sqlx=warn,hyper=warn,reqwest=warn"
+# The log file output level.
+# This value is not overriden by the RUST_LOG environment variable.
+# 
+# For more details about setting up this logging level and a guide on more granular settings, 
+# see <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives>).
+log_file_output_level_filter = "info,sqlx=warn,hyper=warn,reqwest=warn"
+
+# Log file output directory.
+log_file_output_directory = "./logs/"
+
+
+
+
+###
+# HTTP server-related configuration.
+###
+[http]
+# What host to bind the HTTP server to.
+host = "127.0.0.1"
+# What port to bind the HTTP server to.
+port = 8866
+
+
+
+
+###
+# PostgreSQL database-related configuration.
+###
+[database]
+# Host where the database resides.
+host= "127.0.0.1"
+# Post the database is listening on.
+port = 5432
+# Login username.
+username = "kolomoni"
+# Login password.
+password = "kolomoni"
+# Database name.
+database_name = "kolomoni"
+
+
+
+
+###
+# Secrets
+###
+[secrets]
+# Salt for the Argon2id hasher. 32 characters is probably fine.
+hash_salt = "VL4ZSnIYfkIUSvSmjMFkxZB885CgAwQR"
+
+
+
+
+###
+# JWT authentication token-related configuration.
+###
+[json_web_token]
+# JWT secret used to
+secret = "MzgLNBawTMjqL0SxZUj7r2CLX1lEcXYQ"

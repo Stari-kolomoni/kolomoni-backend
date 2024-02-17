@@ -57,9 +57,90 @@
 //! ```
 //!
 
+use itertools::Itertools;
+use kolomoni_configuration::Configuration;
+use kolomoni_migrations::{Migrator, MigratorTrait};
+use miette::{Context, IntoDiagnostic, Result};
+use sea_orm::{Database, DatabaseConnection};
+use sea_orm_migration::MigrationStatus;
+use tracing::info;
+
 
 pub mod api;
 pub mod authentication;
 pub mod cli;
 pub mod logging;
 pub mod state;
+
+#[cfg(feature = "with_test_facilities")]
+pub mod testing;
+
+pub async fn apply_pending_migrations(database_connection: &DatabaseConnection) -> Result<()> {
+    let migrations_status = Migrator::get_migration_with_status(database_connection)
+        .await
+        .into_diagnostic()
+        .wrap_err("Failed to check current database migration status.")?;
+
+    let pending_migrations = migrations_status
+        .into_iter()
+        .filter(|migration| migration.status() == MigrationStatus::Pending)
+        .collect::<Vec<_>>();
+
+    if pending_migrations.is_empty() {
+        info!("No pending database migrations.");
+        return Ok(());
+    }
+
+
+    let num_pending_migrations = pending_migrations.len();
+    let pending_migration_names = pending_migrations
+        .into_iter()
+        .map(|migration| migration.name().to_string())
+        .join(", ");
+
+    info!(
+        "There are {} pending migrations: {}",
+        num_pending_migrations, pending_migration_names
+    );
+
+
+    info!("Applying migrations.");
+    Migrator::up(database_connection, None)
+        .await
+        .into_diagnostic()
+        .wrap_err("Could not apply database migration.")?;
+    info!("Migrations applied.");
+
+    Ok(())
+}
+
+
+
+pub async fn connect_and_set_up_database_with_full_url(
+    database_url: String,
+) -> Result<DatabaseConnection> {
+    let database = Database::connect(database_url)
+        .await
+        .into_diagnostic()
+        .wrap_err("Could not initialize connection to PostgreSQL database.")?;
+
+    info!("Database connection established.");
+
+    apply_pending_migrations(&database).await?;
+
+    Ok(database)
+}
+
+/// Connect to PostgreSQL database as specified in the configuration file
+/// and apply any pending migrations.
+pub async fn connect_and_set_up_database(config: &Configuration) -> Result<DatabaseConnection> {
+    connect_and_set_up_database_with_full_url(format!(
+        "postgres://{}:{}@{}:{}/{}",
+        config.database.username,
+        config.database.password,
+        config.database.host,
+        config.database.port,
+        config.database.database_name,
+    ))
+    .await
+}
