@@ -47,10 +47,7 @@ async fn main() -> Result<()> {
     // Load configuration.
     let configuration = match arguments.configuration_file_path.as_ref() {
         Some(path) => {
-            println!(
-                "Loading configuration: {}",
-                arguments.configuration_file_path
-            );
+            println!("Loading configuration: {}", path.display());
             Configuration::load_from_path(path)
         }
         None => {
