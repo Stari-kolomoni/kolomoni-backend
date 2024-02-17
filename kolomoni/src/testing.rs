@@ -2,11 +2,14 @@
 //! the `with_test_facilities` feature flag is enabled.
 
 use actix_web::{post, web, HttpResponse, Scope};
+use kolomoni_auth::Role;
+use kolomoni_database::mutation;
 use kolomoni_migrations::Migrator;
 use miette::{Context, IntoDiagnostic, Result};
 use sea_orm::DatabaseConnection;
 use sea_orm_migration::MigratorTrait;
-use tracing::info;
+use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 
 use crate::{
     api::errors::{APIError, EndpointResult},
@@ -16,8 +19,6 @@ use crate::{
 pub async fn drop_database_and_reapply_migrations(
     database_connection: &DatabaseConnection,
 ) -> Result<()> {
-    use tracing::warn;
-
     warn!("Dropping the entire database and reapplying all migrations.");
 
     Migrator::fresh(database_connection)
@@ -32,9 +33,40 @@ pub async fn drop_database_and_reapply_migrations(
 
 #[post("/full-reset")]
 pub async fn reset_server(state: ApplicationState) -> EndpointResult {
+    warn!("Resetting database.");
+
     drop_database_and_reapply_migrations(&state.database)
         .await
         .map_err(APIError::InternalError)?;
+
+    Ok(HttpResponse::Ok().finish())
+}
+
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct GiveFullUserPermissions {
+    pub user_id: i32,
+}
+
+#[post("/give-user-full-permissions")]
+pub async fn give_full_permissions_to_user(
+    state: ApplicationState,
+    request_body: web::Json<GiveFullUserPermissions>,
+) -> EndpointResult {
+    let target_user_id = request_body.user_id;
+
+    warn!(
+        "Giving full permissions to user {}.",
+        target_user_id
+    );
+
+    mutation::UserRoleMutation::add_roles_to_user(
+        &state.database,
+        target_user_id,
+        &[Role::User, Role::Administrator],
+    )
+    .await
+    .map_err(APIError::InternalError)?;
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -44,4 +76,5 @@ pub async fn reset_server(state: ApplicationState) -> EndpointResult {
 pub fn testing_router() -> Scope {
     web::scope("/testing")
         .service(reset_server)
+        .service(give_full_permissions_to_user)
 }

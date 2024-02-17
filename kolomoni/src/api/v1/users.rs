@@ -32,7 +32,8 @@ pub mod specific;
 /// Information about a single user.
 ///
 /// This struct is used as part of a response in the public API.
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 #[schema(example = json!({
     "id": 1,
     "username": "janeznovak",
@@ -82,7 +83,8 @@ impl UserInformation {
 /// Information about one user in particular.
 ///
 /// This struct is used as a response in the public API.
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 #[schema(example = json!({
     "user": {
         "id": 1,

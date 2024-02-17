@@ -159,7 +159,7 @@ impl PermissionSet {
         }
     }
 
-    /// Initialize [`UserPermissionSet`] given a `Vec` of permission names.
+    /// Initialize [`PermissionSet`] given a `Vec` of permission names.
     /// Returns `Err` if a permission name doesn't resolve to a [`Permission`].
     pub fn from_permission_names<P>(permission_names: Vec<P>) -> Result<Self>
     where

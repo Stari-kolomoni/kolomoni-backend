@@ -1,188 +1,166 @@
-use std::fmt::Debug;
-
-use actix_http::{
-    header::{HeaderName, HeaderValue},
-    Method,
-    StatusCode,
+use chrono::Utc;
+use kolomoni::api::{
+    macros::construct_last_modified_header_value,
+    v1::{
+        login::{UserLoginRequest, UserLoginResponse},
+        users::{
+            all::RegisteredUsersListResponse,
+            registration::{UserRegistrationRequest, UserRegistrationResponse},
+            UserInfoResponse,
+        },
+    },
 };
-use actix_web::http;
-use bytes::Bytes;
-use kolomoni::api::v1::ping::PingResponse;
-use reqwest::{header::HeaderMap, Client, ClientBuilder, RequestBuilder, Response};
-use serde::{Deserialize, Serialize};
-
-
-pub const TEST_USER_AGENT: &str = concat!("kolomoni-e2e-test/", env!("CARGO_PKG_VERSION"));
-
-pub struct TestServer {
-    base_api_url: String,
-
-    client: Client,
-}
-
-impl TestServer {
-    pub fn new(base_api_url: String) -> Self {
-        let client = ClientBuilder::new()
-            .user_agent(TEST_USER_AGENT)
-            .build()
-            .expect("failed to set up reqwest client");
-
-        Self {
-            client,
-            base_api_url,
-        }
-    }
-
-    pub async fn reset_server(&self) {
-        let response = self
-            .request(Method::POST, "/testing/full-reset")
-            .send()
-            .await;
-
-        response.assert_status_equals(StatusCode::OK);
-    }
-
-    pub fn request<U>(&self, method: http::Method, endpoint: U) -> TestRequestBuilder
-    where
-        U: AsRef<str>,
-    {
-        let request_builder = self.client.request(
-            method,
-            format!("{}{}", self.base_api_url, endpoint.as_ref()),
-        );
-
-        TestRequestBuilder { request_builder }
-    }
-}
-
-
-pub struct TestRequestBuilder {
-    request_builder: RequestBuilder,
-}
-
-impl TestRequestBuilder {
-    pub fn with_authentication_token(mut self, token: String) -> Self {
-        self.request_builder = self.request_builder.bearer_auth(token);
-        self
-    }
-
-    pub fn with_json_body<V>(mut self, value: V) -> Self
-    where
-        V: Serialize,
-    {
-        let serialized_body = serde_json::to_vec(&value).expect("failed to serialize value to JSON");
-
-        self.request_builder = self.request_builder.body(serialized_body);
-        self
-    }
-
-    pub async fn send(self) -> TestResponseV2 {
-        let response = self
-            .request_builder
-            .send()
-            .await
-            .expect("failed to perform HTTP request");
-
-        TestResponseV2::from_reqwest_response(response).await
-    }
-}
-
-
-pub struct TestResponseV2 {
-    status: StatusCode,
-    headers: HeaderMap,
-    body_bytes: Bytes,
-}
-
-impl TestResponseV2 {
-    async fn from_reqwest_response(response: Response) -> Self {
-        Self {
-            status: response.status(),
-            headers: response.headers().to_owned(),
-            body_bytes: response
-                .bytes()
-                .await
-                .expect("failed to extract body from response"),
-        }
-    }
-
-    pub fn assert_status_equals(&self, status_code: StatusCode) {
-        assert_eq!(self.status, status_code);
-    }
-
-    pub fn assert_header_exists<N>(&self, header_name: N)
-    where
-        N: Into<HeaderName>,
-    {
-        let header_name: HeaderName = header_name.into();
-
-        self.headers.get(&header_name).unwrap_or_else(|| {
-            panic!(
-                "header {} does not exist on response",
-                header_name.as_str()
-            )
-        });
-    }
-
-    pub fn assert_header_matches_value<N, V>(&self, header_name: N, header_value: V)
-    where
-        N: Into<HeaderName>,
-        V: Into<HeaderValue>,
-    {
-        let header_name: HeaderName = header_name.into();
-        let expected_header_value: HeaderValue = header_value.into();
-
-        let actual_header_value = self.headers.get(&header_name).unwrap_or_else(|| {
-            panic!(
-                "header {} does not exist on response",
-                header_name.as_str()
-            )
-        });
-
-        assert_eq!(expected_header_value, actual_header_value);
-    }
-
-    pub fn json_body<'de, D>(&'de self) -> D
-    where
-        D: Deserialize<'de>,
-    {
-        serde_json::from_slice::<D>(&self.body_bytes).expect("failed to deserialize body as JSON")
-    }
-
-    pub fn assert_json_body_matches<'de, D>(&'de self, expected_content: D)
-    where
-        D: Deserialize<'de> + PartialEq + Eq + Debug,
-    {
-        let data = self.json_body::<D>();
-
-        assert_eq!(data, expected_content);
-    }
-}
-
-
-pub async fn prepare_test_server_instance() -> TestServer {
-    const TEST_API_SERVER_ENV_VAR_NAME: &str = "TEST_API_SERVER_URL";
-
-    let test_server_url = std::env::var(TEST_API_SERVER_ENV_VAR_NAME).unwrap_or_else(|_| {
-        panic!(
-            "Unexpected test environment! Expected a {} environment variable, found none (or invalid unicode).",
-            TEST_API_SERVER_ENV_VAR_NAME
-        )
-    });
-
-    let server = TestServer::new(test_server_url);
-    server.reset_server().await;
-
-    server
-}
+use kolomoni_test_util::prelude::*;
 
 
 #[tokio::test]
-async fn server_can_be_pinged() {
+async fn basic_user_operations_work() {
     let server = prepare_test_server_instance().await;
 
-    let response = server.request(Method::GET, "/api/v1/ping").send().await;
 
-    response.assert_status_equals(StatusCode::OK);
-    response.assert_json_body_matches(PingResponse { ok: true });
+
+    // Register new user "janez".
+    let time_before_registration = Utc::now();
+    let registration_request = UserRegistrationRequest {
+        username: "janez".to_string(),
+        display_name: "Janez Veliki".to_string(),
+        password: "janez".to_string(),
+    };
+
+    let registration_response = server
+        .request(Method::POST, "/api/v1/users")
+        .with_json_body(registration_request.clone())
+        .send()
+        .await;
+
+    registration_response.assert_status_equals(StatusCode::OK);
+    let new_user_info = registration_response
+        .json_body::<UserRegistrationResponse>()
+        .user;
+
+    assert_eq!(
+        new_user_info.username,
+        registration_request.username
+    );
+    assert_eq!(
+        new_user_info.display_name,
+        registration_request.display_name
+    );
+
+    assert!(new_user_info.joined_at >= time_before_registration);
+    assert!(new_user_info.last_modified_at >= time_before_registration);
+    assert!(new_user_info.last_active_at >= time_before_registration);
+
+    let time_now = Utc::now();
+    assert!(new_user_info.joined_at <= time_now);
+    assert!(new_user_info.last_modified_at <= time_now);
+    assert!(new_user_info.last_active_at <= time_now);
+
+
+
+    // Ensure that trying to register again fails.
+    server
+        .request(Method::POST, "/api/v1/users")
+        .with_json_body(registration_request.clone())
+        .send()
+        .await
+        .assert_status_equals(StatusCode::CONFLICT);
+
+
+
+    // Ensure that trying to register under a different username,
+    // but same display name, fails too.
+    let conflicting_registration_request = UserRegistrationRequest {
+        username: "janez2".to_string(),
+        ..registration_request
+    };
+
+    server
+        .request(Method::POST, "/api/v1/users")
+        .with_json_body(conflicting_registration_request.clone())
+        .send()
+        .await
+        .assert_status_equals(StatusCode::CONFLICT);
+
+
+
+    server.give_full_permissions_to_user(new_user_info.id).await;
+
+
+
+    // Log in our new powerful user.
+    let login_request = UserLoginRequest {
+        username: "janez".to_string(),
+        password: "janez".to_string(),
+    };
+
+    let login_response = server
+        .request(Method::POST, "/api/v1/login")
+        .with_json_body(login_request)
+        .send()
+        .await;
+    login_response.assert_status_equals(StatusCode::OK);
+
+    let login_response_body = login_response.json_body::<UserLoginResponse>();
+    let access_token = login_response_body.access_token;
+
+
+
+    // Ensure the registration response matches the current user information endpoint.
+    let current_user_info_response = server
+        .request(Method::GET, "/api/v1/users/me")
+        .with_authentication_token(&access_token)
+        .send()
+        .await;
+    current_user_info_response.assert_status_equals(StatusCode::OK);
+    current_user_info_response.assert_header_matches_value(
+        header::LAST_MODIFIED,
+        construct_last_modified_header_value(&new_user_info.last_modified_at).unwrap(),
+    );
+
+    let fresh_user_info = current_user_info_response
+        .json_body::<UserInfoResponse>()
+        .user;
+
+    assert_eq!(new_user_info, fresh_user_info);
+
+
+
+
+    // List all users, ensure it's of length 1. Register a new user and ensure the length has increased.
+    let all_users_response = server
+        .request(Method::GET, "/api/v1/users")
+        .with_authentication_token(&access_token)
+        .send()
+        .await;
+    all_users_response.assert_status_equals(StatusCode::OK);
+
+    let all_users_response_body = all_users_response.json_body::<RegisteredUsersListResponse>();
+    assert_eq!(all_users_response_body.users.len(), 1);
+
+
+    server
+        .request(Method::POST, "/api/v1/users")
+        .with_json_body(UserRegistrationRequest {
+            username: "meta".to_string(),
+            display_name: "Meta".to_string(),
+            password: "meta".to_string(),
+        })
+        .send()
+        .await
+        .assert_status_equals(StatusCode::OK);
+
+
+    let all_users_updated_response = server
+        .request(Method::GET, "/api/v1/users")
+        .with_authentication_token(&access_token)
+        .send()
+        .await;
+    all_users_updated_response.assert_status_equals(StatusCode::OK);
+
+    let all_users_updated_response_body =
+        all_users_updated_response.json_body::<RegisteredUsersListResponse>();
+    assert_eq!(all_users_updated_response_body.users.len(), 2);
+
+    // Test user modifications (display name, roles).
 }

@@ -7,23 +7,7 @@ edition = "2021"
 
 [dev-dependencies]
 kolomoni = { path = "..", features = ["with_test_facilities"] }
-kolomoni_auth = { path = "../kolomoni_auth" }
-kolomoni_database = { path = "../kolomoni_database" }
-kolomoni_configuration = { path = "../kolomoni_configuration" }
+kolomoni_test_util = { path = "../kolomoni_test_util" }
 
-actix-web = { workspace = true }
-actix-http = { workspace = true }
-actix-cors = { workspace = true }
-actix-service = { workspace = true }
-
-reqwest = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-
-tracing-actix-web = { workspace = true }
-
-miette = { workspace = true }
 tokio = { workspace = true }
-sea-orm = { workspace = true }
-
-bytes =  { workspace = true }
+chrono = { workspace = true }

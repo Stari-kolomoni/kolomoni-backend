@@ -85,6 +85,8 @@ pub async fn get_current_user_info(
 ) -> EndpointResult {
     // User must provide an authentication token and
     // have the `user.self:read` permission to access this endpoint.
+    // TODO How do we do blanket permission grants in this situation?
+    //      Should require_authentication handle that?
     let authenticated_user = require_authentication!(authentication_extractor);
     let authenticated_user_id = authenticated_user.user_id();
     require_permission!(

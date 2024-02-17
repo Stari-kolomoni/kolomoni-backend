@@ -16,7 +16,8 @@ use crate::state::ApplicationState;
 
 
 /// User login information.
-#[derive(Deserialize, Debug, ToSchema)]
+#[derive(Deserialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
 #[schema(
     example = json!({
         "username": "sample_user",
@@ -39,7 +40,8 @@ pub struct UserLoginRequest {
 ///   receive a new (fresh) request token.
 ///
 /// This works because the `refresh_token` has a longer expiration time.
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 #[schema(
     example = json!({
         "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1Y\

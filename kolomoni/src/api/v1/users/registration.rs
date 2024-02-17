@@ -25,6 +25,7 @@ use crate::{
     "display_name": "Janez Novak",
     "password": "perica_reže_raci_rep"
 }))]
+#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
 pub struct UserRegistrationRequest {
     /// Username to register as (not the same as the display name).
     pub username: String,
@@ -50,7 +51,8 @@ impl From<UserRegistrationRequest> for UserRegistrationInfo {
 
 /// API-serializable response upon successful user registration.
 /// Contains the newly-created user's information.
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 #[schema(
     example = json!({
         "user": {

@@ -19,7 +19,8 @@ use crate::{
 };
 
 /// List of registered users.
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(serde::Deserialize))]
 #[schema(title = "RegisteredUsersListResponse")]
 #[schema(example = json!({
     "users": [

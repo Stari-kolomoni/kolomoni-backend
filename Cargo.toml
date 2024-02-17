@@ -16,7 +16,8 @@ members = [
     "kolomoni_database",
     "kolomoni_migrations",
     "kolomoni_openapi",
-    "kolomoni_test"
+    "kolomoni_test",
+    "kolomoni_test_util"
 ]
 
 

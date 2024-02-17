@@ -25,7 +25,7 @@ pub trait RequiredPermission {
     fn name() -> &'static str;
 }
 
-/// Given a variant name for [`Permission`], this macro will generate
+/// Given a variant name for [`Permission`][kolomoni_auth::Permission], this macro will generate
 /// an empty struct with the name `RequiredPermissionNameHere`.
 ///
 /// For example, calling `generate_standalone_requirement_struct!(UserSelfRead)`
@@ -96,7 +96,7 @@ generate_standalone_requirement_struct!(WordDelete);
 /// that the above will appear in the OpenAPI documentation.**
 ///
 ///
-/// </br>
+/// <br>
 ///
 /// # Example
 /// ```no_run
@@ -395,7 +395,7 @@ impl utoipa::IntoResponses for InternalServerErrorResponse {
 ///
 /// # Example
 /// This example uses the `If-Modified-Since` extractor, see
-/// [`OptionalIfModifiedSince`][kolomoni::api::OptionalIfModifiedSince]
+/// [`OptionalIfModifiedSince`][crate::api::OptionalIfModifiedSince]
 /// for more info.
 ///
 /// ```
