@@ -9,10 +9,10 @@ on:
 jobs:
   run-unit-tests:
     runs-on: "self-hosted"
-    name: "Run doc- and unit tests"
+    name: "Run doc and unit tests"
     steps:
       - name: "Set up required tools"
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
       - name: "Checkout repository"
         uses: actions/checkout@v4.1.1
       - name: "Install stable Rust"
@@ -33,7 +33,7 @@ jobs:
     name: "Run end-to-end tests"
     steps:
       - name: "Set up required tools"
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
       - name: "Checkout repository"
         uses: actions/checkout@v4.1.1
       - name: "Install stable Rust"
@@ -55,7 +55,7 @@ jobs:
       - name: "Run end-to-end tests"
         env:
           TEST_API_SERVER_URL: "http://127.0.0.1:8866"
-        run: cd kolomoni_test && cargo test --jobs 1 --verbose
+        run: cd kolomoni_test && cargo test --verbose -- --test-threads 1
       - name: "Stop API server"
         # Kills the most recent background task.
         run: kill %%
