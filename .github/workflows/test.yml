@@ -11,12 +11,16 @@ jobs:
     runs-on: "self-hosted"
     name: "Run doc- and unit tests"
     steps:
+      - name: "Set up required tools"
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libssl-dev
       - name: "Checkout repository"
         uses: actions/checkout@v4.1.1
       - name: "Install stable Rust"
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
       - name: "Run unit tests"
         # Excludes the end-to-end testing crate (tested separately).
         # This one also doesn't execute doctests due to --all-targets.
@@ -28,12 +32,16 @@ jobs:
     runs-on: "self-hosted"
     name: "Run end-to-end tests"
     steps:
+      - name: "Set up required tools"
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libssl-dev
       - name: "Checkout repository"
         uses: actions/checkout@v4.1.1
       - name: "Install stable Rust"
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
       - name: "Initialize PostgreSQL database"
         run: |
           docker run --name kolomoni-e2e-test-database --expose 5432 \
