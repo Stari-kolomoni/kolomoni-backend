@@ -85,6 +85,7 @@ jobs:
 
             if tail -n100 ./logs/server.log | grep -q "server initialized and running"
             then
+              :
             else
               echo "Server is ready!"
               break
@@ -92,6 +93,7 @@ jobs:
 
             if ps -ef | grep "$SERVER_PID" | grep -v "grep" -q
             then
+              :
             else
               echo "Server process exited without success."
               exit 1
