@@ -81,8 +81,6 @@ jobs:
           echo "File ./logs/server.log exists, waiting until server is ready."
           while true
           do
-            echo "Checking readiness..."
-
             if tail -n100 ./logs/server.log | grep -q "server initialized and running"
             then
               echo "Server is ready!"
@@ -91,6 +89,8 @@ jobs:
 
             if ps -ef | grep "$SERVER_PID" | grep -v "grep" -q
             then
+              :
+            else
               echo "Server process exited without success."
               exit 1
             fi
