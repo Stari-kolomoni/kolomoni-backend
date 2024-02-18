@@ -2,6 +2,7 @@ use std::net::Ipv4Addr;
 
 use actix_web::{App, HttpServer};
 use kolomoni::api::errors;
+use kolomoni::api::v1::dictionary;
 use kolomoni::api::v1::login;
 use kolomoni::api::v1::ping;
 use kolomoni::api::v1::users;
@@ -20,30 +21,90 @@ use utoipa_rapidoc::RapiDoc;
 #[derive(OpenApiDerivable)]
 #[openapi(
     paths(
+        /***
+         * Annotated paths are relative to `kolomoni/src/api/v1`.
+         */
+
+        // ping.rs
         ping::ping,
+
+        // login.rs
         login::login,
         login::refresh_login,
+
+        // users/all.rs
         users::all::get_all_registered_users,
-        users::registration::register_user,
+
+        // users/current.rs
         users::current::get_current_user_info,
+        users::current::get_current_user_roles,
         users::current::get_current_user_effective_permissions,
         users::current::update_current_user_display_name,
+
+        // users/registration.rs
+        users::registration::register_user,
+
+        // users/specific.rs
         users::specific::get_specific_user_info,
-        users::specific::get_specific_user_effective_permissions,
         users::specific::get_specific_user_roles,
+        users::specific::get_specific_user_effective_permissions,
+        users::specific::update_specific_user_display_name,
         users::specific::add_roles_to_specific_user,
         users::specific::remove_roles_from_specific_user,
-        users::specific::update_specific_user_display_name,
+
+        // dictionary/slovene_word.rs
+        dictionary::slovene_word::get_all_slovene_words,
+        dictionary::slovene_word::create_a_slovene_word,
+        dictionary::slovene_word::get_specific_slovene_word,
+        dictionary::slovene_word::update_a_specific_slovene_word,
+        dictionary::slovene_word::delete_a_specific_slovene_word,
     ),
     components(
         schemas(
-            users::all::RegisteredUsersListResponse,
+            /***
+             * Annotated paths are relative to `kolomoni/src/api/v1`.
+             */
+
+            // ping.rs
+            ping::PingResponse,
+
+            // login.rs
+            login::UserLoginRequest,
+            login::UserLoginResponse,
+            login::UserLoginRefreshRequest,
+            login::UserLoginRefreshResponse,
+
+            // users.rs
             users::UserInformation,
             users::UserInfoResponse,
-            users::UserPermissionsResponse,
             users::UserDisplayNameChangeRequest,
             users::UserDisplayNameChangeResponse,
-            errors::ErrorReasonResponse
+            users::UserRolesResponse,
+            users::UserPermissionsResponse,
+
+            // users/all.rs
+            users::all::RegisteredUsersListResponse,
+
+            // users/current.rs
+            // (none)
+            // users/registration.rs
+            users::registration::UserRegistrationRequest,
+            users::registration::UserRegistrationResponse,
+
+            // users/specific.rs
+            users::specific::UserRoleAddRequest,
+            users::specific::UserRoleRemoveRequest,
+
+            // ../errors.rs
+            errors::ErrorReasonResponse,
+
+            // dictionary/slovene_word.rs
+            dictionary::slovene_word::SloveneWord,
+            dictionary::slovene_word::SloveneWordsResponse,
+            dictionary::slovene_word::SloveneWordCreationRequest,
+            dictionary::slovene_word::SloveneWordCreationResponse,
+            dictionary::slovene_word::SloveneWordInfoResponse,
+            dictionary::slovene_word::SloveneWordUpdateRequest,
         ),
     ),
     info(
