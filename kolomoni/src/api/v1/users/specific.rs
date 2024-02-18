@@ -25,7 +25,6 @@ use crate::{
     },
     authentication::UserAuthenticationExtractor,
     error_response_with_reason,
-    impl_json_response_builder,
     require_authentication,
     require_permission,
     require_permission_with_optional_authentication,
@@ -113,8 +112,9 @@ async fn get_specific_user_info(
 
 /// Get a user's roles
 ///
-/// *This endpoint requires the `users.any:read` permission.*
-///
+/// # Authentication
+/// Authentication is not required on this endpoint due to a blanket grant of
+/// the `users.any:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
     path = "/users/{user_id}/roles",
@@ -129,7 +129,7 @@ async fn get_specific_user_info(
         (
             status = 200,
             description = "User role list.",
-            body = UpdatedUserRolesResponse
+            body = UserRolesResponse
         ),
         (
             status = 404,
@@ -148,9 +148,16 @@ pub async fn get_specific_user_roles(
     authentication_extractor: UserAuthenticationExtractor,
     path_info: web::Path<(i32,)>,
 ) -> EndpointResult {
-    // Only authenticated users with the `user.any:read` permission can access this endpoint.
-    let authenticated_user = require_authentication!(authentication_extractor);
-    require_permission!(state, authenticated_user, Permission::UserAnyRead);
+    // Users don't need to authenticate due to a
+    // blanket permission grant for `user.any:read`.
+    // This will also work if we remove the blanket grant
+    // in the future - it will fall back to requiring authentication
+    // AND the `user.any:read` permission.
+    require_permission_with_optional_authentication!(
+        state,
+        authentication_extractor,
+        Permission::UserAnyRead
+    );
 
     let target_user_id = path_info.into_inner().0;
     let target_user_exists = UserQuery::user_exists_by_user_id(&state.database, target_user_id)
@@ -158,7 +165,7 @@ pub async fn get_specific_user_roles(
         .map_err(APIError::InternalError)?;
 
     if !target_user_exists {
-        return Ok(HttpResponse::NotFound().finish());
+        return Err(APIError::not_found());
     }
 
 
@@ -299,6 +306,12 @@ async fn get_specific_user_effective_permissions(
             })
         ),
         (
+            status = 404,
+            description = "User with the given ID does not exist.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "Resource not found: no such user." })
+        ),
+        (
             status = 409,
             description = "User with given display name already exists.",
             body = ErrorReasonResponse,
@@ -330,18 +343,23 @@ async fn update_specific_user_display_name(
 
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
-    let requested_user_id = path_info.into_inner().0;
+    let target_user_id = path_info.into_inner().0;
 
-    let current_user = query::UserQuery::get_user_by_id(&state.database, authenticated_user_id)
-        .await
-        .map_err(APIError::InternalError)?
-        .ok_or_else(|| APIError::internal_reason("BUG: Current user does not exist."))?;
-
-    if current_user.id == requested_user_id {
+    if authenticated_user_id == target_user_id {
         return Ok(error_response_with_reason!(
             StatusCode::FORBIDDEN,
             "Can't modify your own account on this endpoint."
         ));
+    }
+
+
+    let target_user_exists =
+        query::UserQuery::user_exists_by_user_id(&state.database, target_user_id)
+            .await
+            .map_err(APIError::InternalError)?;
+
+    if !target_user_exists {
+        return Err(APIError::not_found_with_reason("no such user"));
     }
 
 
@@ -372,7 +390,7 @@ async fn update_specific_user_display_name(
     // Update requested user's display name.
     mutation::UserMutation::update_display_name_by_user_id(
         &database_transaction,
-        requested_user_id,
+        target_user_id,
         json_data.new_display_name.clone(),
     )
     .await
@@ -380,7 +398,7 @@ async fn update_specific_user_display_name(
 
     let updated_user = mutation::UserMutation::update_last_active_at_by_user_id(
         &database_transaction,
-        requested_user_id,
+        target_user_id,
         None,
     )
     .await
@@ -394,7 +412,7 @@ async fn update_specific_user_display_name(
 
     info!(
         operator_id = authenticated_user_id,
-        target_user_id = requested_user_id,
+        target_user_id = target_user_id,
         new_display_name = json_data.new_display_name,
         "User has updated another user's display name."
     );
@@ -408,7 +426,8 @@ async fn update_specific_user_display_name(
 
 
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
 #[schema(
     example = json!({
         "roles_to_add": ["administrator"]
@@ -418,20 +437,6 @@ pub struct UserRoleAddRequest {
     pub roles_to_add: Vec<String>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-#[schema(
-    example = json!({
-        "roles": [
-            "user",
-            "administrator"
-        ]
-    })
-)]
-pub struct UpdatedUserRolesResponse {
-    pub roles: Vec<String>,
-}
-
-impl_json_response_builder!(UpdatedUserRolesResponse);
 
 
 #[utoipa::path(
@@ -451,7 +456,7 @@ impl_json_response_builder!(UpdatedUserRolesResponse);
         (
             status = 200,
             description = "Updated user role list.",
-            body = UpdatedUserRolesResponse
+            body = UserRolesResponse
         ),
         (
             status = 400,
@@ -579,8 +584,8 @@ pub async fn add_roles_to_specific_user(
         .map_err(APIError::InternalError)?;
 
 
-    Ok(UpdatedUserRolesResponse {
-        roles: updated_role_set.role_names(),
+    Ok(UserRolesResponse {
+        role_names: updated_role_set.role_names(),
     }
     .into_response())
 }
@@ -588,7 +593,8 @@ pub async fn add_roles_to_specific_user(
 
 
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Deserialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
 #[schema(
     example = json!({
         "roles_to_remove": ["administrator"]
@@ -616,7 +622,7 @@ pub struct UserRoleRemoveRequest {
         (
             status = 200,
             description = "Updated user role list.",
-            body = UpdatedUserRolesResponse
+            body = UserRolesResponse
         ),
         (
             status = 400,
@@ -657,7 +663,7 @@ pub async fn remove_roles_from_specific_user(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     path_info: web::Path<(i32,)>,
-    json_data: web::Json<UserRoleAddRequest>,
+    json_data: web::Json<UserRoleRemoveRequest>,
 ) -> EndpointResult {
     // Only authenticated users with the `user.any:write` permission can remove roles
     // from other users, but only if they also have that role.
@@ -690,7 +696,7 @@ pub async fn remove_roles_from_specific_user(
 
 
     let parsed_roles_to_remove_result = request_data
-        .roles_to_add
+        .roles_to_remove
         .into_iter()
         .map(|role_name| {
             Role::from_name(&role_name).ok_or_else(|| format!("No such role: \"{role_name}\"."))
@@ -748,8 +754,8 @@ pub async fn remove_roles_from_specific_user(
         .map_err(APIError::InternalError)?;
 
 
-    Ok(UpdatedUserRolesResponse {
-        roles: updated_role_set.role_names(),
+    Ok(UserRolesResponse {
+        role_names: updated_role_set.role_names(),
     }
     .into_response())
 }

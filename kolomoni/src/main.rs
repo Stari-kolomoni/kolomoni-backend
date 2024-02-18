@@ -1,3 +1,4 @@
+use actix_web::error::JsonPayloadError;
 use actix_web::{web, HttpServer};
 use clap::Parser;
 use kolomoni::connect_and_set_up_database;
@@ -17,6 +18,7 @@ mod state;
 mod testing;
 
 use crate::api::api_router;
+use crate::api::errors::APIError;
 use crate::cli::CLIArgs;
 use crate::logging::initialize_tracing;
 use crate::state::ApplicationStateInner;
@@ -91,7 +93,36 @@ async fn main() -> Result<()> {
     #[rustfmt::skip]
     #[allow(clippy::let_and_return)]
     let server = HttpServer::new(move || {
-        let json_extractor_config = actix_web::web::JsonConfig::default();
+        let json_extractor_config = actix_web::web::JsonConfig::default()
+            .error_handler(|payload_error, _| {
+                match payload_error {
+                    JsonPayloadError::ContentType  => {
+                        APIError::client_error(
+                            "If your request body contains JSON, please signal that \
+                            with the Content-Type: application/json header."
+                        ).into()
+                    },
+                    JsonPayloadError::Serialize(error) => {
+                        APIError::internal_reason(format!("Failed to serialize to JSON: {:?}", error)).into()
+                    },
+                    JsonPayloadError::Deserialize(_) => {
+                        APIError::client_error(
+                            "Invalid JSON body."
+                        ).into()
+                    },
+                    JsonPayloadError::Overflow { .. } | JsonPayloadError::OverflowKnownLength { .. } => {
+                        APIError::client_error(
+                            "Request body is too large."
+                        ).into()
+                    },
+                    error => {
+                        APIError::internal_reason(format!(
+                            "Unrecognized error: {:?}",
+                            error
+                        )).into()
+                    }
+                }
+            });
 
         // FIXME Modify permissive CORS to something more safe in production.
         let cors = actix_cors::Cors::permissive().expose_headers(vec![

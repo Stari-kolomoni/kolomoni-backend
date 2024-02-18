@@ -197,7 +197,7 @@ impl UserMutation {
         };
 
         user_with_updated_display_name
-            .update(database)
+            .save(database)
             .await
             .into_diagnostic()
             .wrap_err("Failed while updating a user's display name in the database (by ID).")?;

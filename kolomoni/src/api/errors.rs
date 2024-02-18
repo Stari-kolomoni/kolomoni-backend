@@ -20,7 +20,8 @@ use utoipa::ToSchema;
 ///
 /// This is useful for specifying reasons when returning a HTTP status code
 /// with an error.
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(serde::Deserialize))]
 pub struct ErrorReasonResponse {
     /// Error reason.
     pub reason: String,
@@ -209,6 +210,10 @@ pub enum APIError {
         reason_response: Option<ErrorReasonResponse>,
     },
 
+    /// Bad client request with a reason; will produce a `400 Bad Request`.
+    /// The `reason` will also be sent along in the response.
+    OtherClientError { reason: String },
+
     /// Internal error with a string reason.
     /// Triggers a `500 Internal Server Error` (*doesn't leak the error through the API*).
     InternalReason(String),
@@ -247,6 +252,15 @@ impl APIError {
     pub fn missing_permission() -> Self {
         Self::NotEnoughPermissions {
             missing_permission: None,
+        }
+    }
+
+    pub fn client_error<S>(reason: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self::OtherClientError {
+            reason: reason.into(),
         }
     }
 
@@ -315,6 +329,7 @@ impl Display for APIError {
                     write!(f, "Resource not found.")
                 }
             },
+            APIError::OtherClientError { reason } => write!(f, "Client error: {}", reason),
             APIError::InternalReason(reason) => write!(f, "Internal error: {reason}."),
             APIError::InternalError(error) => write!(f, "Internal error: {error}."),
             APIError::InternalDatabaseError(error) => write!(f, "Internal database error: {error}."),
@@ -328,6 +343,7 @@ impl ResponseError for APIError {
             APIError::NotAuthenticated => StatusCode::UNAUTHORIZED,
             APIError::NotEnoughPermissions { .. } => StatusCode::FORBIDDEN,
             APIError::NotFound { .. } => StatusCode::NOT_FOUND,
+            APIError::OtherClientError { .. } => StatusCode::BAD_REQUEST,
             APIError::InternalReason(_) => StatusCode::INTERNAL_SERVER_ERROR,
             APIError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             APIError::InternalDatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -349,6 +365,11 @@ impl ResponseError for APIError {
                 Some(reason_response) => HttpResponse::NotFound().json(reason_response),
                 None => HttpResponse::NotFound().finish(),
             },
+            APIError::OtherClientError { reason } => {
+                HttpResponse::BadRequest().json(ErrorReasonResponse {
+                    reason: reason.to_string(),
+                })
+            }
             APIError::InternalReason(error) => {
                 error!(error = error, "Internal error.");
 
