@@ -427,7 +427,7 @@ async fn update_specific_user_display_name(
 
 
 #[derive(Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
+#[cfg_attr(feature = "with_test_facilities", derive(serde::Serialize))]
 #[schema(
     example = json!({
         "roles_to_add": ["administrator"]
@@ -594,7 +594,7 @@ pub async fn add_roles_to_specific_user(
 
 
 #[derive(Deserialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
+#[cfg_attr(feature = "with_test_facilities", derive(serde::Serialize))]
 #[schema(
     example = json!({
         "roles_to_remove": ["administrator"]
