@@ -46,8 +46,9 @@ impl_json_response_builder!(RegisteredUsersListResponse);
 /// This endpoint returns a list of all registered users.
 ///
 ///
-/// # Permissions
-/// This endpoint requires the `users.any:read` permission.
+/// # Authentication
+/// This endpoint requires authentication and
+/// the `users.any:read` permission.
 #[utoipa::path(
     get,
     path = "/users",
@@ -70,7 +71,7 @@ pub async fn get_all_registered_users(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
 ) -> EndpointResult {
-    // User must provide their authentication token and
+    // User MUST provide their authentication token AND
     // have the `user.any:read` permission to access this endpoint.
     let authenticated_user = require_authentication!(authentication);
     require_permission!(state, authenticated_user, Permission::UserAnyRead);

@@ -390,6 +390,37 @@ macro_rules! require_authentication {
 }
 
 
+#[macro_export]
+macro_rules! require_permission_with_optional_authentication {
+    ($application_state:expr, $user_auth_extractor:expr, $permission:expr) => {
+        match $user_auth_extractor.authenticated_user() {
+            Some(_authenticated_user) => {
+                if !_authenticated_user
+                    .has_permission(&$application_state.database, $permission)
+                    .await
+                    .map_err($crate::api::errors::APIError::InternalError)?
+                {
+                    return Err(
+                        $crate::api::errors::APIError::missing_specific_permission($permission),
+                    );
+                }
+
+                Some(_authenticated_user)
+            }
+            None => {
+                if !$user_auth_extractor.is_permission_granted_to_all($permission) {
+                    return Err(
+                        $crate::api::errors::APIError::missing_specific_permission($permission),
+                    );
+                }
+
+                None
+            }
+        }
+    };
+}
+
+
 
 /// A macro that early-returns an
 /// `Err(`[`APIError::NotEnoughPermissions`]`)`

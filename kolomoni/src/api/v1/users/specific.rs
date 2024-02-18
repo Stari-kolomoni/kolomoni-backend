@@ -20,6 +20,7 @@ use crate::{
             UserInfoResponse,
             UserInformation,
             UserPermissionsResponse,
+            UserRolesResponse,
         },
     },
     authentication::UserAuthenticationExtractor,
@@ -27,6 +28,7 @@ use crate::{
     impl_json_response_builder,
     require_authentication,
     require_permission,
+    require_permission_with_optional_authentication,
     state::ApplicationState,
 };
 
@@ -37,7 +39,9 @@ use crate::{
 /// This is a generic version of the `GET /users/me` endpoint, allowing you to see information
 /// about users other than yourself.
 ///
-/// *This endpoint requires the `users.any:read` permission.*
+/// # Authentication
+/// Authentication is not required on this endpoint due to a blanket grant of
+/// the `users.any:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
     path = "/users/{user_id}",
@@ -78,9 +82,16 @@ async fn get_specific_user_info(
     authentication_extractor: UserAuthenticationExtractor,
     path_info: web::Path<(i32,)>,
 ) -> EndpointResult {
-    // Only authenticated users with the `user.any:read` permission can access this endpoint.
-    let authenticated_user = require_authentication!(authentication_extractor);
-    require_permission!(state, authenticated_user, Permission::UserAnyRead);
+    // Users don't need to authenticate due to a
+    // blanket permission grant for `user.any:read`.
+    // This will also work if we remove the blanket grant
+    // in the future - it will fall back to requiring authentication
+    // AND the `user.any:read` permission.
+    require_permission_with_optional_authentication!(
+        state,
+        authentication_extractor,
+        Permission::UserAnyRead
+    );
 
 
     // Return information about the requested user.
@@ -98,22 +109,6 @@ async fn get_specific_user_info(
     Ok(UserInfoResponse::new(user).into_response())
 }
 
-
-
-#[derive(Serialize, Debug, ToSchema)]
-#[schema(
-    example = json!({
-        "role_names": [
-            "user",
-            "administrator"
-        ]
-    })
-)]
-pub struct UserRolesResponse {
-    pub role_names: Vec<String>,
-}
-
-impl_json_response_builder!(UserRolesResponse);
 
 
 /// Get a user's roles
@@ -135,12 +130,6 @@ impl_json_response_builder!(UserRolesResponse);
             status = 200,
             description = "User role list.",
             body = UpdatedUserRolesResponse
-        ),
-        (
-            status = 400,
-            description = "Invalid role name.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "No such role: \"non-existent-role-name\"." })
         ),
         (
             status = 404,

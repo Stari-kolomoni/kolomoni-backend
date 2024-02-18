@@ -6,7 +6,10 @@ use actix_web::{
     HttpResponse,
 };
 use kolomoni_auth::Permission;
-use kolomoni_database::{mutation, query};
+use kolomoni_database::{
+    mutation,
+    query::{self, UserQuery, UserRoleQuery},
+};
 use miette::IntoDiagnostic;
 use sea_orm::TransactionTrait;
 use tracing::info;
@@ -26,6 +29,7 @@ use crate::{
             UserInfoResponse,
             UserInformation,
             UserPermissionsResponse,
+            UserRolesResponse,
         },
         OptionalIfModifiedSince,
     },
@@ -85,8 +89,6 @@ pub async fn get_current_user_info(
 ) -> EndpointResult {
     // User must provide an authentication token and
     // have the `user.self:read` permission to access this endpoint.
-    // TODO How do we do blanket permission grants in this situation?
-    //      Should require_authentication handle that?
     let authenticated_user = require_authentication!(authentication_extractor);
     let authenticated_user_id = authenticated_user.user_id();
     require_permission!(
@@ -122,6 +124,61 @@ pub async fn get_current_user_info(
             .build())
     }
 }
+
+
+#[utoipa::path(
+    get,
+    path = "/users/me/roles",
+    responses(
+        (
+            status = 200,
+            description = "The authenticated user's role list.",
+            body = UpdatedUserRolesResponse
+        ),
+        (
+            status = 404,
+            description = "You do not exist."
+        ),
+        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
+        openapi::InternalServerErrorResponse,
+    ),
+    security(
+        ("access_token" = [])
+    )
+)]
+#[get("/me/roles")]
+pub async fn get_current_user_roles(
+    state: ApplicationState,
+    authentication: UserAuthenticationExtractor,
+) -> EndpointResult {
+    let authenticated_user = require_authentication!(authentication);
+    require_permission!(
+        state,
+        authenticated_user,
+        Permission::UserSelfRead
+    );
+
+    let user_exists =
+        UserQuery::user_exists_by_user_id(&state.database, authenticated_user.user_id())
+            .await
+            .map_err(APIError::InternalError)?;
+    if !user_exists {
+        return Err(APIError::not_found());
+    }
+
+
+    let user_roles = UserRoleQuery::user_roles(&state.database, authenticated_user.user_id())
+        .await
+        .map_err(APIError::InternalError)?;
+
+    let user_role_names = user_roles.role_names();
+
+    Ok(UserRolesResponse {
+        role_names: user_role_names,
+    }
+    .into_response())
+}
+
 
 
 /// Get current user's permissions

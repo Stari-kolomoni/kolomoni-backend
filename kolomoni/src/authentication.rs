@@ -55,6 +55,10 @@ impl UserAuthenticationExtractor {
             }),
         }
     }
+
+    pub fn is_permission_granted_to_all(&self, permission: Permission) -> bool {
+        BLANKET_ANY_USER_PERMISSION_GRANT.contains(&permission)
+    }
 }
 
 impl FromRequest for UserAuthenticationExtractor {

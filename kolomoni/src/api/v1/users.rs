@@ -8,6 +8,7 @@ use self::all::get_all_registered_users;
 use self::current::{
     get_current_user_effective_permissions,
     get_current_user_info,
+    get_current_user_roles,
     update_current_user_display_name,
 };
 use self::registration::register_user;
@@ -32,7 +33,7 @@ pub mod specific;
 /// Information about a single user.
 ///
 /// This struct is used as part of a response in the public API.
-#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 #[schema(example = json!({
     "id": 1,
@@ -114,7 +115,8 @@ impl_json_response_builder!(UserInfoResponse);
 /// User (API caller) request to change a user's display name.
 ///
 /// This struct is used as a request in the public API.
-#[derive(Deserialize, Clone, Debug, ToSchema)]
+#[derive(Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
 #[schema(
     example = json!({
         "new_display_name": "Janez Novak Veliki"
@@ -131,7 +133,8 @@ pub struct UserDisplayNameChangeRequest {
 /// Contains the updated user information.
 ///
 /// This struct is used as a response in the public API.
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 pub struct UserDisplayNameChangeResponse {
     pub user: UserInformation,
 }
@@ -140,10 +143,30 @@ impl_json_response_builder!(UserDisplayNameChangeResponse);
 
 
 
+
+#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
+#[schema(
+    example = json!({
+        "role_names": [
+            "user",
+            "administrator"
+        ]
+    })
+)]
+pub struct UserRolesResponse {
+    pub role_names: Vec<String>,
+}
+
+impl_json_response_builder!(UserRolesResponse);
+
+
+
 /// Response containing a list of active permissions.
 ///
 /// This struct is used as a response in the public API.
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 #[schema(
     example = json!({
         "permissions": [
@@ -176,6 +199,7 @@ pub fn users_router() -> Scope {
         .service(get_all_registered_users)
         .service(register_user)
         .service(get_current_user_info)
+        .service(get_current_user_roles)
         .service(get_current_user_effective_permissions)
         .service(update_current_user_display_name)
         .service(get_specific_user_info)
