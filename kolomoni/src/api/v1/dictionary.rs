@@ -2,7 +2,8 @@ use actix_web::{web, Scope};
 
 use self::slovene_word::slovene_dictionary_router;
 
-mod slovene_word;
+pub mod slovene_word;
+
 
 #[rustfmt::skip]
 pub fn dictionary_router() -> Scope {

@@ -5,7 +5,7 @@ use kolomoni_database::{
     query::{self, UserQuery, UserRoleQuery},
 };
 use sea_orm::TransactionTrait;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tracing::info;
 use utoipa::ToSchema;
 

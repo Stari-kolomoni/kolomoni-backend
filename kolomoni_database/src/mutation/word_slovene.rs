@@ -1,6 +1,7 @@
 use chrono::Utc;
-use miette::{Context, IntoDiagnostic, Result};
-use sea_orm::{ActiveModelTrait, ActiveValue, ConnectionTrait, TransactionTrait};
+use miette::{miette, Context, IntoDiagnostic, Result};
+use sea_orm::{ActiveModelTrait, ActiveValue, ConnectionTrait, TransactionTrait, TryIntoModel};
+use uuid::Uuid;
 
 use crate::{
     begin_transaction,
@@ -8,11 +9,21 @@ use crate::{
     shared::{generate_random_word_uuid, WordLanguage},
 };
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct NewSloveneWord {
     pub lemma: String,
     pub disambiguation: Option<String>,
     pub description: Option<String>,
 }
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct UpdatedSloveneWord {
+    pub lemma: Option<String>,
+    pub disambiguation: Option<String>,
+    pub description: Option<String>,
+}
+
+
 
 pub struct SloveneWordMutation;
 
@@ -56,5 +67,67 @@ impl SloveneWordMutation {
 
 
         Ok(new_slovene_word)
+    }
+
+    pub async fn update<C: ConnectionTrait + TransactionTrait>(
+        database: &C,
+        word_uuid: Uuid,
+        update: UpdatedSloveneWord,
+    ) -> Result<word_slovene::Model> {
+        let mut active_word_model = word_slovene::ActiveModel {
+            word_id: ActiveValue::Unchanged(word_uuid),
+            last_edited_at: ActiveValue::Set(Utc::now().fixed_offset()),
+            ..Default::default()
+        };
+
+        if let Some(updated_lemma) = update.lemma {
+            active_word_model.lemma = ActiveValue::Set(updated_lemma);
+        };
+
+        if let Some(updated_disambiguation) = update.disambiguation {
+            active_word_model.disambiguation = ActiveValue::Set(Some(updated_disambiguation));
+        }
+
+        if let Some(updated_description) = update.description {
+            active_word_model.description = ActiveValue::Set(Some(updated_description));
+        }
+
+
+        let updated_active_word = active_word_model
+            .save(database)
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed to update slovene word.")?;
+
+        let updated_word = updated_active_word
+            .try_into_model()
+            .into_diagnostic()
+            .wrap_err("Failed to convert active slovene model to normal model.")?;
+
+
+        Ok(updated_word)
+    }
+
+    pub async fn delete<C: ConnectionTrait + TransactionTrait>(
+        database: &C,
+        word_uuid: Uuid,
+    ) -> Result<()> {
+        let active_word_model = word_slovene::ActiveModel {
+            word_id: ActiveValue::Unchanged(word_uuid),
+            ..Default::default()
+        };
+
+        let deletion_result = active_word_model
+            .delete(database)
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed while trying to delete slovene word.")?;
+
+        debug_assert!(deletion_result.rows_affected <= 1);
+        if deletion_result.rows_affected != 1 {
+            return Err(miette!("no word with the given UUID"));
+        }
+
+        Ok(())
     }
 }
