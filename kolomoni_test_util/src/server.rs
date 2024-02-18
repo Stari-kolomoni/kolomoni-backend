@@ -1,3 +1,4 @@
+use ::http::{HeaderMap, HeaderName};
 use actix_http::{header::HeaderValue, Method, StatusCode};
 use actix_web::http;
 use kolomoni::testing::GiveFullUserPermissions;
@@ -54,26 +55,63 @@ impl TestServer {
     where
         U: AsRef<str>,
     {
-        let request_builder = self.client.request(
+        TestRequestBuilder::new(
+            &self.client,
             method,
             format!("{}{}", self.base_api_url, endpoint.as_ref()),
-        );
-
-        TestRequestBuilder { request_builder }
+        )
     }
 }
 
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct TestRequestDebugInfo {
+    url: String,
+    method: Method,
+    headers: HeaderMap,
+    body: Option<String>,
+}
+
+
 pub struct TestRequestBuilder {
+    debug_info: TestRequestDebugInfo,
     request_builder: RequestBuilder,
 }
 
 impl TestRequestBuilder {
-    pub fn with_authentication_token<S>(mut self, token: S) -> Self
+    pub fn new(client: &Client, method: Method, url: String) -> Self {
+        Self {
+            debug_info: TestRequestDebugInfo {
+                url: url.clone(),
+                method: method.clone(),
+                headers: HeaderMap::new(),
+                body: None,
+            },
+            request_builder: client.request(method, url),
+        }
+    }
+
+    pub fn with_header(mut self, header_name: HeaderName, header_value: HeaderValue) -> Self {
+        self.debug_info
+            .headers
+            .append(header_name.clone(), header_value.clone());
+
+        self.request_builder = self.request_builder.header(header_name, header_value);
+        self
+    }
+
+    pub fn with_access_token<S>(mut self, token: S) -> Self
     where
         S: Into<String>,
     {
-        self.request_builder = self.request_builder.bearer_auth(token.into());
+        let token: String = token.into();
+
+        self.debug_info.headers.append(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+        );
+
+        self.request_builder = self.request_builder.bearer_auth(token);
         self
     }
 
@@ -82,6 +120,8 @@ impl TestRequestBuilder {
         V: Serialize,
     {
         let serialized_body = serde_json::to_vec(&value).expect("failed to serialize value to JSON");
+
+        self.debug_info.body = Some(String::from_utf8(serialized_body.clone()).unwrap());
 
         self.request_builder = self.request_builder.body(serialized_body);
         self.request_builder = self.request_builder.header(
@@ -99,7 +139,7 @@ impl TestRequestBuilder {
             .await
             .expect("failed to perform HTTP request");
 
-        TestResponse::from_reqwest_response(response).await
+        TestResponse::new(self.debug_info, response).await
     }
 }
 

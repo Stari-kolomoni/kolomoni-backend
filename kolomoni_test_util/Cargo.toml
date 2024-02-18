@@ -16,6 +16,8 @@ actix-http = { workspace = true }
 actix-cors = { workspace = true }
 actix-service = { workspace = true }
 
+http = { workspace = true }
+
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
