@@ -1,7 +1,7 @@
 use ::http::{HeaderMap, HeaderName};
 use actix_http::{header::HeaderValue, Method, StatusCode};
 use actix_web::http;
-use kolomoni::testing::GiveFullUserPermissions;
+use kolomoni::testing::{GiveFullUserPermissionsRequest, ResetUserRolesRequest};
 use reqwest::{header, Client, ClientBuilder, RequestBuilder};
 use serde::Serialize;
 
@@ -44,7 +44,20 @@ impl TestServer {
                 Method::POST,
                 "/testing/give-user-full-permissions",
             )
-            .with_json_body(GiveFullUserPermissions { user_id })
+            .with_json_body(GiveFullUserPermissionsRequest { user_id })
+            .send()
+            .await;
+
+        response.assert_status_equals(StatusCode::OK);
+    }
+
+    pub async fn reset_user_permissions_to_normal(&self, user_id: i32) {
+        let response = self
+            .request(
+                Method::POST,
+                "/testing/reset-user-roles-to-normal",
+            )
+            .with_json_body(ResetUserRolesRequest { user_id })
             .send()
             .await;
 
