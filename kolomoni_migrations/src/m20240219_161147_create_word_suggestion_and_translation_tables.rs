@@ -23,7 +23,6 @@ const SUGGESTION_FK_SLOVENE_WORD_ID_CONSTRAINT_NAME: &str =
     "fk__word_translation_suggestion__slovene_word_id__word_slovene";
 const SUGGESTION_FK_ENGLISH_WORD_ID_CONSTRAINT_NAME: &str =
     "fk__word_translation_suggestion__english_word_id__word_english";
-const SUGGESTION_INDEX_ON_BOTH_IDS: &str = "index__word_translation_suggestion__on__both_ids";
 
 
 
@@ -47,7 +46,6 @@ const TRANSLATION_FK_SLOVENE_WORD_ID_CONSTRAINT_NAME: &str =
     "fk__word_translation__slovene_word_id__word_slovene";
 const TRANSLATION_FK_ENGLISH_WORD_ID_CONSTRAINT_NAME: &str =
     "fk__word_translation__english_word_id__word_english";
-const TRANSLATION_INDEX_ON_BOTH_IDS: &str = "index__word_translation__on__both_ids";
 
 
 
@@ -86,12 +84,6 @@ impl MigrationTrait for Migration {
                     .primary_key(
                         Index::create()
                             .name(SUGGESTION_PK_CONSTRAINT_NAME)
-                            .col(WordTranslationSuggestion::EnglishWordId)
-                            .col(WordTranslationSuggestion::SloveneWordId),
-                    )
-                    .index(
-                        Index::create()
-                            .name(SUGGESTION_INDEX_ON_BOTH_IDS)
                             .col(WordTranslationSuggestion::EnglishWordId)
                             .col(WordTranslationSuggestion::SloveneWordId),
                     )
@@ -145,12 +137,6 @@ impl MigrationTrait for Migration {
                     .primary_key(
                         Index::create()
                             .name(TRANSLATION_PK_CONSTRAINT_NAME)
-                            .col(WordTranslation::EnglishWordId)
-                            .col(WordTranslation::SloveneWordId),
-                    )
-                    .index(
-                        Index::create()
-                            .name(TRANSLATION_INDEX_ON_BOTH_IDS)
                             .col(WordTranslation::EnglishWordId)
                             .col(WordTranslation::SloveneWordId),
                     )
