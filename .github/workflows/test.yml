@@ -1,9 +1,10 @@
-name: "Run backend tests"
+name: "Backend tests"
 
 on:
   push:
     branches:
       - "master"
+      - "dev"
   workflow_dispatch: 
 
 jobs:
