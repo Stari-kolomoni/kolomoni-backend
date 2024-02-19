@@ -8,3 +8,5 @@ pub use super::user_role::Entity as UserRole;
 pub use super::word::Entity as Word;
 pub use super::word_english::Entity as WordEnglish;
 pub use super::word_slovene::Entity as WordSlovene;
+pub use super::word_translation::Entity as WordTranslation;
+pub use super::word_translation_suggestion::Entity as WordTranslationSuggestion;

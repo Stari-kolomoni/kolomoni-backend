@@ -46,6 +46,8 @@ impl PrimaryKeyTrait for PrimaryKey {
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
     Word,
+    WordTranslation,
+    WordTranslationSuggestion,
 }
 
 impl ColumnTrait for Column {
@@ -69,6 +71,10 @@ impl RelationTrait for Relation {
                 .from(Column::WordId)
                 .to(super::word::Column::Id)
                 .into(),
+            Self::WordTranslation => Entity::has_many(super::word_translation::Entity).into(),
+            Self::WordTranslationSuggestion => {
+                Entity::has_many(super::word_translation_suggestion::Entity).into()
+            }
         }
     }
 }
@@ -76,6 +82,18 @@ impl RelationTrait for Relation {
 impl Related<super::word::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Word.def()
+    }
+}
+
+impl Related<super::word_translation::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::WordTranslation.def()
+    }
+}
+
+impl Related<super::word_translation_suggestion::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::WordTranslationSuggestion.def()
     }
 }
 

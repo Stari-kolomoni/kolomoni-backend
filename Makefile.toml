@@ -40,7 +40,7 @@ args = [
 
 
 
-[tasks.generate-entities-from-database]
+[tasks.generate-entities]
 clear = true
 workspace = false
 command = "sea-orm-cli"

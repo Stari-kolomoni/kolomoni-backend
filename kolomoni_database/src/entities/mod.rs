@@ -10,3 +10,5 @@ pub mod user_role;
 pub mod word;
 pub mod word_english;
 pub mod word_slovene;
+pub mod word_translation;
+pub mod word_translation_suggestion;
