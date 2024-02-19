@@ -6,8 +6,8 @@ use chrono::{DateTime, Utc};
 use kolomoni_auth::Permission;
 use kolomoni_database::{
     entities,
-    mutation::{NewSloveneWord, SloveneWordMutation, UpdatedSloveneWord},
-    query::{self, SloveneWordQuery},
+    mutation::{EnglishWordMutation, NewEnglishWord, UpdatedEnglishWord},
+    query::{self, EnglishWordQuery},
 };
 use miette::IntoDiagnostic;
 use sea_orm::prelude::Uuid;
@@ -30,18 +30,19 @@ use crate::{
 };
 
 
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 #[schema(
     example = json!({
         "word_id": "018dbe00-266e-7398-abd2-0906df0aa345",
-        "lemma": "pustolovec",
-        "disambiguation": "lik",
-        "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino.",
+        "lemma": "adventurer",
+        "disambiguation": "character",
+        "description": "Playable or non-playable character.",
         "added_at": "2023-06-27T20:34:27.217273Z",
         "last_edited_at": "2023-06-27T20:34:27.217273Z"
     })
 )]
-pub struct SloveneWord {
+pub struct EnglishWord {
     pub word_id: String,
     pub lemma: String,
     pub disambiguation: Option<String>,
@@ -50,8 +51,8 @@ pub struct SloveneWord {
     pub last_edited_at: DateTime<Utc>,
 }
 
-impl SloveneWord {
-    pub fn from_database_model(model: entities::word_slovene::Model) -> Self {
+impl EnglishWord {
+    pub fn from_database_model(model: entities::word_english::Model) -> Self {
         Self {
             word_id: model.word_id.to_string(),
             lemma: model.lemma,
@@ -64,67 +65,68 @@ impl SloveneWord {
 }
 
 
-
 #[derive(Serialize, Debug, ToSchema)]
-pub struct SloveneWordsResponse {
-    slovene_words: Vec<SloveneWord>,
+pub struct EnglishWordsResponse {
+    english_words: Vec<EnglishWord>,
 }
 
-impl_json_response_builder!(SloveneWordsResponse);
+impl_json_response_builder!(EnglishWordsResponse);
 
 
 #[utoipa::path(
     get,
-    path = "/dictionary/slovene",
-    tag = "dictionary:slovene",
+    path = "/dictionary/english",
+    tag = "dictionary:english",
     responses(
         (
             status = 200,
-            description = "A list of all slovene words.",
-            body = SloveneWordsResponse,
+            description = "A list of all english words.",
+            body = EnglishWordsResponse,
         ),
         openapi::FailedAuthenticationResponses<openapi::RequiresWordRead>,
         openapi::InternalServerErrorResponse,
     )
 )]
 #[get("")]
-pub async fn get_all_slovene_words(
+pub async fn get_all_english_words(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
 ) -> EndpointResult {
     require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
 
-    // Load words from the database.
-    let words = query::SloveneWordQuery::all_words(&state.database)
+    let words = query::EnglishWordQuery::all_words(&state.database)
         .await
         .map_err(APIError::InternalError)?;
 
     let words_as_api_structures = words
         .into_iter()
-        .map(SloveneWord::from_database_model)
+        .map(EnglishWord::from_database_model)
         .collect();
 
-    Ok(SloveneWordsResponse {
-        slovene_words: words_as_api_structures,
+
+    Ok(EnglishWordsResponse {
+        english_words: words_as_api_structures,
     }
     .into_response())
 }
+
 
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
 #[schema(
     example = json!({
-        "lemma": "pustolovec",
-        "disambiguation": "lik",
-        "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino."
+        "lemma": "adventurer",
+        "disambiguation": "character",
+        "description": "Playable or non-playable character.",
     })
 )]
-pub struct SloveneWordCreationRequest {
+pub struct EnglishWordCreationRequest {
     pub lemma: String,
     pub disambiguation: Option<String>,
     pub description: Option<String>,
 }
+
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
@@ -132,49 +134,49 @@ pub struct SloveneWordCreationRequest {
     example = json!({
         "word": {
             "word_id": "018dbe00-266e-7398-abd2-0906df0aa345",
-            "lemma": "pustolovec",
-            "disambiguation": "lik",
-            "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino.",
+            "lemma": "adventurer",
+            "disambiguation": "character",
+            "description": "Playable or non-playable character.",
             "added_at": "2023-06-27T20:34:27.217273Z",
             "last_edited_at": "2023-06-27T20:34:27.217273Z"
         }
     })
 )]
-pub struct SloveneWordCreationResponse {
-    pub word: SloveneWord,
+pub struct EnglishWordCreationResponse {
+    pub word: EnglishWord,
 }
 
-impl_json_response_builder!(SloveneWordCreationResponse);
+impl_json_response_builder!(EnglishWordCreationResponse);
 
 
 #[utoipa::path(
     post,
-    path = "/dictionary/slovene",
-    tag = "dictionary:slovene",
+    path = "/dictionary/english",
+    tag = "dictionary:english",
     request_body(
-        content = SloveneWordCreationRequest
+        content = EnglishWordCreationRequest
     ),
     responses(
         (
             status = 200,
-            description = "The newly-created slovene word.",
-            body = SloveneWordCreationResponse,
+            description = "The newly-created english word.",
+            body = EnglishWordCreationResponse,
         ),
         (
             status = 409,
-            description = "Slovene word with the given lemma already exists.",
+            description = "English word with the given lemma already exists.",
             body = ErrorReasonResponse,
-            example = json!({ "reason": "A slovene word with the given lemma already exists." })
+            example = json!({ "reason": "An english word with the given lemma already exists." })
         ),
         openapi::FailedAuthenticationResponses<openapi::RequiresWordCreate>,
         openapi::InternalServerErrorResponse,
     )
 )]
 #[post("")]
-pub async fn create_slovene_word(
+pub async fn create_english_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    creation_request: web::Json<SloveneWordCreationRequest>,
+    creation_request: web::Json<EnglishWordCreationRequest>,
 ) -> EndpointResult {
     let authenticated_user = require_authentication!(authentication);
     require_permission!(state, authenticated_user, Permission::WordCreate);
@@ -182,22 +184,23 @@ pub async fn create_slovene_word(
 
     let creation_request = creation_request.into_inner();
 
+
     let lemma_already_exists =
-        SloveneWordQuery::word_exists_by_lemma(&state.database, creation_request.lemma.clone())
+        EnglishWordQuery::word_exists_by_lemma(&state.database, creation_request.lemma.clone())
             .await
             .map_err(APIError::InternalError)?;
 
     if lemma_already_exists {
         return Ok(error_response_with_reason!(
             StatusCode::CONFLICT,
-            "A slovene word with the given lemma already exists."
+            "An english word with the given lemma already exists."
         ));
     }
 
 
-    let newly_created_word = SloveneWordMutation::create(
+    let newly_created_word = EnglishWordMutation::create(
         &state.database,
-        NewSloveneWord {
+        NewEnglishWord {
             lemma: creation_request.lemma,
             disambiguation: creation_request.disambiguation,
             description: creation_request.description,
@@ -207,8 +210,8 @@ pub async fn create_slovene_word(
     .map_err(APIError::InternalError)?;
 
 
-    Ok(SloveneWordCreationResponse {
-        word: SloveneWord::from_database_model(newly_created_word),
+    Ok(EnglishWordCreationResponse {
+        word: EnglishWord::from_database_model(newly_created_word),
     }
     .into_response())
 }
@@ -218,29 +221,29 @@ pub async fn create_slovene_word(
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
-pub struct SloveneWordInfoResponse {
-    pub word: SloveneWord,
+pub struct EnglishWordInfoResponse {
+    pub word: EnglishWord,
 }
 
-impl_json_response_builder!(SloveneWordInfoResponse);
+impl_json_response_builder!(EnglishWordInfoResponse);
 
 
 #[utoipa::path(
     get,
-    path = "/dictionary/slovene/{word_uuid}",
-    tag = "dictionary:slovene",
+    path = "/dictionary/english/{word_uuid}",
+    tag = "dictionary:english",
     params(
         (
             "word_uuid" = String,
             Path,
-            description = "UUID of the slovene word."
+            description = "UUID of the english word."
         )
     ),
     responses(
         (
             status = 200,
-            description = "Information about the requested slovene word.",
-            body = SloveneWordInfoResponse,
+            description = "Information about the requested english word.",
+            body = EnglishWordInfoResponse,
         ),
         (
             status = 400,
@@ -250,14 +253,14 @@ impl_json_response_builder!(SloveneWordInfoResponse);
         ),
         (
             status = 404,
-            description = "The requested slovene word does not exist."
+            description = "The requested english word does not exist."
         ),
         openapi::FailedAuthenticationResponses<openapi::RequiresWordRead>,
         openapi::InternalServerErrorResponse,
     )
 )]
 #[get("/{word_uuid}")]
-pub async fn get_specific_slovene_word(
+pub async fn get_specific_english_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
@@ -271,7 +274,7 @@ pub async fn get_specific_slovene_word(
         .map_err(|_| APIError::client_error("invalid UUID"))?;
 
 
-    let target_word = SloveneWordQuery::word_by_uuid(&state.database, target_word_uuid)
+    let target_word = EnglishWordQuery::word_by_uuid(&state.database, target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -280,43 +283,43 @@ pub async fn get_specific_slovene_word(
     };
 
 
-    Ok(SloveneWordInfoResponse {
-        word: SloveneWord::from_database_model(target_word),
+    Ok(EnglishWordInfoResponse {
+        word: EnglishWord::from_database_model(target_word),
     }
     .into_response())
 }
 
 
-
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-pub struct SloveneWordUpdateRequest {
+pub struct EnglishWordUpdateRequest {
     pub lemma: Option<String>,
     pub disambiguation: Option<String>,
     pub description: Option<String>,
 }
 
-impl_json_response_builder!(SloveneWordUpdateRequest);
+impl_json_response_builder!(EnglishWordUpdateRequest);
+
 
 
 #[utoipa::path(
     patch,
-    path = "/dictionary/slovene/{word_uuid}",
-    tag = "dictionary:slovene",
+    path = "/dictionary/english/{word_uuid}",
+    tag = "dictionary:english",
     params(
         (
             "word_uuid" = String,
             Path,
-            description = "UUID of the slovene word."
+            description = "UUID of the english word."
         )
     ),
     request_body(
-        content = SloveneWordUpdateRequest,
+        content = EnglishWordUpdateRequest,
     ),
     responses(
         (
             status = 200,
-            description = "Updated slovene word.",
-            body = SloveneWordInfoResponse,
+            description = "Updated english word.",
+            body = EnglishWordInfoResponse,
         ),
         (
             status = 400,
@@ -326,18 +329,18 @@ impl_json_response_builder!(SloveneWordUpdateRequest);
         ),
         (
             status = 404,
-            description = "The requested slovene word does not exist."
+            description = "The requested english word does not exist."
         ),
         openapi::FailedAuthenticationResponses<openapi::RequiresWordUpdate>,
         openapi::InternalServerErrorResponse,
     )
 )]
 #[patch("/{word_uuid}")]
-pub async fn update_specific_slovene_word(
+pub async fn update_specific_english_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
-    request_data: web::Json<SloveneWordUpdateRequest>,
+    request_data: web::Json<EnglishWordUpdateRequest>,
 ) -> EndpointResult {
     let authenticated_user = require_authentication!(authentication);
     require_permission!(state, authenticated_user, Permission::WordUpdate);
@@ -352,7 +355,7 @@ pub async fn update_specific_slovene_word(
 
 
     let target_word_exists =
-        SloveneWordQuery::word_exists_by_uuid(&state.database, target_word_uuid)
+        EnglishWordQuery::word_exists_by_uuid(&state.database, target_word_uuid)
             .await
             .map_err(APIError::InternalError)?;
 
@@ -361,10 +364,10 @@ pub async fn update_specific_slovene_word(
     }
 
 
-    let updated_word = SloveneWordMutation::update(
+    let updated_model = EnglishWordMutation::update(
         &state.database,
         target_word_uuid,
-        UpdatedSloveneWord {
+        UpdatedEnglishWord {
             lemma: request_data.lemma,
             disambiguation: request_data.disambiguation,
             description: request_data.description,
@@ -374,8 +377,8 @@ pub async fn update_specific_slovene_word(
     .map_err(APIError::InternalError)?;
 
 
-    Ok(SloveneWordInfoResponse {
-        word: SloveneWord::from_database_model(updated_word),
+    Ok(EnglishWordInfoResponse {
+        word: EnglishWord::from_database_model(updated_model),
     }
     .into_response())
 }
@@ -384,19 +387,19 @@ pub async fn update_specific_slovene_word(
 
 #[utoipa::path(
     delete,
-    path = "/dictionary/slovene/{word_uuid}",
-    tag = "dictionary:slovene",
+    path = "/dictionary/english/{word_uuid}",
+    tag = "dictionary:english",
     params(
         (
             "word_uuid" = String,
             Path,
-            description = "UUID of the slovene word to delete."
+            description = "UUID of the english word to delete."
         )
     ),
     responses(
         (
             status = 200,
-            description = "Slovene word deleted.",
+            description = "English word deleted.",
         ),
         (
             status = 400,
@@ -406,14 +409,14 @@ pub async fn update_specific_slovene_word(
         ),
         (
             status = 404,
-            description = "The given slovene word does not exist."
+            description = "The given english word does not exist."
         ),
         openapi::FailedAuthenticationResponses<openapi::RequiresWordDelete>,
         openapi::InternalServerErrorResponse,
     )
 )]
 #[delete("/{word_uuid}")]
-pub async fn delete_specific_slovene_word(
+pub async fn delete_specific_english_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
@@ -429,7 +432,7 @@ pub async fn delete_specific_slovene_word(
 
 
     let target_word_exists =
-        SloveneWordQuery::word_exists_by_uuid(&state.database, target_word_uuid)
+        EnglishWordQuery::word_exists_by_uuid(&state.database, target_word_uuid)
             .await
             .map_err(APIError::InternalError)?;
 
@@ -438,7 +441,7 @@ pub async fn delete_specific_slovene_word(
     }
 
 
-    SloveneWordMutation::delete(&state.database, target_word_uuid)
+    EnglishWordMutation::delete(&state.database, target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -447,15 +450,16 @@ pub async fn delete_specific_slovene_word(
 }
 
 
+
 // TODO Links, suggestions, translations.
 
 
 #[rustfmt::skip]
-pub fn slovene_dictionary_router() -> Scope {
-    web::scope("/slovene")
-        .service(get_all_slovene_words)
-        .service(create_slovene_word)
-        .service(get_specific_slovene_word)
-        .service(update_specific_slovene_word)
-        .service(delete_specific_slovene_word)
+pub fn english_dictionary_router() -> Scope {
+    web::scope("/english")
+        .service(get_all_english_words)
+        .service(create_english_word)
+        .service(get_specific_english_word)
+        .service(update_specific_english_word)
+        .service(delete_specific_english_word)
 }

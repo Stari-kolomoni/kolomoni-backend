@@ -54,10 +54,17 @@ use utoipa_rapidoc::RapiDoc;
 
         // dictionary/slovene_word.rs
         dictionary::slovene_word::get_all_slovene_words,
-        dictionary::slovene_word::create_a_slovene_word,
+        dictionary::slovene_word::create_slovene_word,
         dictionary::slovene_word::get_specific_slovene_word,
-        dictionary::slovene_word::update_a_specific_slovene_word,
-        dictionary::slovene_word::delete_a_specific_slovene_word,
+        dictionary::slovene_word::update_specific_slovene_word,
+        dictionary::slovene_word::delete_specific_slovene_word,
+
+        // dictionary/english_word.rs
+        dictionary::english_word::get_all_english_words,
+        dictionary::english_word::create_english_word,
+        dictionary::english_word::get_specific_english_word,
+        dictionary::english_word::update_specific_english_word,
+        dictionary::english_word::delete_specific_english_word,
     ),
     components(
         schemas(
@@ -105,6 +112,14 @@ use utoipa_rapidoc::RapiDoc;
             dictionary::slovene_word::SloveneWordCreationResponse,
             dictionary::slovene_word::SloveneWordInfoResponse,
             dictionary::slovene_word::SloveneWordUpdateRequest,
+
+            // dictionary/english_word.rs
+            dictionary::english_word::EnglishWord,
+            dictionary::english_word::EnglishWordsResponse,
+            dictionary::english_word::EnglishWordCreationRequest,
+            dictionary::english_word::EnglishWordCreationResponse,
+            dictionary::english_word::EnglishWordInfoResponse,
+            dictionary::english_word::EnglishWordUpdateRequest,
         ),
     ),
     info(

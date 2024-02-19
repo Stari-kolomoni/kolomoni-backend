@@ -196,12 +196,16 @@ impl_json_response_builder!(UserPermissionsResponse);
 #[rustfmt::skip]
 pub fn users_router() -> Scope {
     web::scope("users")
+        // all.rs
         .service(get_all_registered_users)
+        // registration.rs
         .service(register_user)
+        // current.ts
         .service(get_current_user_info)
         .service(get_current_user_roles)
         .service(get_current_user_effective_permissions)
         .service(update_current_user_display_name)
+        // specific.rs
         .service(get_specific_user_info)
         .service(get_specific_user_effective_permissions)
         .service(get_specific_user_roles)

@@ -1,13 +1,14 @@
 use actix_web::{web, Scope};
 
-use self::slovene_word::slovene_dictionary_router;
+use self::{english_word::english_dictionary_router, slovene_word::slovene_dictionary_router};
 
+pub mod english_word;
 pub mod slovene_word;
 
 
 #[rustfmt::skip]
 pub fn dictionary_router() -> Scope {
-    // TODO
     web::scope("/dictionary")
         .service(slovene_dictionary_router())
+        .service(english_dictionary_router())
 }

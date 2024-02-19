@@ -4,6 +4,8 @@ use actix_utils::future::{self, Ready};
 use actix_web::{http::header, web, FromRequest, HttpRequest, Scope};
 use chrono::{DateTime, SubsecRound, Utc};
 
+use self::v1::v1_api_router;
+
 pub mod errors;
 pub mod macros;
 pub mod openapi;
@@ -71,6 +73,8 @@ impl FromRequest for OptionalIfModifiedSince {
 /// Router for the entire public API.
 ///
 /// Lives under the `/api` path and is made up of `/v1` and its sub-routes.
+#[rustfmt::skip]
 pub fn api_router() -> Scope {
-    web::scope("/api").service(v1::v1_api_router())
+    web::scope("/api")
+        .service(v1_api_router())
 }
