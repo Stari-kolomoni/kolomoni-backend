@@ -5,7 +5,7 @@ use sea_orm_migration::prelude::*;
 
 
 #[derive(DeriveIden)]
-enum Word {
+pub enum Word {
     #[sea_orm(iden = "word")]
     Table,
 
@@ -22,7 +22,7 @@ const WORD_INDEX_ON_ID: &str = "index__word__on__id";
 
 
 #[derive(DeriveIden)]
-enum WordSlovene {
+pub enum WordSlovene {
     #[sea_orm(iden = "word_slovene")]
     Table,
 
@@ -51,7 +51,7 @@ const WORD_SLOVENE_FK_WORD_ID_CONSTRAINT_NAME: &str = "fk__word_slovene__word_id
 
 
 #[derive(DeriveIden)]
-enum WordEnglish {
+pub enum WordEnglish {
     #[sea_orm(iden = "word_english")]
     Table,
 
