@@ -55,12 +55,16 @@ impl StandardRole {
                 StandardPermission::UserSelfWrite,
                 StandardPermission::UserAnyRead,
                 StandardPermission::WordRead,
+                StandardPermission::SuggestionCreate,
             ],
             StandardRole::Administrator => vec![
                 StandardPermission::UserAnyWrite,
                 StandardPermission::WordCreate,
                 StandardPermission::WordUpdate,
                 StandardPermission::WordDelete,
+                StandardPermission::SuggestionDelete,
+                StandardPermission::TranslationCreate,
+                StandardPermission::TranslationDelete,
             ],
         }
     }

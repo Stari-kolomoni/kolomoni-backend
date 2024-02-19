@@ -80,12 +80,16 @@ impl Role {
                 Permission::UserSelfWrite,
                 Permission::UserAnyRead,
                 Permission::WordRead,
+                Permission::SuggestionCreate,
             ],
             Role::Administrator => vec![
                 Permission::UserAnyWrite,
                 Permission::WordCreate,
                 Permission::WordUpdate,
                 Permission::WordDelete,
+                Permission::SuggestionDelete,
+                Permission::TranslationCreate,
+                Permission::TranslationDelete,
             ],
         }
     }

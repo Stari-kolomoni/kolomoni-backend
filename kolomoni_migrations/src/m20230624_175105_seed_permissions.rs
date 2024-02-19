@@ -21,6 +21,10 @@ pub enum StandardPermission {
     WordRead,
     WordUpdate,
     WordDelete,
+    SuggestionCreate,
+    SuggestionDelete,
+    TranslationCreate,
+    TranslationDelete,
 }
 
 impl StandardPermission {
@@ -34,6 +38,10 @@ impl StandardPermission {
             Self::WordRead,
             Self::WordUpdate,
             Self::WordDelete,
+            Self::SuggestionCreate,
+            Self::SuggestionDelete,
+            Self::TranslationCreate,
+            Self::TranslationDelete,
         ]
     }
 
@@ -47,6 +55,10 @@ impl StandardPermission {
             StandardPermission::WordRead => 6,
             StandardPermission::WordUpdate => 7,
             StandardPermission::WordDelete => 8,
+            StandardPermission::SuggestionCreate => 9,
+            StandardPermission::SuggestionDelete => 10,
+            StandardPermission::TranslationCreate => 11,
+            StandardPermission::TranslationDelete => 12,
         }
     }
 
@@ -60,6 +72,10 @@ impl StandardPermission {
             StandardPermission::WordRead => "word:read",
             StandardPermission::WordUpdate => "word:update",
             StandardPermission::WordDelete => "word:delete",
+            StandardPermission::SuggestionCreate => "word.suggestion:create",
+            StandardPermission::SuggestionDelete => "word.suggestion:delete",
+            StandardPermission::TranslationCreate => "word.translation:create",
+            StandardPermission::TranslationDelete => "word.translation:delete",
         }
     }
 
@@ -82,6 +98,14 @@ impl StandardPermission {
                 "Allows the user to update existing words in the dictionary (but not delete them).",
             StandardPermission::WordDelete =>
                 "Allows the user to delete words from the dictionary.",
+            StandardPermission::SuggestionCreate => 
+                "Allows the user to create a translation suggestion.",
+            StandardPermission::SuggestionDelete => 
+                "Allows the user to remove a translation suggestion.",
+            StandardPermission::TranslationCreate =>
+                "Allows the user to translate a word.",
+            StandardPermission::TranslationDelete => 
+                "Allows the user to remove a word translation.",
         }
     }
 }

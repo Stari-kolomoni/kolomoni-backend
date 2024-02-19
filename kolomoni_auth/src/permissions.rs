@@ -45,6 +45,18 @@ pub enum Permission {
 
     #[serde(rename = "word:delete")]
     WordDelete,
+
+    #[serde(rename = "word.suggestion:create")]
+    SuggestionCreate,
+
+    #[serde(rename = "word.suggestion:delete")]
+    SuggestionDelete,
+
+    #[serde(rename = "word.translation:create")]
+    TranslationCreate,
+
+    #[serde(rename = "word.translation:delete")]
+    TranslationDelete,
 }
 
 
@@ -59,6 +71,10 @@ impl Permission {
             6 => Some(Permission::WordRead),
             7 => Some(Permission::WordUpdate),
             8 => Some(Permission::WordDelete),
+            9 => Some(Permission::SuggestionCreate),
+            10 => Some(Permission::SuggestionDelete),
+            11 => Some(Permission::TranslationCreate),
+            12 => Some(Permission::TranslationDelete),
             _ => None,
         }
     }
@@ -75,6 +91,10 @@ impl Permission {
             Permission::WordRead => 6,
             Permission::WordUpdate => 7,
             Permission::WordDelete => 8,
+            Permission::SuggestionCreate => 9,
+            Permission::SuggestionDelete => 10,
+            Permission::TranslationCreate => 11,
+            Permission::TranslationDelete => 12,
         }
     }
 
@@ -89,6 +109,10 @@ impl Permission {
             "word:read" => Some(Self::WordRead),
             "word:update" => Some(Self::WordUpdate),
             "word:delete" => Some(Self::WordDelete),
+            "word.suggestion:create" => Some(Self::SuggestionCreate),
+            "word.suggestion:delete" => Some(Self::SuggestionDelete),
+            "word.translation:create" => Some(Self::TranslationCreate),
+            "word.translation:delete" => Some(Self::TranslationDelete),
             _ => None,
         }
     }
@@ -104,6 +128,10 @@ impl Permission {
             Permission::WordRead => "word:read",
             Permission::WordUpdate => "word:update",
             Permission::WordDelete => "word:delete",
+            Permission::SuggestionCreate => "word.suggestion:create",
+            Permission::SuggestionDelete => "word.suggestion:delete",
+            Permission::TranslationCreate => "word.translation:create",
+            Permission::TranslationDelete => "word.translation:delete",
         }
     }
 
@@ -127,6 +155,15 @@ impl Permission {
                 "Allows the user to update existing words in the dictionary (but not delete them).",
             Permission::WordDelete =>
                 "Allows the user to delete words from the dictionary.",
+            Permission::SuggestionCreate => 
+                "Allows the user to create a translation suggestion.",
+            Permission::SuggestionDelete => 
+                "Allows the user to remove a translation suggestion.",
+            Permission::TranslationCreate =>
+                "Allows the user to translate a word.",
+            Permission::TranslationDelete => 
+                "Allows the user to remove a word translation.",
+                
         }
     }
 }
