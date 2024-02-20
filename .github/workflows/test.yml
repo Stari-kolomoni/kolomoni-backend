@@ -7,10 +7,6 @@ on:
       - "dev"
   workflow_dispatch: 
 
-concurrency:
-  group: "test"
-  cancel-in-progress: false
-
 jobs:
   run-unit-tests:
     runs-on: "self-hosted"
