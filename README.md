@@ -2,6 +2,7 @@
 
 [![Test Status](https://img.shields.io/github/actions/workflow/status/Stari-kolomoni/kolomoni-backend/test.yml?branch=master&style=flat-square&logo=github&logoColor=white&label=doc%2C%20unit%20%26%20end-to-end%20tests)](https://github.com/Stari-kolomoni/kolomoni-backend/actions/workflows/test.yml)
 [![Licensed under GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square)](https://github.com/Stari-kolomoni/kolomoni-backend/blob/master/LICENSE.md)
+[![Development Docs](https://img.shields.io/badge/development_docs-here-orange)](https://stari-kolomoni.github.io/kolomoni-backend/)
 
 
 This repository contains the full backend for the Stari Kolomoni open fantasy translation project.
