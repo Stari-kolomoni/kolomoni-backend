@@ -94,7 +94,7 @@ async fn main() -> Result<()> {
     #[allow(clippy::let_and_return)]
     let server = HttpServer::new(move || {
         let json_extractor_config = actix_web::web::JsonConfig::default()
-            .error_handler(|payload_error, _| {
+            .error_handler(|payload_error, request| {
                 match payload_error {
                     JsonPayloadError::ContentType  => {
                         APIError::client_error(
@@ -103,7 +103,9 @@ async fn main() -> Result<()> {
                         ).into()
                     },
                     JsonPayloadError::Serialize(error) => {
-                        APIError::internal_reason(format!("Failed to serialize to JSON: {:?}", error)).into()
+                        APIError::internal_reason(
+                            format!("Failed to serialize to JSON: {:?}. Request: {:?}", error, request)
+                        ).into()
                     },
                     JsonPayloadError::Deserialize(_) => {
                         APIError::client_error(
