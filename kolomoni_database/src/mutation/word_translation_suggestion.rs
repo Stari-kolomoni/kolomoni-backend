@@ -12,6 +12,11 @@ pub struct NewTranslationSuggestion {
     pub slovene_word_id: Uuid,
 }
 
+pub struct TranslationSuggestionToDelete {
+    pub english_word_id: Uuid,
+    pub slovene_word_id: Uuid,
+}
+
 
 pub struct TranslationSuggestionMutation;
 
@@ -33,5 +38,25 @@ impl TranslationSuggestionMutation {
             .wrap_err("Failed while inserting new translation suggestion into the database.")?;
 
         Ok(new_suggestion_model)
+    }
+
+    pub async fn delete<C: ConnectionTrait + TransactionTrait>(
+        database: &C,
+        to_delete: TranslationSuggestionToDelete,
+    ) -> Result<()> {
+        let active_suggestion = word_translation_suggestion::ActiveModel {
+            english_word_id: ActiveValue::Unchanged(to_delete.english_word_id),
+            slovene_word_id: ActiveValue::Unchanged(to_delete.slovene_word_id),
+            ..Default::default()
+        };
+
+
+        active_suggestion
+            .delete(database)
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed while deleting translation suggestion from the database.")?;
+
+        Ok(())
     }
 }

@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use actix_http::StatusCode;
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
 use chrono::{DateTime, Utc};
@@ -7,18 +5,18 @@ use kolomoni_auth::Permission;
 use kolomoni_database::{
     entities,
     mutation::{EnglishWordMutation, NewEnglishWord, UpdatedEnglishWord},
-    query::{self, EnglishWordQuery},
+    query::{self, EnglishWordQuery, TranslationQuery, TranslationSuggestionQuery},
 };
-use miette::IntoDiagnostic;
-use sea_orm::prelude::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::slovene_word::SloveneWord;
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
         openapi,
+        v1::dictionary::parse_string_into_uuid,
     },
     authentication::UserAuthenticationExtractor,
     error_response_with_reason,
@@ -43,23 +41,60 @@ use crate::{
     })
 )]
 pub struct EnglishWord {
+    /// Internal UUID of the word.
     pub word_id: String,
+
+    /// An abstract or base form of the word.
     pub lemma: String,
+
+    /// If there are multiple similar words, the disambiguation
+    /// helps distinguish the word from other words at a glance.
     pub disambiguation: Option<String>,
+
+    /// A short description of the word. Supports Markdown.
+    ///
+    /// TODO Will need special Markdown support for linking to other dictionary words
+    ///      and possibly autocomplete in the frontend editor.
     pub description: Option<String>,
+
+    /// When the word was created.
     pub added_at: DateTime<Utc>,
+
+    /// When the word was last edited.
     pub last_edited_at: DateTime<Utc>,
+
+    /// Suggested slovene translations of this word.
+    pub suggested_translations: Vec<SloveneWord>,
+
+    /// Slovene translations of this word.
+    pub translations: Vec<SloveneWord>,
 }
 
 impl EnglishWord {
-    pub fn from_database_model(model: entities::word_english::Model) -> Self {
+    pub fn from_models(
+        english_model: entities::word_english::Model,
+        suggested_translations: Vec<entities::word_slovene::Model>,
+        translations: Vec<entities::word_slovene::Model>,
+    ) -> Self {
+        let suggested_translations = suggested_translations
+            .into_iter()
+            .map(SloveneWord::from_database_model)
+            .collect();
+
+        let translations = translations
+            .into_iter()
+            .map(SloveneWord::from_database_model)
+            .collect();
+
         Self {
-            word_id: model.word_id.to_string(),
-            lemma: model.lemma,
-            disambiguation: model.disambiguation,
-            description: model.description,
-            added_at: model.added_at.to_utc(),
-            last_edited_at: model.last_edited_at.to_utc(),
+            word_id: english_model.word_id.to_string(),
+            lemma: english_model.lemma,
+            disambiguation: english_model.disambiguation,
+            description: english_model.description,
+            added_at: english_model.added_at.to_utc(),
+            last_edited_at: english_model.last_edited_at.to_utc(),
+            suggested_translations,
+            translations,
         }
     }
 }
@@ -98,10 +133,33 @@ pub async fn get_all_english_words(
         .await
         .map_err(APIError::InternalError)?;
 
-    let words_as_api_structures = words
-        .into_iter()
-        .map(EnglishWord::from_database_model)
-        .collect();
+
+    let mut words_as_api_structures: Vec<EnglishWord> = Vec::with_capacity(words.len());
+
+    // PERF: This might be a good candidate for optimization, probably with caching.
+    for raw_english_word in words {
+        let suggested_translations =
+            query::TranslationSuggestionQuery::suggestions_for_english_word(
+                &state.database,
+                raw_english_word.word_id,
+            )
+            .await
+            .map_err(APIError::InternalError)?;
+
+        let translations = query::TranslationQuery::translations_for_english_word(
+            &state.database,
+            raw_english_word.word_id,
+        )
+        .await
+        .map_err(APIError::InternalError)?;
+
+
+        words_as_api_structures.push(EnglishWord::from_models(
+            raw_english_word,
+            suggested_translations,
+            translations,
+        ));
+    }
 
 
     Ok(EnglishWordsResponse {
@@ -211,7 +269,8 @@ pub async fn create_english_word(
 
 
     Ok(EnglishWordCreationResponse {
-        word: EnglishWord::from_database_model(newly_created_word),
+        // A newly-created word can not have any suggestions or translations yet.
+        word: EnglishWord::from_models(newly_created_word, Vec::new(), Vec::new()),
     }
     .into_response())
 }
@@ -268,10 +327,7 @@ pub async fn get_specific_english_word(
     require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
 
 
-    let target_word_uuid_string = parameters.into_inner().0;
-    let target_word_uuid = Uuid::from_str(&target_word_uuid_string)
-        .into_diagnostic()
-        .map_err(|_| APIError::client_error("invalid UUID"))?;
+    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
 
 
     let target_word = EnglishWordQuery::word_by_uuid(&state.database, target_word_uuid)
@@ -283,8 +339,19 @@ pub async fn get_specific_english_word(
     };
 
 
+    let translation_suggestions =
+        TranslationSuggestionQuery::suggestions_for_english_word(&state.database, target_word_uuid)
+            .await
+            .map_err(APIError::InternalError)?;
+
+    let translations =
+        TranslationQuery::translations_for_english_word(&state.database, target_word_uuid)
+            .await
+            .map_err(APIError::InternalError)?;
+
+
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::from_database_model(target_word),
+        word: EnglishWord::from_models(target_word, translation_suggestions, translations),
     }
     .into_response())
 }
@@ -346,10 +413,7 @@ pub async fn update_specific_english_word(
     require_permission!(state, authenticated_user, Permission::WordUpdate);
 
 
-    let target_word_uuid_string = parameters.into_inner().0;
-    let target_word_uuid = Uuid::from_str(&target_word_uuid_string)
-        .into_diagnostic()
-        .map_err(|_| APIError::client_error("invalid UUID"))?;
+    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
 
     let request_data = request_data.into_inner();
 
@@ -377,8 +441,23 @@ pub async fn update_specific_english_word(
     .map_err(APIError::InternalError)?;
 
 
+    let translation_suggestions =
+        TranslationSuggestionQuery::suggestions_for_english_word(&state.database, target_word_uuid)
+            .await
+            .map_err(APIError::InternalError)?;
+
+    let translations =
+        TranslationQuery::translations_for_english_word(&state.database, target_word_uuid)
+            .await
+            .map_err(APIError::InternalError)?;
+
+
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::from_database_model(updated_model),
+        word: EnglishWord::from_models(
+            updated_model,
+            translation_suggestions,
+            translations,
+        ),
     }
     .into_response())
 }
@@ -425,11 +504,7 @@ pub async fn delete_specific_english_word(
     require_permission!(state, authenticated_user, Permission::WordDelete);
 
 
-    let target_word_uuid_string = parameters.into_inner().0;
-    let target_word_uuid = Uuid::from_str(&target_word_uuid_string)
-        .into_diagnostic()
-        .map_err(|_| APIError::client_error("invalid UUID"))?;
-
+    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
 
     let target_word_exists =
         EnglishWordQuery::word_exists_by_uuid(&state.database, target_word_uuid)

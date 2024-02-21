@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use actix_http::StatusCode;
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
 use chrono::{DateTime, Utc};
@@ -9,8 +7,6 @@ use kolomoni_database::{
     mutation::{NewSloveneWord, SloveneWordMutation, UpdatedSloveneWord},
     query::{self, SloveneWordQuery},
 };
-use miette::IntoDiagnostic;
-use sea_orm::prelude::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -19,6 +15,7 @@ use crate::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
         openapi,
+        v1::dictionary::parse_string_into_uuid,
     },
     authentication::UserAuthenticationExtractor,
     error_response_with_reason,
@@ -265,10 +262,7 @@ pub async fn get_specific_slovene_word(
     require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
 
 
-    let target_word_uuid_string = parameters.into_inner().0;
-    let target_word_uuid = Uuid::from_str(&target_word_uuid_string)
-        .into_diagnostic()
-        .map_err(|_| APIError::client_error("invalid UUID"))?;
+    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
 
 
     let target_word = SloveneWordQuery::word_by_uuid(&state.database, target_word_uuid)
@@ -343,10 +337,7 @@ pub async fn update_specific_slovene_word(
     require_permission!(state, authenticated_user, Permission::WordUpdate);
 
 
-    let target_word_uuid_string = parameters.into_inner().0;
-    let target_word_uuid = Uuid::from_str(&target_word_uuid_string)
-        .into_diagnostic()
-        .map_err(|_| APIError::client_error("invalid UUID"))?;
+    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
 
     let request_data = request_data.into_inner();
 
@@ -422,10 +413,7 @@ pub async fn delete_specific_slovene_word(
     require_permission!(state, authenticated_user, Permission::WordDelete);
 
 
-    let target_word_uuid_string = parameters.into_inner().0;
-    let target_word_uuid = Uuid::from_str(&target_word_uuid_string)
-        .into_diagnostic()
-        .map_err(|_| APIError::client_error("invalid UUID"))?;
+    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
 
 
     let target_word_exists =

@@ -2,12 +2,8 @@ use actix_http::StatusCode;
 use actix_web::{delete, post, web, HttpResponse, Scope};
 use kolomoni_auth::Permission;
 use kolomoni_database::{
-    mutation::{
-        NewTranslationSuggestion,
-        TranslationSuggestionMutation,
-        TranslationSuggestionToDelete,
-    },
-    query::TranslationSuggestionQuery,
+    mutation::{NewTranslation, TranslationMutation, TranslationToDelete},
+    query::TranslationQuery,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -27,45 +23,44 @@ use crate::{
 
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct TranslationSuggestionRequest {
+pub struct TranslationRequest {
     english_word_id: String,
     slovene_word_id: String,
 }
 
-
 #[utoipa::path(
     post,
-    path = "/suggestion",
-    tag = "dictionary:suggestion",
+    path = "/translation",
+    tag = "dictionary:translation",
     request_body(
-        content = TranslationSuggestionRequest
+        content = TranslationRequest
     ),
     responses(
         (
             status = 200,
-            description = "The translation suggestion relationship has been created."
+            description = "The translation has been created."
         ),
         (
             status = 409,
-            description = "The translation suggestion relationship already exists.",
+            description = "The translation already exists.",
             body = ErrorReasonResponse,
-            example = json!({ "reason": "The translation suggestion already exists." })
+            example = json!({ "reason": "The translation already exists." })
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresSuggestionCreate>,
+        openapi::FailedAuthenticationResponses<openapi::RequiresTranslationCreate>,
         openapi::InternalServerErrorResponse,
     )
 )]
 #[post("")]
-pub async fn suggest_translation(
+pub async fn create_translation(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    request_body: web::Json<TranslationSuggestionRequest>,
+    request_body: web::Json<TranslationRequest>,
 ) -> EndpointResult {
     let authenticated_user = require_authentication!(authentication);
     require_permission!(
         state,
         authenticated_user,
-        Permission::SuggestionCreate
+        Permission::TranslationCreate
     );
 
 
@@ -75,7 +70,7 @@ pub async fn suggest_translation(
     let slovene_word_uuid = parse_string_into_uuid(&request_body.slovene_word_id)?;
 
 
-    let suggestion_already_exists = TranslationSuggestionQuery::exists(
+    let translation_already_exists = TranslationQuery::exists(
         &state.database,
         english_word_uuid,
         slovene_word_uuid,
@@ -83,17 +78,16 @@ pub async fn suggest_translation(
     .await
     .map_err(APIError::InternalError)?;
 
-    if suggestion_already_exists {
+    if translation_already_exists {
         return Ok(error_response_with_reason!(
             StatusCode::CONFLICT,
-            "The translation suggestion already exists."
+            "The translation already exists."
         ));
     }
 
-
-    TranslationSuggestionMutation::create(
+    TranslationMutation::create(
         &state.database,
-        NewTranslationSuggestion {
+        NewTranslation {
             english_word_id: english_word_uuid,
             slovene_word_id: slovene_word_uuid,
         },
@@ -109,42 +103,42 @@ pub async fn suggest_translation(
 
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct TranslationSuggestionDeletionRequest {
+pub struct TranslationDeletionRequest {
     english_word_id: String,
     slovene_word_id: String,
 }
 
 #[utoipa::path(
     delete,
-    path = "/suggestion",
-    tag = "dictionary:suggestion",
+    path = "/translation",
+    tag = "dictionary:translation",
     request_body(
-        content = TranslationSuggestionDeletionRequest
+        content = TranslationDeletionRequest
     ),
     responses(
         (
             status = 200,
-            description = "The translation suggestion relationship has been deleted."
+            description = "The translation relationship has been deleted."
         ),
         (
             status = 404,
-            description = "The translation suggestion relationship does not exist.",
+            description = "The translation relationship does not exist.",
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresSuggestionDelete>,
+        openapi::FailedAuthenticationResponses<openapi::RequiresTranslationDelete>,
         openapi::InternalServerErrorResponse,
     )
 )]
 #[delete("")]
-pub async fn delete_suggestion(
+pub async fn delete_translation(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    request_body: web::Json<TranslationSuggestionDeletionRequest>,
+    request_body: web::Json<TranslationDeletionRequest>,
 ) -> EndpointResult {
     let authenticated_user = require_authentication!(authentication);
     require_permission!(
         state,
         authenticated_user,
-        Permission::SuggestionDelete
+        Permission::TranslationDelete
     );
 
 
@@ -154,7 +148,7 @@ pub async fn delete_suggestion(
     let slovene_word_uuid = parse_string_into_uuid(&request_body.slovene_word_id)?;
 
 
-    let suggestion_exists = TranslationSuggestionQuery::exists(
+    let suggestion_exists = TranslationQuery::exists(
         &state.database,
         english_word_uuid,
         slovene_word_uuid,
@@ -167,9 +161,9 @@ pub async fn delete_suggestion(
     }
 
 
-    TranslationSuggestionMutation::delete(
+    TranslationMutation::delete(
         &state.database,
-        TranslationSuggestionToDelete {
+        TranslationToDelete {
             english_word_id: english_word_uuid,
             slovene_word_id: slovene_word_uuid,
         },
@@ -183,8 +177,8 @@ pub async fn delete_suggestion(
 
 
 #[rustfmt::skip]
-pub fn suggested_translations_router() -> Scope {
-    web::scope("/suggestion")
-        .service(suggest_translation)
-        .service(delete_suggestion)
+pub fn translations_router() -> Scope {
+    web::scope("/translation")
+        .service(create_translation)
+        .service(delete_translation)
 }
