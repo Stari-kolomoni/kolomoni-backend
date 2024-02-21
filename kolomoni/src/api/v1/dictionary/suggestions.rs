@@ -7,7 +7,7 @@ use kolomoni_database::{
         TranslationSuggestionMutation,
         TranslationSuggestionToDelete,
     },
-    query::TranslationSuggestionQuery,
+    query::{EnglishWordQuery, SloveneWordQuery, TranslationSuggestionQuery},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -28,8 +28,8 @@ use crate::{
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct TranslationSuggestionRequest {
-    english_word_id: String,
-    slovene_word_id: String,
+    pub english_word_id: String,
+    pub slovene_word_id: String,
 }
 
 
@@ -52,6 +52,12 @@ pub struct TranslationSuggestionRequest {
         (
             status = 200,
             description = "The translation suggestion relationship has been created."
+        ),
+        (
+            status = 400,
+            description = "The provided slovene or english word does not exist.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "The provided english word does not exist." })
         ),
         (
             status = 409,
@@ -82,6 +88,27 @@ pub async fn suggest_translation(
 
     let english_word_uuid = parse_string_into_uuid(&request_body.english_word_id)?;
     let slovene_word_uuid = parse_string_into_uuid(&request_body.slovene_word_id)?;
+
+
+    let english_word_exists =
+        EnglishWordQuery::word_exists_by_uuid(&state.database, english_word_uuid)
+            .await
+            .map_err(APIError::InternalError)?;
+    if !english_word_exists {
+        return Err(APIError::client_error(
+            "The provided english word does not exist.",
+        ));
+    }
+
+    let slovene_word_exists =
+        SloveneWordQuery::word_exists_by_uuid(&state.database, slovene_word_uuid)
+            .await
+            .map_err(APIError::InternalError)?;
+    if !slovene_word_exists {
+        return Err(APIError::client_error(
+            "The provided slovene word does not exist.",
+        ));
+    }
 
 
     let suggestion_already_exists = TranslationSuggestionQuery::exists(
@@ -119,8 +146,8 @@ pub async fn suggest_translation(
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct TranslationSuggestionDeletionRequest {
-    english_word_id: String,
-    slovene_word_id: String,
+    pub english_word_id: String,
+    pub slovene_word_id: String,
 }
 
 
@@ -143,6 +170,12 @@ pub struct TranslationSuggestionDeletionRequest {
         (
             status = 200,
             description = "The translation suggestion relationship has been deleted."
+        ),
+        (
+            status = 400,
+            description = "The provided slovene or english word does not exist.",
+            body = ErrorReasonResponse,
+            example = json!({ "reason": "The provided english word does not exist." })
         ),
         (
             status = 404,
@@ -171,6 +204,29 @@ pub async fn delete_suggestion(
 
     let english_word_uuid = parse_string_into_uuid(&request_body.english_word_id)?;
     let slovene_word_uuid = parse_string_into_uuid(&request_body.slovene_word_id)?;
+
+
+
+    let english_word_exists =
+        EnglishWordQuery::word_exists_by_uuid(&state.database, english_word_uuid)
+            .await
+            .map_err(APIError::InternalError)?;
+    if !english_word_exists {
+        return Err(APIError::client_error(
+            "The provided english word does not exist.",
+        ));
+    }
+
+    let slovene_word_exists =
+        SloveneWordQuery::word_exists_by_uuid(&state.database, slovene_word_uuid)
+            .await
+            .map_err(APIError::InternalError)?;
+    if !slovene_word_exists {
+        return Err(APIError::client_error(
+            "The provided slovene word does not exist.",
+        ));
+    }
+
 
 
     let suggestion_exists = TranslationSuggestionQuery::exists(
