@@ -28,6 +28,15 @@ pub struct TranslationRequest {
     slovene_word_id: String,
 }
 
+
+/// Create a new translation
+///
+/// This endpoint will create a new translation relationship
+/// between an english and a slovene word. Note that this is different than
+/// a *translation suggestion*.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `word.translation:create` permission.
 #[utoipa::path(
     post,
     path = "/translation",
@@ -46,6 +55,7 @@ pub struct TranslationRequest {
             body = ErrorReasonResponse,
             example = json!({ "reason": "The translation already exists." })
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresTranslationCreate>,
         openapi::InternalServerErrorResponse,
     )
@@ -108,6 +118,16 @@ pub struct TranslationDeletionRequest {
     slovene_word_id: String,
 }
 
+
+
+/// Delete a translation
+///
+/// This endpoint will remove a translation relationship
+/// between an english and a slovene word. Note that this is different than
+/// a *translation suggestion*.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `word.translation:delete` permission.
 #[utoipa::path(
     delete,
     path = "/translation",
@@ -124,6 +144,7 @@ pub struct TranslationDeletionRequest {
             status = 404,
             description = "The translation relationship does not exist.",
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresTranslationDelete>,
         openapi::InternalServerErrorResponse,
     )

@@ -37,7 +37,18 @@ use crate::{
         "disambiguation": "character",
         "description": "Playable or non-playable character.",
         "added_at": "2023-06-27T20:34:27.217273Z",
-        "last_edited_at": "2023-06-27T20:34:27.217273Z"
+        "last_edited_at": "2023-06-27T20:34:27.217273Z",
+        "suggested_translations": [],
+        "translations": [
+            {
+                "word_id": "018dbe00-266e-7398-abd2-0906df0aa345",
+                "lemma": "pustolovec",
+                "disambiguation": "lik",
+                "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino.",
+                "added_at": "2023-06-27T20:34:27.217273Z",
+                "last_edited_at": "2023-06-27T20:34:27.217273Z"
+            }
+        ]
     })
 )]
 pub struct EnglishWord {
@@ -108,6 +119,13 @@ pub struct EnglishWordsResponse {
 impl_json_response_builder!(EnglishWordsResponse);
 
 
+/// List all english words
+///
+/// This endpoint returns a list of all english words.
+///
+/// # Authentication
+/// Authentication is *not required* on this endpoint due to blanket grant of
+/// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
     path = "/dictionary/english",
@@ -207,6 +225,12 @@ pub struct EnglishWordCreationResponse {
 impl_json_response_builder!(EnglishWordCreationResponse);
 
 
+/// Create an english word
+///
+/// This endpoint creates a new english word in the dictionary.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `word:create` permission.
 #[utoipa::path(
     post,
     path = "/dictionary/english",
@@ -226,6 +250,7 @@ impl_json_response_builder!(EnglishWordCreationResponse);
             body = ErrorReasonResponse,
             example = json!({ "reason": "An english word with the given lemma already exists." })
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresWordCreate>,
         openapi::InternalServerErrorResponse,
     )
@@ -287,6 +312,13 @@ pub struct EnglishWordInfoResponse {
 impl_json_response_builder!(EnglishWordInfoResponse);
 
 
+/// Get an english word
+///
+/// This endpoint returns information about a single english word from the dictionary.
+///
+/// # Authentication
+/// Authentication is *not required* on this endpoint due to a blanket grant of
+/// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
     path = "/dictionary/english/{word_uuid}",
@@ -368,6 +400,12 @@ impl_json_response_builder!(EnglishWordUpdateRequest);
 
 
 
+/// Update an english word
+///
+/// This endpoint updates an existing english word in the dictionary.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `word:update` permission.
 #[utoipa::path(
     patch,
     path = "/dictionary/english/{word_uuid}",
@@ -398,6 +436,7 @@ impl_json_response_builder!(EnglishWordUpdateRequest);
             status = 404,
             description = "The requested english word does not exist."
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresWordUpdate>,
         openapi::InternalServerErrorResponse,
     )
@@ -464,6 +503,12 @@ pub async fn update_specific_english_word(
 
 
 
+/// Delete an english word
+///
+/// This endpoint deletes an english word from the dictionary.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `word:delete` permission.
 #[utoipa::path(
     delete,
     path = "/dictionary/english/{word_uuid}",
@@ -526,7 +571,7 @@ pub async fn delete_specific_english_word(
 
 
 
-// TODO Links, suggestions, translations.
+// TODO Links.
 
 
 #[rustfmt::skip]

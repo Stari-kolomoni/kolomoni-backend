@@ -65,6 +65,14 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::english_word::get_specific_english_word,
         dictionary::english_word::update_specific_english_word,
         dictionary::english_word::delete_specific_english_word,
+
+        // dictionary/suggestions.rs
+        dictionary::suggestions::suggest_translation,
+        dictionary::suggestions::delete_suggestion,
+
+        // dictionary/translations.rs
+        dictionary::translations::create_translation,
+        dictionary::translations::delete_translation,
     ),
     components(
         schemas(
@@ -120,6 +128,14 @@ use utoipa_rapidoc::RapiDoc;
             dictionary::english_word::EnglishWordCreationResponse,
             dictionary::english_word::EnglishWordInfoResponse,
             dictionary::english_word::EnglishWordUpdateRequest,
+
+            // dictionary/suggestions.rs
+            dictionary::suggestions::TranslationSuggestionRequest,
+            dictionary::suggestions::TranslationSuggestionDeletionRequest,
+    
+            // dictionary/translations.rs
+            dictionary::translations::TranslationRequest,
+            dictionary::translations::TranslationDeletionRequest,
         ),
     ),
     info(
@@ -183,33 +199,46 @@ fn remove_duplicated_summary_from_description(summary: &str, paragraph: &mut Str
     }
 }
 
+fn process_with_expanded_markdown_support(string: &mut String) {
+    // Replace triple dash with em dash.
+    *string = string.replace("---", "—");
+
+    // Replace double dash with en dash.
+    *string = string.replace("--", "–");
+}
+
 /// Filters out private comments from the API documentation
 /// (marked by `--- EXCLUDE FROM PUBLIC API DOCUMENTATION ---`) and
 /// removes duplicated summary paragraphs from description fields.
 fn clean_up_documentation(documentation: &mut OpenApi) {
     if let Some(info_description) = documentation.info.description.as_mut() {
         remove_private_comments(info_description);
+        process_with_expanded_markdown_support(info_description);
     }
 
     for path in documentation.paths.paths.values_mut() {
         if let Some(path_description) = path.description.as_mut() {
-            if let Some(path_summary) = path.summary.as_ref() {
+            if let Some(path_summary) = path.summary.as_mut() {
                 remove_duplicated_summary_from_description(path_summary, path_description);
+                process_with_expanded_markdown_support(path_summary);
             }
 
             remove_private_comments(path_description);
+            process_with_expanded_markdown_support(path_description);
         }
 
         for operation in path.operations.values_mut() {
             if let Some(operation_description) = operation.description.as_mut() {
-                if let Some(operation_summary) = operation.summary.as_ref() {
+                if let Some(operation_summary) = operation.summary.as_mut() {
                     remove_duplicated_summary_from_description(
                         operation_summary,
                         operation_description,
                     );
+                    process_with_expanded_markdown_support(operation_summary);
                 }
 
                 remove_private_comments(operation_description);
+                process_with_expanded_markdown_support(operation_description);
             }
         }
     }

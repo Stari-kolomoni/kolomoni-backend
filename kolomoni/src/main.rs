@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
                 match payload_error {
                     JsonPayloadError::ContentType  => {
                         APIError::client_error(
-                            "If your request body contains JSON, please signal that \
+                            "non-JSON body. If your request body contains JSON, please signal that \
                             with the Content-Type: application/json header."
                         ).into()
                     },
@@ -107,12 +107,12 @@ async fn main() -> Result<()> {
                     },
                     JsonPayloadError::Deserialize(_) => {
                         APIError::client_error(
-                            "Invalid JSON body."
+                            "invalid JSON body."
                         ).into()
                     },
                     JsonPayloadError::Overflow { .. } | JsonPayloadError::OverflowKnownLength { .. } => {
                         APIError::client_error(
-                            "Request body is too large."
+                            "request body is too large."
                         ).into()
                     },
                     error => {

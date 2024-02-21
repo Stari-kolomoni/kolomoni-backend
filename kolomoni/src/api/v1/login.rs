@@ -67,7 +67,7 @@ impl_json_response_builder!(UserLoginResponse);
 
 
 
-/// Create an access token.
+/// Login
 ///
 /// This endpoint is the login method: it validates the credentials (username and password) and
 /// gives the user an access token they can use in future requests to authenticate themselves.
@@ -95,6 +95,7 @@ impl_json_response_builder!(UserLoginResponse);
             body = ErrorReasonResponse,
             example = json!({ "reason": "Invalid login credentials." })
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::InternalServerErrorResponse,
     )
 )]
@@ -203,7 +204,7 @@ impl_json_response_builder!(UserLoginRefreshResponse);
 
 
 
-/// Refresh a user's access
+/// Refresh a login
 ///
 /// The user must provide a refresh token given to them on an initial call to `/users/login`.
 /// "Refreshing a login" does not invalidate the refresh token.
@@ -244,6 +245,7 @@ impl_json_response_builder!(UserLoginRefreshResponse);
                 ))
             )
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::InternalServerErrorResponse,
     )
 )]

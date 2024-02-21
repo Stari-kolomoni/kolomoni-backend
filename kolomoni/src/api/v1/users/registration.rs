@@ -30,7 +30,7 @@ pub struct UserRegistrationRequest {
     /// Username to register as (not the same as the display name).
     pub username: String,
 
-    /// Name to display in the UI as.
+    /// Name to display as in the UI.
     pub display_name: String,
 
     /// Password for this user account.
@@ -76,9 +76,12 @@ impl_json_response_builder!(UserRegistrationResponse);
 /// Register a new user
 ///
 /// This endpoint registers a new user with the provided username, display name and password.
-/// Only one user with the given username or display name can exist (both fields are required to be unique).
 ///
-/// No authentication is required.
+/// Both the username and the display name must be unique across all users,
+/// i.e. no two users can share the same username or display name.
+///
+/// # Authentication
+/// This endpoint does not require authentication.
 #[utoipa::path(
     post,
     path = "/users",
@@ -107,6 +110,7 @@ impl_json_response_builder!(UserRegistrationResponse);
                 )),
             )
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::InternalServerErrorResponse,
     )
 )]

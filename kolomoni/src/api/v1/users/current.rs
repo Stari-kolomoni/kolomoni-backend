@@ -41,17 +41,17 @@ use crate::{
 };
 
 
-/// Get current user's information
+/// Get your user information
 ///
 /// This endpoint returns the logged-in user's information.
 ///
 ///
-/// # Required permissions
-/// This endpoint requires the `users.self:read` permission.
+/// # Authentication
+/// This endpoint requires authentication and the `users.self:read` permission.
 #[utoipa::path(
     get,
     path = "/users/me",
-    tag = "self",
+    tag = "users:self",
     params(
         openapi::IfModifiedSinceParameter
     ),
@@ -126,9 +126,19 @@ pub async fn get_current_user_info(
 }
 
 
+
+
+/// Get your roles
+///
+/// This endpoint returns the logged-in user's role list.
+///
+///
+/// # Authentication
+/// This endpoint requires authentication and the `users.self:read` permission.
 #[utoipa::path(
     get,
     path = "/users/me/roles",
+    tag = "users:self",
     responses(
         (
             status = 200,
@@ -181,14 +191,17 @@ pub async fn get_current_user_roles(
 
 
 
-/// Get current user's permissions
+/// Get your effective permissions
 ///
-/// # Required permissions
-/// This endpoint requires the `users.self:read` permission.
+/// This endpoint returns the logged-in user's effective permission list.
+/// The effective permission list depends on permissions that each of the user's roles provide.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `users.self:read` permission.
 #[utoipa::path(
     get,
     path = "/users/me/permissions",
-    tag = "self",
+    tag = "users:self",
     responses(
         (
             status = 200,
@@ -236,18 +249,18 @@ async fn get_current_user_effective_permissions(
 
 
 
-/// Change the current user's display name
+/// Change your display name
 ///
 /// This endpoint allows you to change your own display name. Note that the display name
 /// must be unique among all users, so your request may be denied with a `409 Conflict`
 /// to indicate a display name collision.
 ///
-/// # Required permissions
+/// # Authentication
 /// This endpoint requires the `users.self:write` permission.
 #[utoipa::path(
     patch,
     path = "/users/me/display_name",
-    tag = "self",
+    tag = "users:self",
     request_body(
         content = UserDisplayNameChangeRequest,
         example = json!({
@@ -276,6 +289,7 @@ async fn get_current_user_effective_permissions(
             body = ErrorReasonResponse,
             example = json!({ "reason": "User with given display name already exists." })
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresUserSelfWrite>,
         openapi::InternalServerErrorResponse,
     ),

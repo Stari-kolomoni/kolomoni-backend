@@ -33,13 +33,13 @@ use crate::{
 
 
 
-/// Get a specific user's information
+/// Get a user's information
 ///
-/// This is a generic version of the `GET /users/me` endpoint, allowing you to see information
-/// about users other than yourself.
+/// This is an expanded version of the `GET /users/me` endpoint,
+/// allowing you to see information about users other than yourself.
 ///
 /// # Authentication
-/// Authentication is not required on this endpoint due to a blanket grant of
+/// Authentication is *not required* on this endpoint due to a blanket grant of
 /// the `users.any:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
@@ -113,11 +113,12 @@ async fn get_specific_user_info(
 /// Get a user's roles
 ///
 /// # Authentication
-/// Authentication is not required on this endpoint due to a blanket grant of
+/// Authentication is *not required* on this endpoint due to a blanket grant of
 /// the `users.any:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
     path = "/users/{user_id}/roles",
+    tag = "users",
     params(
         (
             "user_id" = i32,
@@ -186,15 +187,18 @@ pub async fn get_specific_user_roles(
     .into_response())
 }
 
+
+
 /// Get a user's effective permissions
 ///
-/// Returns a list of effective permissions (computed from user roles).
+/// Returns a list of effective permissions.
+/// The effective permission list depends on permissions that each of the user's roles provide.
 ///
-/// This is a generic version of the `GET /users/me/permissions` endpoint, allowing you
-/// to see others' permissions.
+/// This is a generic version of the `GET /users/me/permissions` endpoint,
+/// allowing you to see others' permissions.
 ///
-/// # Permissions
-/// *This endpoint requires the `users.any:read` permission.*
+/// # Authentication
+/// This endpoint requires authentication and the `users.any:read` permission.
 #[utoipa::path(
     get,
     path = "/users/{user_id}/permissions",
@@ -269,12 +273,16 @@ async fn get_specific_user_effective_permissions(
 
 
 
-/// Update a specific user's display name
+/// Update a user's display name
 ///
-/// This is generic version of the `PATCH /users/me/display_name` endpoint, allowing a user
-/// with enough permissions to modify another user's display name.
+/// This is generic version of the `PATCH /users/me/display_name` endpoint,
+/// allowing a user with enough permissions to modify another user's display name.
 ///
-/// *This endpoint requires the `users.any:write` permission.*
+/// # Restrictions
+/// You can not modify your own roles on this endpoint.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `users.any:write` permission.
 #[utoipa::path(
     patch,
     path = "/users/{user_id}/display_name",
@@ -317,6 +325,7 @@ async fn get_specific_user_effective_permissions(
             body = ErrorReasonResponse,
             example = json!({ "reason": "User with given display name already exists." })
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
         openapi::InternalServerErrorResponse,
     ),
@@ -438,10 +447,21 @@ pub struct UserRoleAddRequest {
 }
 
 
-
+/// Add roles to a user
+///
+/// This endpoint allows a user with enough permissions to add roles to another user.
+///
+/// # Restrictions
+/// You can not modify your own roles on this endpoint.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `users.any:write` permission.
+/// Additionally, you can not give out a role you do not have yourself -- trying to do
+/// so will fail with `403 Forbidden`.
 #[utoipa::path(
     post,
     path = "/users/{user_id}/roles",
+    tag = "users",
     params(
         (
             "user_id" = i32,
@@ -485,6 +505,7 @@ pub struct UserRoleAddRequest {
             body = ErrorReasonResponse,
             example = json!({ "reason": "The specified user does not exist." })
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
         openapi::InternalServerErrorResponse,
     ),
@@ -605,9 +626,21 @@ pub struct UserRoleRemoveRequest {
 }
 
 
+/// Removes roles from a user
+///
+/// This endpoint allows a user with enough permission to remove roles from another user.
+///
+/// # Restrictions
+/// You can not modify your own roles on this endpoint.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `users.any:write` permission.
+/// Additionally, you can not remove a role you do not have yourself -- trying to do
+/// so will fail with `403 Forbidden`.
 #[utoipa::path(
     delete,
     path = "/users/{user_id}/roles",
+    tag = "users",
     params(
         (
             "user_id" = i32,
@@ -651,6 +684,7 @@ pub struct UserRoleRemoveRequest {
             body = ErrorReasonResponse,
             example = json!({ "reason": "The specified user does not exist." })
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
         openapi::InternalServerErrorResponse,
     ),

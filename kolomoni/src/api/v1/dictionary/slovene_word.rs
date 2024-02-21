@@ -27,6 +27,7 @@ use crate::{
 };
 
 
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 #[schema(
     example = json!({
@@ -39,11 +40,23 @@ use crate::{
     })
 )]
 pub struct SloveneWord {
+    /// Internal UUID of the word.
     pub word_id: String,
+
+    /// An abstract or base form of the word.
     pub lemma: String,
+
+    /// If there are multiple similar words, the disambiguation
+    /// helps distinguish the word from other words at a glance.
     pub disambiguation: Option<String>,
+
+    /// A short description of the word. Supports Markdown.
     pub description: Option<String>,
+
+    /// When the word was created.
     pub added_at: DateTime<Utc>,
+
+    /// When the word was last edited.
     pub last_edited_at: DateTime<Utc>,
 }
 
@@ -70,6 +83,14 @@ pub struct SloveneWordsResponse {
 impl_json_response_builder!(SloveneWordsResponse);
 
 
+
+/// List all slovene words
+///
+/// This endpoint returns a list of all slovene words.
+///
+/// # Authentication
+/// Authentication is *not required* on this endpoint due to blanket grant of
+/// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
     path = "/dictionary/slovene",
@@ -144,6 +165,13 @@ pub struct SloveneWordCreationResponse {
 impl_json_response_builder!(SloveneWordCreationResponse);
 
 
+
+/// Create a slovene word
+///
+/// This endpoint creates a new slovene word in the dictionary.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `word:create` permission.
 #[utoipa::path(
     post,
     path = "/dictionary/slovene",
@@ -163,6 +191,7 @@ impl_json_response_builder!(SloveneWordCreationResponse);
             body = ErrorReasonResponse,
             example = json!({ "reason": "A slovene word with the given lemma already exists." })
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresWordCreate>,
         openapi::InternalServerErrorResponse,
     )
@@ -222,6 +251,14 @@ pub struct SloveneWordInfoResponse {
 impl_json_response_builder!(SloveneWordInfoResponse);
 
 
+
+/// Get a slovene word
+///
+/// This endpoint returns information about a single slovene word from the dictionary.
+///
+/// # Authentication
+/// Authentication is *not required* on this endpoint due to a blanket grant of
+/// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
     path = "/dictionary/slovene/{word_uuid}",
@@ -292,6 +329,13 @@ pub struct SloveneWordUpdateRequest {
 impl_json_response_builder!(SloveneWordUpdateRequest);
 
 
+
+/// Update a slovene word
+///
+/// This endpoint updates an existing slovene word in the dictionary.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `word:update` permission.
 #[utoipa::path(
     patch,
     path = "/dictionary/slovene/{word_uuid}",
@@ -322,6 +366,7 @@ impl_json_response_builder!(SloveneWordUpdateRequest);
             status = 404,
             description = "The requested slovene word does not exist."
         ),
+        openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresWordUpdate>,
         openapi::InternalServerErrorResponse,
     )
@@ -373,6 +418,12 @@ pub async fn update_specific_slovene_word(
 
 
 
+/// Delete a slovene word
+///
+/// This endpoint deletes a slovene word from the dictionary.
+///
+/// # Authentication
+/// This endpoint requires authentication and the `word:delete` permission.
 #[utoipa::path(
     delete,
     path = "/dictionary/slovene/{word_uuid}",
@@ -435,7 +486,7 @@ pub async fn delete_specific_slovene_word(
 }
 
 
-// TODO Links, suggestions, translations.
+// TODO Links.
 
 
 #[rustfmt::skip]

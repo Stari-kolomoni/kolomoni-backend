@@ -47,8 +47,7 @@ impl_json_response_builder!(RegisteredUsersListResponse);
 ///
 ///
 /// # Authentication
-/// This endpoint requires authentication and
-/// the `users.any:read` permission.
+/// This endpoint requires authentication and the `users.any:read` permission.
 #[utoipa::path(
     get,
     path = "/users",

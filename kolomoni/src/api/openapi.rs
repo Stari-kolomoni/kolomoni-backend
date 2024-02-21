@@ -3,11 +3,11 @@
 
 use std::{collections::BTreeMap, marker::PhantomData};
 
+use serde_json::json;
 use utoipa::{
     openapi::{
         example::ExampleBuilder,
         ContentBuilder,
-        Ref,
         RefOr,
         Response,
         ResponseBuilder,
@@ -31,7 +31,7 @@ pub trait RequiredPermission {
 /// For example, calling `generate_standalone_requirement_struct!(UserSelfRead)`
 /// will result in the following code:
 ///
-/// ```
+/// ```no_run
 /// # use kolomoni::api::openapi::RequiredPermission;
 /// # use kolomoni_auth::Permission;
 /// pub struct RequiresUserSelfRead;
@@ -194,9 +194,7 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
                             )))
                             .build(),
                     )])
-                    .schema(RefOr::Ref(Ref::from_schema_name(
-                        ErrorReasonResponse::schema().0,
-                    )))
+                    .schema(ErrorReasonResponse::schema().1)
                     .build(),
             )
             .build();
@@ -218,7 +216,7 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
 /// that the above will appear in the OpenAPI documentation.**
 ///
 /// # Example
-/// ```
+/// ```no_run
 /// use actix_web::{get, http::{header, StatusCode}};
 /// use actix_web::HttpResponse;
 /// use chrono::Utc;
@@ -262,7 +260,7 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
 ///
 /// The above is basically equivalent to specifying the following manual responses:
 ///
-/// ```
+/// ```no_run
 /// # use actix_web::{get, http::{header, StatusCode}};
 /// # use actix_web::HttpResponse;
 /// # use chrono::Utc;
@@ -329,7 +327,7 @@ impl utoipa::IntoResponses for UnmodifiedConditionalResponse {
 /// can cause this to happen.
 ///
 /// # Example
-/// ```
+/// ```no_run
 /// use actix_web::get;
 /// use actix_web::HttpResponse;
 /// use kolomoni::state::ApplicationState;
@@ -390,6 +388,116 @@ impl utoipa::IntoResponses for InternalServerErrorResponse {
 }
 
 
+/// A `utoipa` endpoint response for when and endpoint may return a `400 Bad Request` HTTP response
+/// indicating that a JSON body included in the request is not valid.
+///
+/// This should be present on routes that have a [`web::Json<...>`][actix_web::web::Json]
+/// parameter. For more information on how JSON extractor errors are handled,
+/// see the [`JsonConfig`][actix_web::web::JsonConfig] that is instantiated in the server
+/// initialization closure in `main.rs`.
+///
+/// # Example
+/// ```no_run
+/// use serde::Deserialize;
+/// use utoipa::ToSchema;
+/// use actix_web::{get, web, http, HttpResponse};
+/// use kolomoni::state::ApplicationState;
+/// use kolomoni::api::openapi;
+/// use kolomoni::api::errors::{APIError, EndpointResult};
+/// use kolomoni_database::query::UserQuery;
+///
+/// #[derive(Deserialize, PartialEq, Eq, Debug, ToSchema)]
+/// struct HelloWorldRequest {
+///    text: String,
+/// }
+///
+/// #[utoipa::path(
+///     get,
+///     path = "/hello-world",
+///     responses(
+///         (
+///             status = 200,
+///             description = "Hello world to you too!"
+///         ),
+///         openapi::MissingOrInvalidJsonRequestBodyResponse,
+///         openapi::InternalServerErrorResponse,
+///     )
+/// )]
+/// #[get("/hello-world")]
+/// pub async fn some_endpoint_function(
+///     state: ApplicationState,
+///     json_body: web::Json<HelloWorldRequest>,
+/// ) -> EndpointResult {
+///     println!("{}", json_body.text);
+///     
+///     // ... and so on
+///     
+///     Ok(HttpResponse::Ok().finish())
+/// }
+/// ```
+pub struct MissingOrInvalidJsonRequestBodyResponse;
+
+impl utoipa::IntoResponses for MissingOrInvalidJsonRequestBodyResponse {
+    fn responses() -> BTreeMap<String, utoipa::openapi::RefOr<utoipa::openapi::response::Response>> {
+        let bad_request_response = ResponseBuilder::new()
+            .description(
+                "Bad request due to an invalid JSON request body. Possible reasons:\n\
+                - `Content-Type` header is not specified or does not equal `application/json`.\n\
+                - Incorrect structure of the JSON body or invalid JSON in general.\n\
+                - Request body is too large (highly unlikely)."
+            )
+            .content(
+                mime::APPLICATION_JSON.to_string(),
+                ContentBuilder::new()
+                    .examples_from_iter(vec![
+                        (
+                            "`Content-Type` header is missing or does not equal `application/json`.",
+                            ExampleBuilder::new()
+                                .value(Some(json!({
+                                    "reason": "Client error: non-JSON body. If your request body contains JSON, \
+                                              please signal that with the `Content-Type: application/json` header."
+                                })))
+                                .build(),
+                        ),
+                        (
+                            "Provided request body does not contain valid JSON data.",
+                            ExampleBuilder::new()
+                                .value(Some(json!({
+                                    "reason": "Client error: invalid JSON body."
+                                })))
+                                .build(),
+                        ),
+                        (
+                            "Provided request body does not matches the expected JSON structure \
+                            (e.g. it's missing some fields or has a field of the incorrect type).",
+                            ExampleBuilder::new()
+                                .value(Some(json!({
+                                    "reason": "Client error: invalid JSON body."
+                                })))
+                                .build(),
+                        ),
+                        (
+                            "Provided request body is too large. Unlikely, but possible.",
+                            ExampleBuilder::new()
+                                .value(Some(json!({
+                                    "reason": "Client error: request body is too large."
+                                })))
+                                .build(),
+                        )
+                    ])
+                    .schema(ErrorReasonResponse::schema().1)
+                    .build(),
+            ).build();
+
+        ResponsesBuilder::new()
+            .response("400", bad_request_response)
+            .build()
+            .into()
+    }
+}
+
+
+
 
 /// A `utoipa` endpoint parameter for when an endpoint supports specifying
 /// the [`If-Modified-Since` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Modified-Since).
@@ -402,7 +510,7 @@ impl utoipa::IntoResponses for InternalServerErrorResponse {
 /// [`OptionalIfModifiedSince`][crate::api::OptionalIfModifiedSince]
 /// for more info.
 ///
-/// ```
+/// ```no_run
 /// use miette::IntoDiagnostic;
 /// use actix_web::{get, http::{StatusCode, header}};
 /// use actix_web::HttpResponse;
