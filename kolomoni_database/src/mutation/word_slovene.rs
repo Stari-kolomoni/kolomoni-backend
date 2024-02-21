@@ -66,6 +66,12 @@ impl SloveneWordMutation {
             .wrap_err("Failed while inserting slovene word.")?;
 
 
+        transaction
+            .commit()
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed to commit english word creation transaction.")?;
+
         Ok(new_slovene_word)
     }
 
