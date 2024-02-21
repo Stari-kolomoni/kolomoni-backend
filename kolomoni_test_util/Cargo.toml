@@ -28,4 +28,5 @@ miette = { workspace = true }
 tokio = { workspace = true }
 sea-orm = { workspace = true }
 
-bytes =  { workspace = true }
+bytes = { workspace = true }
+uuid = { workspace = true }
