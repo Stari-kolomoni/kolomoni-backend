@@ -75,9 +75,10 @@ impl SloveneWord {
 
 
 
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 pub struct SloveneWordsResponse {
-    slovene_words: Vec<SloveneWord>,
+    pub slovene_words: Vec<SloveneWord>,
 }
 
 impl_json_response_builder!(SloveneWordsResponse);

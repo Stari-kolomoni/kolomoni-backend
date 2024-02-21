@@ -8,6 +8,7 @@ use kolomoni_database::{
     query::{self, EnglishWordQuery, TranslationQuery, TranslationSuggestionQuery},
 };
 use serde::{Deserialize, Serialize};
+use tracing::info;
 use utoipa::ToSchema;
 
 use super::slovene_word::SloveneWord;
@@ -41,7 +42,7 @@ use crate::{
         "suggested_translations": [],
         "translations": [
             {
-                "word_id": "018dbe00-266e-7398-abd2-0906df0aa345",
+                "word_id": "018dbe00-266e-7398-abd2-0906df0aa346",
                 "lemma": "pustolovec",
                 "disambiguation": "lik",
                 "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino.",
@@ -111,12 +112,14 @@ impl EnglishWord {
 }
 
 
-#[derive(Serialize, Debug, ToSchema)]
+#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 pub struct EnglishWordsResponse {
-    english_words: Vec<EnglishWord>,
+    pub english_words: Vec<EnglishWord>,
 }
 
 impl_json_response_builder!(EnglishWordsResponse);
+
 
 
 /// List all english words
@@ -292,6 +295,11 @@ pub async fn create_english_word(
     .await
     .map_err(APIError::InternalError)?;
 
+
+    info!(
+        created_by_user = authenticated_user.user_id(),
+        "Created new english word: {}", newly_created_word.lemma,
+    );
 
     Ok(EnglishWordCreationResponse {
         // A newly-created word can not have any suggestions or translations yet.
