@@ -25,6 +25,9 @@ pub enum StandardPermission {
     SuggestionDelete,
     TranslationCreate,
     TranslationDelete,
+    CategoryCreate,
+    CategoryUpdate,
+    CategoryDelete,
 }
 
 impl StandardPermission {
@@ -42,6 +45,9 @@ impl StandardPermission {
             Self::SuggestionDelete,
             Self::TranslationCreate,
             Self::TranslationDelete,
+            Self::CategoryCreate,
+            Self::CategoryUpdate,
+            Self::CategoryDelete
         ]
     }
 
@@ -59,6 +65,9 @@ impl StandardPermission {
             StandardPermission::SuggestionDelete => 10,
             StandardPermission::TranslationCreate => 11,
             StandardPermission::TranslationDelete => 12,
+            StandardPermission::CategoryCreate => 13,
+            StandardPermission::CategoryUpdate => 14,
+            StandardPermission::CategoryDelete => 15,
         }
     }
 
@@ -76,6 +85,9 @@ impl StandardPermission {
             StandardPermission::SuggestionDelete => "word.suggestion:delete",
             StandardPermission::TranslationCreate => "word.translation:create",
             StandardPermission::TranslationDelete => "word.translation:delete",
+            StandardPermission::CategoryCreate => "category:create",
+            StandardPermission::CategoryUpdate => "category:update",
+            StandardPermission::CategoryDelete => "category:delete",
         }
     }
 
@@ -106,6 +118,12 @@ impl StandardPermission {
                 "Allows the user to translate a word.",
             StandardPermission::TranslationDelete => 
                 "Allows the user to remove a word translation.",
+            StandardPermission::CategoryCreate => 
+                "Allows the user to create a word category.",
+            StandardPermission::CategoryUpdate => 
+                "Allows the user to update an existing word category.",
+            StandardPermission::CategoryDelete => 
+                "Allows the user to delete a word category.",
         }
     }
 }

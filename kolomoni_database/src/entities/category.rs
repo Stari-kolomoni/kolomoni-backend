@@ -7,20 +7,20 @@ pub struct Entity;
 
 impl EntityName for Entity {
     fn table_name(&self) -> &str {
-        "word"
+        "category"
     }
 }
 
 #[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel, Eq)]
 pub struct Model {
-    pub id: Uuid,
-    pub language: String,
+    pub id: i32,
+    pub name: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
 pub enum Column {
     Id,
-    Language,
+    Name,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -29,7 +29,7 @@ pub enum PrimaryKey {
 }
 
 impl PrimaryKeyTrait for PrimaryKey {
-    type ValueType = Uuid;
+    type ValueType = i32;
     fn auto_increment() -> bool {
         false
     }
@@ -38,16 +38,14 @@ impl PrimaryKeyTrait for PrimaryKey {
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
     WordCategory,
-    WordEnglish,
-    WordSlovene,
 }
 
 impl ColumnTrait for Column {
     type EntityName = Entity;
     fn def(&self) -> ColumnDef {
         match self {
-            Self::Id => ColumnType::Uuid.def(),
-            Self::Language => ColumnType::String(Some(12u32)).def(),
+            Self::Id => ColumnType::Integer.def(),
+            Self::Name => ColumnType::String(None).def().unique(),
         }
     }
 }
@@ -56,8 +54,6 @@ impl RelationTrait for Relation {
     fn def(&self) -> RelationDef {
         match self {
             Self::WordCategory => Entity::has_many(super::word_category::Entity).into(),
-            Self::WordEnglish => Entity::has_many(super::word_english::Entity).into(),
-            Self::WordSlovene => Entity::has_many(super::word_slovene::Entity).into(),
         }
     }
 }
@@ -68,24 +64,12 @@ impl Related<super::word_category::Entity> for Entity {
     }
 }
 
-impl Related<super::word_english::Entity> for Entity {
+impl Related<super::word::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::WordEnglish.def()
-    }
-}
-
-impl Related<super::word_slovene::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::WordSlovene.def()
-    }
-}
-
-impl Related<super::category::Entity> for Entity {
-    fn to() -> RelationDef {
-        super::word_category::Relation::Category.def()
+        super::word_category::Relation::Word.def()
     }
     fn via() -> Option<RelationDef> {
-        Some(super::word_category::Relation::Word.def().rev())
+        Some(super::word_category::Relation::Category.def().rev())
     }
 }
 

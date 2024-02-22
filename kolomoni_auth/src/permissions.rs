@@ -57,6 +57,15 @@ pub enum Permission {
 
     #[serde(rename = "word.translation:delete")]
     TranslationDelete,
+
+    #[serde(rename = "category:create")]
+    CategoryCreate,
+
+    #[serde(rename = "category:update")]
+    CategoryUpdate,
+
+    #[serde(rename = "category:delete")]
+    CategoryDelete,
 }
 
 
@@ -75,6 +84,9 @@ impl Permission {
             10 => Some(Permission::SuggestionDelete),
             11 => Some(Permission::TranslationCreate),
             12 => Some(Permission::TranslationDelete),
+            13 => Some(Permission::CategoryCreate),
+            14 => Some(Permission::CategoryUpdate),
+            15 => Some(Permission::CategoryDelete),
             _ => None,
         }
     }
@@ -95,6 +107,9 @@ impl Permission {
             Permission::SuggestionDelete => 10,
             Permission::TranslationCreate => 11,
             Permission::TranslationDelete => 12,
+            Permission::CategoryCreate => 13,
+            Permission::CategoryUpdate => 14,
+            Permission::CategoryDelete => 15,
         }
     }
 
@@ -113,6 +128,9 @@ impl Permission {
             "word.suggestion:delete" => Some(Self::SuggestionDelete),
             "word.translation:create" => Some(Self::TranslationCreate),
             "word.translation:delete" => Some(Self::TranslationDelete),
+            "category:create" => Some(Self::CategoryCreate),
+            "category:update" => Some(Self::CategoryUpdate),
+            "category:delete" => Some(Self::CategoryDelete),
             _ => None,
         }
     }
@@ -132,6 +150,9 @@ impl Permission {
             Permission::SuggestionDelete => "word.suggestion:delete",
             Permission::TranslationCreate => "word.translation:create",
             Permission::TranslationDelete => "word.translation:delete",
+            Permission::CategoryCreate => "category:create",
+            Permission::CategoryUpdate => "category:update",
+            Permission::CategoryDelete => "category:delete",
         }
     }
 
@@ -163,6 +184,12 @@ impl Permission {
                 "Allows the user to translate a word.",
             Permission::TranslationDelete => 
                 "Allows the user to remove a word translation.",
+            Permission::CategoryCreate => 
+                "Allows the user to create a word category.",
+            Permission::CategoryUpdate => 
+                "Allows the user to update an existing word category.",
+            Permission::CategoryDelete => 
+                "Allows the user to delete a word category.",
                 
         }
     }
@@ -170,7 +197,7 @@ impl Permission {
 
 /// List of permissions that are given to **ANY API CALLER**,
 /// authenticated or not.
-pub const BLANKET_ANY_USER_PERMISSION_GRANT: [Permission; 2] =
+pub const BLANKET_PERMISSION_GRANT: [Permission; 2] =
     [Permission::WordRead, Permission::UserAnyRead];
 
 
@@ -223,7 +250,7 @@ impl PermissionSet {
     /// and return `true` regardless of the user's effective permissions (if the required permission
     /// has a blanket grant).
     pub fn has_permission(&self, permission: Permission) -> bool {
-        if BLANKET_ANY_USER_PERMISSION_GRANT.contains(&permission) {
+        if BLANKET_PERMISSION_GRANT.contains(&permission) {
             return true;
         }
 

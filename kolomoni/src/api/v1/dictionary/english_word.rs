@@ -5,13 +5,19 @@ use kolomoni_auth::Permission;
 use kolomoni_database::{
     entities,
     mutation::{EnglishWordMutation, NewEnglishWord, UpdatedEnglishWord},
-    query::{self, EnglishWordQuery, TranslationQuery, TranslationSuggestionQuery},
+    query::{
+        self,
+        EnglishWordQuery,
+        TranslationQuery,
+        TranslationSuggestionQuery,
+        WordCategoryQuery,
+    },
 };
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
 
-use super::slovene_word::SloveneWord;
+use super::{slovene_word::SloveneWord, Category};
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
@@ -75,6 +81,8 @@ pub struct EnglishWord {
     /// When the word was last edited.
     pub last_edited_at: DateTime<Utc>,
 
+    pub categories: Vec<Category>,
+
     /// Suggested slovene translations of this word.
     pub suggested_translations: Vec<SloveneWord>,
 
@@ -83,20 +91,17 @@ pub struct EnglishWord {
 }
 
 impl EnglishWord {
-    pub fn from_models(
+    pub fn new(
         english_model: entities::word_english::Model,
-        suggested_translations: Vec<entities::word_slovene::Model>,
-        translations: Vec<entities::word_slovene::Model>,
+        categories: Vec<entities::category::Model>,
+        suggested_translations: Vec<SloveneWord>,
+        translations: Vec<SloveneWord>,
     ) -> Self {
-        let suggested_translations = suggested_translations
+        let categories = categories
             .into_iter()
-            .map(SloveneWord::from_database_model)
+            .map(Category::from_database_model)
             .collect();
 
-        let translations = translations
-            .into_iter()
-            .map(SloveneWord::from_database_model)
-            .collect();
 
         Self {
             word_id: english_model.word_id.to_string(),
@@ -105,6 +110,7 @@ impl EnglishWord {
             description: english_model.description,
             added_at: english_model.added_at.to_utc(),
             last_edited_at: english_model.last_edited_at.to_utc(),
+            categories,
             suggested_translations,
             translations,
         }
@@ -159,15 +165,7 @@ pub async fn get_all_english_words(
 
     // PERF: This might be a good candidate for optimization, probably with caching.
     for raw_english_word in words {
-        let suggested_translations =
-            query::TranslationSuggestionQuery::suggestions_for_english_word(
-                &state.database,
-                raw_english_word.word_id,
-            )
-            .await
-            .map_err(APIError::InternalError)?;
-
-        let translations = query::TranslationQuery::translations_for_english_word(
+        let categories = query::WordCategoryQuery::word_categories_by_word_uuid(
             &state.database,
             raw_english_word.word_id,
         )
@@ -175,8 +173,67 @@ pub async fn get_all_english_words(
         .map_err(APIError::InternalError)?;
 
 
-        words_as_api_structures.push(EnglishWord::from_models(
+        let suggested_translations = {
+            let suggested_translation_models =
+                query::TranslationSuggestionQuery::suggestions_for_english_word(
+                    &state.database,
+                    raw_english_word.word_id,
+                )
+                .await
+                .map_err(APIError::InternalError)?;
+
+
+            let mut suggested_translations = Vec::with_capacity(suggested_translation_models.len());
+            for suggested_translation_model in suggested_translation_models {
+                let suggested_translation_word_categories =
+                    WordCategoryQuery::word_categories_by_word_uuid(
+                        &state.database,
+                        suggested_translation_model.word_id,
+                    )
+                    .await
+                    .map_err(APIError::InternalError)?;
+
+                suggested_translations.push(SloveneWord::new(
+                    suggested_translation_model,
+                    suggested_translation_word_categories,
+                ))
+            }
+
+            suggested_translations
+        };
+
+
+        let translations = {
+            let translation_models = query::TranslationQuery::translations_for_english_word(
+                &state.database,
+                raw_english_word.word_id,
+            )
+            .await
+            .map_err(APIError::InternalError)?;
+
+
+            let mut translations = Vec::with_capacity(translation_models.len());
+            for translation_model in translation_models {
+                let translated_word_categories = WordCategoryQuery::word_categories_by_word_uuid(
+                    &state.database,
+                    translation_model.word_id,
+                )
+                .await
+                .map_err(APIError::InternalError)?;
+
+                translations.push(SloveneWord::new(
+                    translation_model,
+                    translated_word_categories,
+                ));
+            }
+
+            translations
+        };
+
+
+        words_as_api_structures.push(EnglishWord::new(
             raw_english_word,
+            categories,
             suggested_translations,
             translations,
         ));
@@ -303,7 +360,12 @@ pub async fn create_english_word(
 
     Ok(EnglishWordCreationResponse {
         // A newly-created word can not have any suggestions or translations yet.
-        word: EnglishWord::from_models(newly_created_word, Vec::new(), Vec::new()),
+        word: EnglishWord::new(
+            newly_created_word,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ),
     }
     .into_response())
 }
@@ -379,19 +441,74 @@ pub async fn get_specific_english_word(
     };
 
 
-    let translation_suggestions =
-        TranslationSuggestionQuery::suggestions_for_english_word(&state.database, target_word_uuid)
+    let categories =
+        query::WordCategoryQuery::word_categories_by_word_uuid(&state.database, target_word_uuid)
             .await
             .map_err(APIError::InternalError)?;
 
-    let translations =
-        TranslationQuery::translations_for_english_word(&state.database, target_word_uuid)
+
+    let suggested_translations = {
+        let suggested_translation_models = TranslationSuggestionQuery::suggestions_for_english_word(
+            &state.database,
+            target_word_uuid,
+        )
+        .await
+        .map_err(APIError::InternalError)?;
+
+
+        let mut suggested_translations = Vec::with_capacity(suggested_translation_models.len());
+        for suggested_translation_model in suggested_translation_models {
+            let suggested_translation_word_categories =
+                WordCategoryQuery::word_categories_by_word_uuid(
+                    &state.database,
+                    suggested_translation_model.word_id,
+                )
+                .await
+                .map_err(APIError::InternalError)?;
+
+            suggested_translations.push(SloveneWord::new(
+                suggested_translation_model,
+                suggested_translation_word_categories,
+            ))
+        }
+
+        suggested_translations
+    };
+
+
+    let translations = {
+        let translation_models =
+            TranslationQuery::translations_for_english_word(&state.database, target_word_uuid)
+                .await
+                .map_err(APIError::InternalError)?;
+
+
+        let mut translations = Vec::with_capacity(translation_models.len());
+        for translation_model in translation_models {
+            let translated_word_categories = WordCategoryQuery::word_categories_by_word_uuid(
+                &state.database,
+                translation_model.word_id,
+            )
             .await
             .map_err(APIError::InternalError)?;
+
+            translations.push(SloveneWord::new(
+                translation_model,
+                translated_word_categories,
+            ));
+        }
+
+        translations
+    };
 
 
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::from_models(target_word, translation_suggestions, translations),
+        word: EnglishWord::new(
+            target_word,
+            categories,
+            suggested_translations,
+            translations,
+        ),
     }
     .into_response())
 }
@@ -488,21 +605,73 @@ pub async fn update_specific_english_word(
     .map_err(APIError::InternalError)?;
 
 
-    let translation_suggestions =
-        TranslationSuggestionQuery::suggestions_for_english_word(&state.database, target_word_uuid)
+
+    let categories =
+        query::WordCategoryQuery::word_categories_by_word_uuid(&state.database, target_word_uuid)
             .await
             .map_err(APIError::InternalError)?;
 
-    let translations =
-        TranslationQuery::translations_for_english_word(&state.database, target_word_uuid)
+
+    let suggested_translations = {
+        let suggested_translation_models = TranslationSuggestionQuery::suggestions_for_english_word(
+            &state.database,
+            target_word_uuid,
+        )
+        .await
+        .map_err(APIError::InternalError)?;
+
+
+        let mut suggested_translations = Vec::with_capacity(suggested_translation_models.len());
+        for suggested_translation_model in suggested_translation_models {
+            let suggested_translation_word_categories =
+                WordCategoryQuery::word_categories_by_word_uuid(
+                    &state.database,
+                    suggested_translation_model.word_id,
+                )
+                .await
+                .map_err(APIError::InternalError)?;
+
+            suggested_translations.push(SloveneWord::new(
+                suggested_translation_model,
+                suggested_translation_word_categories,
+            ))
+        }
+
+        suggested_translations
+    };
+
+
+    let translations = {
+        let translation_models =
+            TranslationQuery::translations_for_english_word(&state.database, target_word_uuid)
+                .await
+                .map_err(APIError::InternalError)?;
+
+
+        let mut translations = Vec::with_capacity(translation_models.len());
+        for translation_model in translation_models {
+            let translated_word_categories = WordCategoryQuery::word_categories_by_word_uuid(
+                &state.database,
+                translation_model.word_id,
+            )
             .await
             .map_err(APIError::InternalError)?;
+
+            translations.push(SloveneWord::new(
+                translation_model,
+                translated_word_categories,
+            ));
+        }
+
+        translations
+    };
 
 
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::from_models(
+        word: EnglishWord::new(
             updated_model,
-            translation_suggestions,
+            categories,
+            suggested_translations,
             translations,
         ),
     }

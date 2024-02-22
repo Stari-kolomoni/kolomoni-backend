@@ -65,6 +65,9 @@ impl StandardRole {
                 StandardPermission::SuggestionDelete,
                 StandardPermission::TranslationCreate,
                 StandardPermission::TranslationDelete,
+                StandardPermission::CategoryCreate,
+                StandardPermission::CategoryUpdate,
+                StandardPermission::CategoryDelete,
             ],
         }
     }

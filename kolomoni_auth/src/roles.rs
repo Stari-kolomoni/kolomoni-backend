@@ -90,6 +90,9 @@ impl Role {
                 Permission::SuggestionDelete,
                 Permission::TranslationCreate,
                 Permission::TranslationDelete,
+                Permission::CategoryCreate,
+                Permission::CategoryUpdate,
+                Permission::CategoryDelete,
             ],
         }
     }

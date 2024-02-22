@@ -7,6 +7,7 @@ mod m20230624_177000_initialize_role_related_tables;
 mod m20230624_177050_seed_roles;
 mod m20240206_234618_create_word_tables;
 mod m20240219_161147_create_word_suggestion_and_translation_tables;
+mod m20240222_185323_create_category_related_tables;
 
 pub struct Migrator;
 
@@ -24,6 +25,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230624_177050_seed_roles::Migration),
             Box::new(m20240206_234618_create_word_tables::Migration),
             Box::new(m20240219_161147_create_word_suggestion_and_translation_tables::Migration),
+            Box::new(m20240222_185323_create_category_related_tables::Migration),
         ]
     }
 }

@@ -7,7 +7,7 @@ use actix_web::http::{header, StatusCode};
 use actix_web::web::Data;
 use actix_web::{FromRequest, HttpRequest};
 use chrono::{DateTime, Utc};
-use kolomoni_auth::{JWTClaims, JWTValidationError, RoleSet, BLANKET_ANY_USER_PERMISSION_GRANT};
+use kolomoni_auth::{JWTClaims, JWTValidationError, RoleSet, BLANKET_PERMISSION_GRANT};
 use kolomoni_auth::{Permission, PermissionSet};
 use kolomoni_database::query::UserRoleQuery;
 use miette::{Context, Result};
@@ -57,7 +57,7 @@ impl UserAuthenticationExtractor {
     }
 
     pub fn is_permission_granted_to_all(&self, permission: Permission) -> bool {
-        BLANKET_ANY_USER_PERMISSION_GRANT.contains(&permission)
+        BLANKET_PERMISSION_GRANT.contains(&permission)
     }
 }
 
@@ -185,7 +185,7 @@ impl AuthenticatedUser {
         database: &C,
         permission: Permission,
     ) -> Result<bool> {
-        if BLANKET_ANY_USER_PERMISSION_GRANT.contains(&permission) {
+        if BLANKET_PERMISSION_GRANT.contains(&permission) {
             return Ok(true);
         }
 
