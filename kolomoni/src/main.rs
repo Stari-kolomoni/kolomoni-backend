@@ -135,6 +135,7 @@ async fn main() -> Result<()> {
         ]);
 
         let mut app = actix_web::App::new()
+            .wrap(actix_web::middleware::Compress::default())
             .wrap(actix_web::middleware::NormalizePath::trim())
             .wrap(cors)
             .wrap(tracing_actix_web::TracingLogger::default())
