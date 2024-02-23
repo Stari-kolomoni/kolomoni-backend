@@ -1,17 +1,18 @@
 use kolomoni::api::v1::dictionary::{
+    categories::{
+        CategoriesResponse,
+        CategoryCreationRequest,
+        CategoryCreationResponse,
+        CategoryResponse,
+        CategoryUpdateRequest,
+    },
     english_word::{
-        EnglishWord,
         EnglishWordCreationRequest,
         EnglishWordCreationResponse,
         EnglishWordInfoResponse,
         EnglishWordsResponse,
     },
-    slovene_word::{
-        SloveneWord,
-        SloveneWordCreationRequest,
-        SloveneWordCreationResponse,
-        SloveneWordsResponse,
-    },
+    slovene_word::{SloveneWordCreationRequest, SloveneWordCreationResponse, SloveneWordsResponse},
     suggestions::{TranslationSuggestionDeletionRequest, TranslationSuggestionRequest},
     translations::{TranslationDeletionRequest, TranslationRequest},
 };
@@ -931,34 +932,631 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
     // Check that "critical hit" has three suggested translations: "terna", "kritični izid" and "usodni zadetek".
     {
-        let queried_word_critical_hit = english_word_list.iter()
-        .find(|word| word.word_id == word_critical_hit.word_id).unwrap();
+        let queried_word_critical_hit = english_word_list
+            .iter()
+            .find(|word| word.word_id == word_critical_hit.word_id)
+            .unwrap();
 
-        assert_eq!(queried_word_critical_hit.suggested_translations.len(), 3);
+        assert_eq!(
+            queried_word_critical_hit.suggested_translations.len(),
+            3
+        );
         assert_eq!(queried_word_critical_hit.translations.len(), 0);
 
 
-        let translated_terna = queried_word_critical_hit.suggested_translations.iter()
-            .find(|suggestion| suggestion.word_id == word_terna.word_id).unwrap();
+        let translated_terna = queried_word_critical_hit
+            .suggested_translations
+            .iter()
+            .find(|suggestion| suggestion.word_id == word_terna.word_id)
+            .unwrap();
+        assert_eq!(translated_terna, &word_terna);
+
+
+        let translated_kriticni_izid = queried_word_critical_hit
+            .suggested_translations
+            .iter()
+            .find(|suggestion| suggestion.word_id == word_kriticni_izid.word_id)
+            .unwrap();
+        assert_eq!(translated_kriticni_izid, &word_kriticni_izid);
+
+
+        let translated_usodni_zadetek = queried_word_critical_hit
+            .suggested_translations
+            .iter()
+            .find(|suggestion| suggestion.word_id == word_usodni_zadetek.word_id)
+            .unwrap();
+        assert_eq!(translated_usodni_zadetek, &word_usodni_zadetek);
+    }
+}
+
+
+
+#[tokio::test]
+async fn word_categories_work() {
+    let server = prepare_test_server_instance().await;
+
+    register_sample_user(&server, SampleUser::Janez).await;
+    register_sample_user(&server, SampleUser::Meta).await;
+
+    let admin_user_access_token = login_sample_user(&server, SampleUser::Janez).await;
+    let admin_user_info = get_sample_user_info(&server, &admin_user_access_token).await;
+
+    let normal_user_access_token = login_sample_user(&server, SampleUser::Meta).await;
+
+    server
+        .give_full_permissions_to_user(admin_user_info.id)
+        .await;
+
+
+
+    /***
+     * Test creating, listing, updating and deleting categories.
+     */
+
+    {
+        let category_list_response = server
+            .request(Method::GET, "/api/v1/dictionary/category")
+            .send()
+            .await;
+
+        category_list_response.assert_status_equals(StatusCode::OK);
+
+        let categories = category_list_response
+            .json_body::<CategoriesResponse>()
+            .categories;
+
+        assert_eq!(categories.len(), 0);
+    }
+
+
+    {
+        // Failing to provide a JSON body should fail with 400 Bad Request.
+        server
+            .request(Method::POST, "/api/v1/dictionary/category")
+            .send()
+            .await
+            .assert_status_equals(StatusCode::BAD_REQUEST);
+
+        // The endpoint should require authentication.
+        server
+            .request(Method::POST, "/api/v1/dictionary/category")
+            .with_json_body(CategoryCreationRequest {
+                slovene_name: "test".to_string(),
+                english_name: "test".to_string(),
+            })
+            .send()
+            .await
+            .assert_status_equals(StatusCode::UNAUTHORIZED);
+
+        // The endpoint should require the correct permission.
+        server
+            .request(Method::POST, "/api/v1/dictionary/category")
+            .with_json_body(CategoryCreationRequest {
+                slovene_name: "test".to_string(),
+                english_name: "test".to_string(),
+            })
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+    }
+
+    let new_category_info = {
+        let category_creation_response = server
+            .request(Method::POST, "/api/v1/dictionary/category")
+            .with_json_body(CategoryCreationRequest {
+                slovene_name: "test".to_string(),
+                english_name: "test".to_string(),
+            })
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        category_creation_response.assert_status_equals(StatusCode::OK);
+
+        let category_info = category_creation_response
+            .json_body::<CategoryCreationResponse>()
+            .category;
+
+
+        // Trying to create a category that already exists should now fail with 409 Conflict.
+        server
+            .request(Method::POST, "/api/v1/dictionary/category")
+            .with_json_body(CategoryCreationRequest {
+                slovene_name: "test".to_string(),
+                english_name: "test".to_string(),
+            })
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::CONFLICT);
+
+        category_info
+    };
+
+
+    {
+        let category_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/category/{}",
+                    new_category_info.id
+                ),
+            )
+            .send()
+            .await;
+
+        category_response.assert_status_equals(StatusCode::OK);
+
+        let fetched_category_info = category_response.json_body::<CategoryResponse>().category;
+
+        assert_eq!(&fetched_category_info, &new_category_info);
+    }
+
+
+    {
+        let category_list_response = server
+            .request(Method::GET, "/api/v1/dictionary/category")
+            .send()
+            .await;
+
+        category_list_response.assert_status_equals(StatusCode::OK);
+
+        let categories = category_list_response
+            .json_body::<CategoriesResponse>()
+            .categories;
+
+        assert_eq!(categories.len(), 1);
+        assert_eq!(&categories[0], &new_category_info);
+    }
+
+
+    {
+        // The PATCH endpoint should fail with 400 Bad Request if no JSON body is provided.
+        server
+            .request(
+                Method::PATCH,
+                "/api/v1/dictionary/category/9810214",
+            )
+            .send()
+            .await
+            .assert_status_equals(StatusCode::BAD_REQUEST);
+
+        // The PATCH endpoint should require authentication and correct permissions.
+        server
+            .request(
+                Method::PATCH,
+                "/api/v1/dictionary/category/9810214",
+            )
+            .with_json_body(CategoryUpdateRequest {
+                slovene_name: Some("test2".to_string()),
+                english_name: None,
+            })
+            .send()
+            .await
+            .assert_status_equals(StatusCode::UNAUTHORIZED);
+
+        server
+            .request(
+                Method::PATCH,
+                "/api/v1/dictionary/category/9810214",
+            )
+            .with_json_body(CategoryUpdateRequest {
+                slovene_name: Some("test2".to_string()),
+                english_name: None,
+            })
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+
+        // The endpoint should fail on a non-existent category.
+        server
+            .request(
+                Method::PATCH,
+                "/api/v1/dictionary/category/9810214",
+            )
+            .with_json_body(CategoryUpdateRequest {
+                slovene_name: Some("test2".to_string()),
+                english_name: None,
+            })
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+
+        // The endpoint should fail with 409 Conflict if the modification clashes
+        // with an existing category.
+        server
+            .request(
+                Method::PATCH,
+                format!(
+                    "/api/v1/dictionary/category/{}",
+                    new_category_info.id
+                ),
+            )
+            .with_json_body(CategoryUpdateRequest {
+                slovene_name: Some("test".to_string()),
+                english_name: None,
+            })
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::CONFLICT);
+    }
+
+    let updated_category_info = {
+        let modification_response = server
+            .request(
+                Method::PATCH,
+                format!(
+                    "/api/v1/dictionary/category/{}",
+                    new_category_info.id
+                ),
+            )
+            .with_json_body(CategoryUpdateRequest {
+                slovene_name: Some("test2".to_string()),
+                english_name: Some("test2".to_string()),
+            })
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        modification_response.assert_status_equals(StatusCode::OK);
+
+        let updated_category_info = modification_response
+            .json_body::<CategoryResponse>()
+            .category;
+
+        assert_eq!(new_category_info.id, updated_category_info.id);
+        assert_eq!(updated_category_info.slovene_name, "test2");
+        assert_eq!(updated_category_info.english_name, "test2");
+
+        updated_category_info
+    };
+
+
+    {
+        let category_list_response = server
+            .request(Method::GET, "/api/v1/dictionary/category")
+            .send()
+            .await;
+
+        category_list_response.assert_status_equals(StatusCode::OK);
+
+        let categories = category_list_response
+            .json_body::<CategoriesResponse>()
+            .categories;
+
+        assert_eq!(categories.len(), 1);
+        assert_eq!(&categories[0], &updated_category_info);
+    }
+
+
+    {
+        // The endpoint should require authentication.
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/category/90475981",
+            )
+            .send()
+            .await
+            .assert_status_equals(StatusCode::UNAUTHORIZED);
+
+        // The endpoint should require correct permissions.
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/category/90475981",
+            )
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+
+        // The endpoint should fail with 404 Not Found if the category does not exist.
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/category/90475981",
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+    }
+
+    {
+        let removal_response = server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/category/{}",
+                    updated_category_info.id
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        removal_response.assert_status_equals(StatusCode::OK);
+    }
+
+
+    {
+        let category_list_response = server
+            .request(Method::GET, "/api/v1/dictionary/category")
+            .send()
+            .await;
+
+        category_list_response.assert_status_equals(StatusCode::OK);
+
+        let categories = category_list_response
+            .json_body::<CategoriesResponse>()
+            .categories;
+
+        assert_eq!(categories.len(), 0);
+    }
+
+
+
+
+    /***
+     * Test linking/unlinking words from categories.
+     */
+
+    let word_ability = create_sample_english_word(
+        &server,
+        &admin_user_access_token,
+        SampleEnglishWord::Ability,
+    )
+    .await;
+
+    let category_class = create_sample_category(
+        &server,
+        &admin_user_access_token,
+        SampleCategory::Razred,
+    )
+    .await;
+    let category_character = create_sample_category(
+        &server,
+        &admin_user_access_token,
+        SampleCategory::Lik,
+    )
+    .await;
+
+
+    {
+        // Linking a category to a word should require authentication.
+        server
+            .request(
+                Method::POST,
+                "/api/v1/dictionary/category/987592/word-link/sojfgoai",
+            )
+            .send()
+            .await
+            .assert_status_equals(StatusCode::UNAUTHORIZED);
+
+        // The endpoint should require correct permissions.
+        server
+            .request(
+                Method::POST,
+                "/api/v1/dictionary/category/987592/word-link/sojfgoai",
+            )
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+
+        // The endpoint should fail with 400 Bad Request if the word UUID is invalid.
+        server
+            .request(
+                Method::POST,
+                "/api/v1/dictionary/category/987592/word-link/sojfgoai",
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::BAD_REQUEST);
+
+        // The endpoint should fail with 404 Not Found if either the category ID
+        // or the word UUID does not exist.
+        server
+            .request(
+                Method::POST,
+                "/api/v1/dictionary/category/987592/word-link/018dd67b-a7d1-7c01-9ea5-8f0ec5a87d0f",
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+
+        server
+            .request(
+                Method::POST,
+                format!(
+                    "/api/v1/dictionary/category/{}/word-link/018dd67b-a7d1-7c01-9ea5-8f0ec5a87d0f",
+                    category_character.id
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+    }
+
+    {
+        let link_response = server
+            .request(
+                Method::POST,
+                format!(
+                    "/api/v1/dictionary/category/{}/word-link/{}",
+                    category_character.id, word_ability.word_id,
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        link_response.assert_status_equals(StatusCode::OK);
+
+
+        // Trying to link again should fail with 409 Conflict.
+        server
+            .request(
+                Method::POST,
+                format!(
+                    "/api/v1/dictionary/category/{}/word-link/{}",
+                    category_character.id, word_ability.word_id,
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::CONFLICT);
+    }
+
+
+    {
+        let word_info_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    word_ability.word_id
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        word_info_response.assert_status_equals(StatusCode::OK);
+
+        let fetched_word_info = word_info_response
+            .json_body::<EnglishWordInfoResponse>()
+            .word;
+
+        assert_eq!(fetched_word_info.categories.len(), 1);
         assert_eq!(
-            translated_terna,
-            &word_terna
+            &fetched_word_info.categories[0],
+            &category_character
         );
+    }
 
 
-        let translated_kriticni_izid = queried_word_critical_hit.suggested_translations.iter()
-            .find(|suggestion| suggestion.word_id == word_kriticni_izid.word_id).unwrap();
-        assert_eq!(
-            translated_kriticni_izid,
-            &word_kriticni_izid
-        );
+    {
+        // Unlinking from a category should require authentication.
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/category/987592/word-link/sojfgoai",
+            )
+            .send()
+            .await
+            .assert_status_equals(StatusCode::UNAUTHORIZED);
+
+        // The endpoint should require correct permissions.
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/category/987592/word-link/sojfgoai",
+            )
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+
+        // The endpoint should fail with 400 Bad Request if the word UUID is invalid.
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/category/987592/word-link/sojfgoai",
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::BAD_REQUEST);
+
+        // The endpoint should fail with 404 Not Found if either the category ID,
+        // the word UUID or the category-word link does not exist.
+        server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/category/{}/word-link/018dd67b-a7d1-7c01-9ea5-8f0ec5a87d0f",
+                    category_character.id
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+
+        server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/category/987592/word-link/{}",
+                    word_ability.word_id
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+
+        server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/category/{}/word-link/{}",
+                    category_class.id, word_ability.word_id
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+    }
+
+    {
+        let category_link_deletion_response = server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/category/{}/word-link/{}",
+                    category_character.id, word_ability.word_id
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        category_link_deletion_response.assert_status_equals(StatusCode::OK);
+    }
 
 
-        let translated_usodni_zadetek = queried_word_critical_hit.suggested_translations.iter()
-            .find(|suggestion| suggestion.word_id == word_usodni_zadetek.word_id).unwrap();
-        assert_eq!(
-            translated_usodni_zadetek,
-            &word_usodni_zadetek
-        );
+    {
+        let word_info_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    word_ability.word_id
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        word_info_response.assert_status_equals(StatusCode::OK);
+
+        let fetched_word_info = word_info_response
+            .json_body::<EnglishWordInfoResponse>()
+            .word;
+
+        assert_eq!(fetched_word_info.categories.len(), 0);
     }
 }
