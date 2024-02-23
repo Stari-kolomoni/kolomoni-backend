@@ -49,7 +49,11 @@ impl MigrationTrait for Migration {
             .create_table(
                 Table::create()
                     .table(Category::Table)
-                    .col(ColumnDef::new_with_type(Category::Id, ColumnType::Integer).not_null())
+                    .col(
+                        ColumnDef::new_with_type(Category::Id, ColumnType::Integer)
+                            .not_null()
+                            .auto_increment(),
+                    )
                     .col(
                         ColumnDef::new_with_type(Category::EnglishName, ColumnType::String(None))
                             .not_null(),
