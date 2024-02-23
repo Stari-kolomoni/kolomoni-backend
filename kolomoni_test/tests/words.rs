@@ -56,8 +56,9 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .send()
             .await
             .assert_status_equals(StatusCode::OK);
+    }
 
-
+    {
         // Total number of english words should be 0 on a fresh database.
         let query_response = server
             .request(Method::GET, "/api/v1/dictionary/english")
@@ -533,7 +534,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
                 english_word_id: word_ability.word_id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
-            .with_access_token(&admin_user_access_token)
+            .with_access_token(&normal_user_access_token)
             .send()
             .await;
 
@@ -601,6 +602,18 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await
             .assert_status_equals(StatusCode::UNAUTHORIZED);
 
+        // The endpoint should require proper permissions.
+        server
+            .request(Method::DELETE, "/api/v1/dictionary/suggestion")
+            .with_json_body(TranslationSuggestionDeletionRequest {
+                english_word_id: word_critical_hit.word_id.to_string(),
+                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
+            })
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+
 
         // Trying to delete a non-existent suggestion should fail with 404 Not Found.
         server
@@ -666,7 +679,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await
             .assert_status_equals(StatusCode::BAD_REQUEST);
 
-        // Creating a suggestion should require authentication.
+        // Creating a translation should require authentication.
         server
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
@@ -676,6 +689,18 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .send()
             .await
             .assert_status_equals(StatusCode::UNAUTHORIZED);
+
+        // The endpoint should require proper permissions.
+        server
+            .request(Method::POST, "/api/v1/dictionary/translation")
+            .with_json_body(TranslationRequest {
+                english_word_id: word_ability.word_id.to_string(),
+                slovene_word_id: word_sposobnost.word_id.to_string(),
+            })
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
 
         // The request should fail if any UUIDs are invalid.
         server
@@ -774,6 +799,18 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await
             .assert_status_equals(StatusCode::UNAUTHORIZED);
 
+        // The endpoint should require proper permissions.
+        server
+            .request(Method::DELETE, "/api/v1/dictionary/translation")
+            .with_json_body(TranslationDeletionRequest {
+                english_word_id: word_critical_hit.word_id.to_string(),
+                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
+            })
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+
         // Trying to delete a non-existent suggestion should fail with 404 Not Found.
         server
             .request(Method::DELETE, "/api/v1/dictionary/translation")
@@ -824,7 +861,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
 
     /***
-     * Prep some more complex situation and then check that things work as expected.
+     * Prepare a slightly more complex situation and then check that things work as expected.
      */
 
     link_word_as_translation(

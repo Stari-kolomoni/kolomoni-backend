@@ -143,7 +143,7 @@ pub async fn get_current_user_info(
         (
             status = 200,
             description = "The authenticated user's role list.",
-            body = UpdatedUserRolesResponse
+            body = UserRolesResponse
         ),
         (
             status = 404,

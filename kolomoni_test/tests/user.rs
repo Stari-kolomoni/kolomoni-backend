@@ -156,12 +156,13 @@ async fn user_registration_and_user_list_work() {
     // List all users; ensure there is only one.
     // Then register a new user and ensure the length has increased to 2.
 
-    server
-        .request(Method::GET, "/api/v1/users")
-        .send()
-        .await
-        .assert_status_equals(StatusCode::UNAUTHORIZED);
-
+    {
+        server
+            .request(Method::GET, "/api/v1/users")
+            .send()
+            .await
+            .assert_status_equals(StatusCode::UNAUTHORIZED);
+    }
 
     {
         let all_users_response = server
@@ -415,23 +416,121 @@ async fn specific_user_operations_work() {
 
     register_sample_user(&server, SampleUser::Janez).await;
     register_sample_user(&server, SampleUser::Meta).await;
+    register_sample_user(&server, SampleUser::Kira).await;
 
-    let sample_user_access_token = login_sample_user(&server, SampleUser::Meta).await;
+    let admin_user_access_token = login_sample_user(&server, SampleUser::Meta).await;
+    let admin_user_info = get_sample_user_info(&server, &admin_user_access_token).await;
 
-    let sample_user_info = get_sample_user_info(&server, &sample_user_access_token).await;
+    let normal_user_access_token = login_sample_user(&server, SampleUser::Janez).await;
+    let aux_normal_user_access_token = login_sample_user(&server, SampleUser::Kira).await;
+
+
+    {
+        let admin_user_roles_response = server
+            .request(Method::GET, "/api/v1/users/me/roles")
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        let admin_user_role_set = admin_user_roles_response
+            .json_body::<UserRolesResponse>()
+            .role_names
+            .into_iter()
+            .map(|role_name| Role::from_name(&role_name).unwrap())
+            .collect::<HashSet<_>>();
+
+        let mut expected_admin_user_role_set = HashSet::new();
+        expected_admin_user_role_set.insert(Role::User);
+
+        assert_eq!(admin_user_role_set, expected_admin_user_role_set);
+    }
+
+    {
+        let normal_user_roles_response = server
+            .request(Method::GET, "/api/v1/users/me/roles")
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await;
+
+        let normal_user_role_set = normal_user_roles_response
+            .json_body::<UserRolesResponse>()
+            .role_names
+            .into_iter()
+            .map(|role_name| Role::from_name(&role_name).unwrap())
+            .collect::<HashSet<_>>();
+
+        let mut expected_normal_user_role_set = HashSet::new();
+        expected_normal_user_role_set.insert(Role::User);
+
+        assert_eq!(
+            normal_user_role_set,
+            expected_normal_user_role_set
+        );
+    }
+
+
     server
-        .give_full_permissions_to_user(sample_user_info.id)
+        .give_full_permissions_to_user(admin_user_info.id)
         .await;
+
+
+    {
+        let admin_user_roles_response = server
+            .request(Method::GET, "/api/v1/users/me/roles")
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        let admin_user_role_set = admin_user_roles_response
+            .json_body::<UserRolesResponse>()
+            .role_names
+            .into_iter()
+            .map(|role_name| Role::from_name(&role_name).unwrap())
+            .collect::<HashSet<_>>();
+
+        let mut expected_admin_user_role_set = HashSet::new();
+        expected_admin_user_role_set.insert(Role::User);
+        expected_admin_user_role_set.insert(Role::Administrator);
+
+        assert_eq!(admin_user_role_set, expected_admin_user_role_set);
+    }
+
+    {
+        let normal_user_roles_response = server
+            .request(Method::GET, "/api/v1/users/me/roles")
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await;
+
+        let normal_user_role_set = normal_user_roles_response
+            .json_body::<UserRolesResponse>()
+            .role_names
+            .into_iter()
+            .map(|role_name| Role::from_name(&role_name).unwrap())
+            .collect::<HashSet<_>>();
+
+        let mut expected_normal_user_role_set = HashSet::new();
+        expected_normal_user_role_set.insert(Role::User);
+
+        assert_eq!(
+            normal_user_role_set,
+            expected_normal_user_role_set
+        );
+    }
+
+
 
 
     // Find user with username "janez".
     let janez_user_info = {
         let all_users_response = server
             .request(Method::GET, "/api/v1/users")
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await;
+
         all_users_response.assert_status_equals(StatusCode::OK);
+
         let user_list = all_users_response.json_body::<RegisteredUsersListResponse>();
 
         user_list
@@ -476,7 +575,7 @@ async fn specific_user_operations_work() {
                 Method::GET,
                 format!("/api/v1/users/{}", janez_user_info.id),
             )
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await;
 
@@ -523,7 +622,7 @@ async fn specific_user_operations_work() {
                 Method::GET,
                 format!("/api/v1/users/{}/roles", janez_user_info.id),
             )
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await;
 
@@ -558,7 +657,7 @@ async fn specific_user_operations_work() {
         // should fail with `404 Not Found`.
         server
             .request(Method::GET, "/api/v1/users/238429/permissions")
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::NOT_FOUND);
@@ -570,7 +669,7 @@ async fn specific_user_operations_work() {
                 Method::GET,
                 format!("/api/v1/users/{}/permissions", janez_user_info.id),
             )
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await;
 
@@ -620,13 +719,24 @@ async fn specific_user_operations_work() {
             .await
             .assert_status_equals(StatusCode::UNAUTHORIZED);
 
+        // The endpoint should require proper permissions.
+        server
+            .request(Method::PATCH, "/api/v1/users/238429/display_name")
+            .with_json_body(UserDisplayNameChangeRequest {
+                new_display_name: "Some Display Name".to_string(),
+            })
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+
         // Attempting to change a non-existent user's display name should fail with `404 Not Found`.
         let not_found_response = server
             .request(Method::PATCH, "/api/v1/users/238429/display_name")
             .with_json_body(UserDisplayNameChangeRequest {
                 new_display_name: "Some Display Name".to_string(),
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await;
 
@@ -646,7 +756,7 @@ async fn specific_user_operations_work() {
             .with_json_body(UserDisplayNameChangeRequest {
                 new_display_name: SampleUser::Janez.display_name().to_string(),
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::CONFLICT);
@@ -665,7 +775,7 @@ async fn specific_user_operations_work() {
             .with_json_body(UserDisplayNameChangeRequest {
                 new_display_name: "Janez Koglot".to_string(),
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await;
 
@@ -706,13 +816,24 @@ async fn specific_user_operations_work() {
             .await
             .assert_status_equals(StatusCode::UNAUTHORIZED);
 
+        // The endpoint should fail without proper permissions.
+        server
+            .request(Method::POST, "/api/v1/users/238429/roles")
+            .with_json_body(UserRoleAddRequest {
+                roles_to_add: vec![Role::Administrator.name().to_string()],
+            })
+            .with_access_token(&normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+
         // Trying to add roles to a non-existent user should fail with `404 Not Found`.
         server
             .request(Method::POST, "/api/v1/users/238429/roles")
             .with_json_body(UserRoleAddRequest {
                 roles_to_add: vec![Role::Administrator.name().to_string()],
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::NOT_FOUND);
@@ -727,7 +848,7 @@ async fn specific_user_operations_work() {
             .with_json_body(UserRoleAddRequest {
                 roles_to_add: vec!["non-existent-role-name".to_string()],
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::BAD_REQUEST);
@@ -738,12 +859,12 @@ async fn specific_user_operations_work() {
         server
             .request(
                 Method::POST,
-                format!("/api/v1/users/{}/roles", sample_user_info.id),
+                format!("/api/v1/users/{}/roles", admin_user_info.id),
             )
             .with_json_body(UserRoleAddRequest {
                 roles_to_add: vec![Role::Administrator.name().to_string()],
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::FORBIDDEN);
@@ -756,7 +877,7 @@ async fn specific_user_operations_work() {
                     Method::GET,
                     format!("/api/v1/users/{}/roles", janez_user_info.id),
                 )
-                .with_access_token(&sample_user_access_token)
+                .with_access_token(&admin_user_access_token)
                 .send()
                 .await;
 
@@ -783,7 +904,7 @@ async fn specific_user_operations_work() {
             .with_json_body(UserRoleAddRequest {
                 roles_to_add: vec![Role::Administrator.name().to_string()],
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await;
 
@@ -823,13 +944,24 @@ async fn specific_user_operations_work() {
             .await
             .assert_status_equals(StatusCode::UNAUTHORIZED);
 
+        // The endpoint should require proper permissions.
+        server
+            .request(Method::DELETE, "/api/v1/users/238429/roles")
+            .with_json_body(UserRoleRemoveRequest {
+                roles_to_remove: vec![Role::Administrator.name().to_string()],
+            })
+            .with_access_token(&aux_normal_user_access_token)
+            .send()
+            .await
+            .assert_status_equals(StatusCode::FORBIDDEN);
+
         // Trying to remove roles from a non-existent user should fail with `404 Not Found`.
         server
             .request(Method::DELETE, "/api/v1/users/238429/roles")
             .with_json_body(UserRoleRemoveRequest {
                 roles_to_remove: vec![Role::Administrator.name().to_string()],
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::NOT_FOUND);
@@ -843,21 +975,22 @@ async fn specific_user_operations_work() {
             .with_json_body(UserRoleRemoveRequest {
                 roles_to_remove: vec!["non-existent-role-name".to_string()],
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::BAD_REQUEST);
+
 
         // Removing roles from yourself should not be allowed.
         server
             .request(
                 Method::DELETE,
-                format!("/api/v1/users/{}/roles", sample_user_info.id),
+                format!("/api/v1/users/{}/roles", admin_user_info.id),
             )
             .with_json_body(UserRoleRemoveRequest {
                 roles_to_remove: vec![Role::Administrator.name().to_string()],
             })
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::FORBIDDEN);
@@ -870,7 +1003,7 @@ async fn specific_user_operations_work() {
                     Method::GET,
                     format!("/api/v1/users/{}/roles", janez_user_info.id),
                 )
-                .with_access_token(&sample_user_access_token)
+                .with_access_token(&admin_user_access_token)
                 .send()
                 .await;
 
@@ -892,7 +1025,7 @@ async fn specific_user_operations_work() {
                 Method::DELETE,
                 format!("/api/v1/users/{}/roles", janez_user_info.id),
             )
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .with_json_body(UserRoleRemoveRequest {
                 roles_to_remove: vec![Role::Administrator.name().to_string()],
             })
@@ -913,20 +1046,43 @@ async fn specific_user_operations_work() {
     }
 
 
+    {
+        let role_list_response = server
+            .request(
+                Method::GET,
+                format!("/api/v1/users/{}/roles", janez_user_info.id),
+            )
+            .with_access_token(&admin_user_access_token)
+            .send()
+            .await;
+
+        role_list_response.assert_status_equals(StatusCode::OK);
+
+        let new_janez_roles = role_list_response
+            .json_body::<UserRolesResponse>()
+            .role_names
+            .into_iter()
+            .map(|role_name| Role::from_name(&role_name).unwrap())
+            .collect::<HashSet<Role>>();
+
+        assert!(!new_janez_roles.contains(&Role::Administrator))
+    }
+
+
     /***
      * Test that users can't give roles they don't have.
      */
 
     // This resets our logged-in user from an admin to a normal user.
     server
-        .reset_user_permissions_to_normal(sample_user_info.id)
+        .reset_user_permissions_to_normal(admin_user_info.id)
         .await;
 
     {
         let sample_user_roles = {
             let role_list_response = server
                 .request(Method::GET, "/api/v1/users/me/roles")
-                .with_access_token(&sample_user_access_token)
+                .with_access_token(&admin_user_access_token)
                 .send()
                 .await;
 
@@ -954,7 +1110,7 @@ async fn specific_user_operations_work() {
                 Method::POST,
                 format!("/api/v1/users/{}/roles", janez_user_info.id,),
             )
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .with_json_body(UserRoleAddRequest {
                 roles_to_add: vec![Role::Administrator.name().to_string()],
             })
@@ -1008,7 +1164,7 @@ async fn specific_user_operations_work() {
                 Method::DELETE,
                 format!("/api/v1/users/{}/roles", janez_user_info.id),
             )
-            .with_access_token(&sample_user_access_token)
+            .with_access_token(&admin_user_access_token)
             .with_json_body(UserRoleRemoveRequest {
                 roles_to_remove: vec![Role::Administrator.name().to_string()],
             })

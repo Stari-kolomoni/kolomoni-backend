@@ -16,6 +16,7 @@ use crate::TestServer;
 pub enum SampleUser {
     Janez,
     Meta,
+    Kira,
 }
 
 impl SampleUser {
@@ -23,6 +24,7 @@ impl SampleUser {
         match self {
             SampleUser::Janez => "janez",
             SampleUser::Meta => "meta",
+            SampleUser::Kira => "kira",
         }
     }
 
@@ -30,6 +32,7 @@ impl SampleUser {
         match self {
             SampleUser::Janez => "Janez Jasnovidni",
             SampleUser::Meta => "Meta Meglenska",
+            SampleUser::Kira => "Kira",
         }
     }
 
@@ -37,6 +40,7 @@ impl SampleUser {
         match self {
             SampleUser::Janez => "janez",
             SampleUser::Meta => "meta",
+            SampleUser::Kira => "kira",
         }
     }
 

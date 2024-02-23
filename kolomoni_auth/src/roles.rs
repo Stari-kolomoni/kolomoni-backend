@@ -103,6 +103,7 @@ pub const DEFAULT_USER_ROLE: Role = Role::User;
 
 
 /// Set of roles, usually associated with some user.
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RoleSet {
     /// Set of roles.
     roles: HashSet<Role>,
