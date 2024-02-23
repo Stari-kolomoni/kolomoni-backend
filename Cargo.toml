@@ -16,6 +16,7 @@ members = [
     "kolomoni_database",
     "kolomoni_migrations",
     "kolomoni_openapi",
+    "kolomoni_search",
     "kolomoni_test",
     "kolomoni_test_util"
 ]
@@ -59,7 +60,6 @@ chrono = "0.4.34"
 http = "0.2.11"
 mime = "0.3.17"
 uuid = { version = "1.7.0", features = ["v7"] }
-governor = "0.6.3"
 httpdate = "1.0.3"
 futures-util = "0.3.30"
 paste = "1.0.14"
