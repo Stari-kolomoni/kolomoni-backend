@@ -70,9 +70,6 @@ use crate::{
         ),
         openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
         openapi::InternalServerErrorResponse,
-    ),
-    security(
-        ("access_token" = [])
     )
 )]
 #[get("/{user_id}")]
@@ -138,9 +135,6 @@ async fn get_specific_user_info(
         ),
         openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
         openapi::InternalServerErrorResponse,
-    ),
-    security(
-        ("access_token" = [])
     )
 )]
 #[get("/{user_id}/roles")]

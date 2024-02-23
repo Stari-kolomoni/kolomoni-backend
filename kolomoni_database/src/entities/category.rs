@@ -14,13 +14,15 @@ impl EntityName for Entity {
 #[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel, Eq)]
 pub struct Model {
     pub id: i32,
-    pub name: String,
+    pub english_name: String,
+    pub slovene_name: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
 pub enum Column {
     Id,
-    Name,
+    EnglishName,
+    SloveneName,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -45,7 +47,8 @@ impl ColumnTrait for Column {
     fn def(&self) -> ColumnDef {
         match self {
             Self::Id => ColumnType::Integer.def(),
-            Self::Name => ColumnType::String(None).def().unique(),
+            Self::EnglishName => ColumnType::String(None).def(),
+            Self::SloveneName => ColumnType::String(None).def(),
         }
     }
 }

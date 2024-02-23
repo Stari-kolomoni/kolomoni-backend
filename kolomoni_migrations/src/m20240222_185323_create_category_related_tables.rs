@@ -10,12 +10,15 @@ enum Category {
     #[sea_orm(iden = "id")]
     Id,
 
-    #[sea_orm(iden = "name")]
-    Name,
+    #[sea_orm(iden = "slovene_name")]
+    SloveneName,
+
+    #[sea_orm(iden = "english_name")]
+    EnglishName,
 }
 
 const CATEGORY_PK_CONSTRAINT_NAME: &str = "pk__category";
-const CATEGORY_UNIQUE_ON_NAME_CONSTRAINT_NAME: &str = "unique__category__name";
+const CATEGORY_UNIQUE_ON_NAMES_CONSTRAINT_NAME: &str = "unique__category__names";
 
 
 #[derive(DeriveIden)]
@@ -48,7 +51,11 @@ impl MigrationTrait for Migration {
                     .table(Category::Table)
                     .col(ColumnDef::new_with_type(Category::Id, ColumnType::Integer).not_null())
                     .col(
-                        ColumnDef::new_with_type(Category::Name, ColumnType::String(None))
+                        ColumnDef::new_with_type(Category::EnglishName, ColumnType::String(None))
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new_with_type(Category::SloveneName, ColumnType::String(None))
                             .not_null(),
                     )
                     .primary_key(
@@ -58,8 +65,9 @@ impl MigrationTrait for Migration {
                     )
                     .index(
                         Index::create()
-                            .name(CATEGORY_UNIQUE_ON_NAME_CONSTRAINT_NAME)
-                            .col(Category::Name)
+                            .name(CATEGORY_UNIQUE_ON_NAMES_CONSTRAINT_NAME)
+                            .col(Category::EnglishName)
+                            .col(Category::SloveneName)
                             .unique(),
                     )
                     .to_owned(),

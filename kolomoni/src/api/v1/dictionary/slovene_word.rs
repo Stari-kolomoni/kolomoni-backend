@@ -215,6 +215,9 @@ impl_json_response_builder!(SloveneWordCreationResponse);
         openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresWordCreate>,
         openapi::InternalServerErrorResponse,
+    ),
+    security(
+        ("access_token" = [])
     )
 )]
 #[post("")]
@@ -397,6 +400,9 @@ impl_json_response_builder!(SloveneWordUpdateRequest);
         openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresWordUpdate>,
         openapi::InternalServerErrorResponse,
+    ),
+    security(
+        ("access_token" = [])
     )
 )]
 #[patch("/{word_uuid}")]
@@ -486,6 +492,9 @@ pub async fn update_specific_slovene_word(
         ),
         openapi::FailedAuthenticationResponses<openapi::RequiresWordDelete>,
         openapi::InternalServerErrorResponse,
+    ),
+    security(
+        ("access_token" = [])
     )
 )]
 #[delete("/{word_uuid}")]

@@ -47,9 +47,10 @@ impl CategoryQuery {
         }
     }
 
-    pub async fn exists_by_name<C: ConnectionTrait + TransactionTrait>(
+    pub async fn exists_by_both_names<C: ConnectionTrait + TransactionTrait>(
         database: &C,
-        category_name: String,
+        slovene_name: String,
+        english_name: String,
     ) -> Result<bool> {
         #[derive(Debug, FromQueryResult, PartialEq, Eq, Hash)]
         struct SuggestionCount {
@@ -57,7 +58,8 @@ impl CategoryQuery {
         }
 
         let mut select_query = category::Entity::find()
-            .filter(category::Column::Name.eq(category_name))
+            .filter(category::Column::SloveneName.eq(slovene_name))
+            .filter(category::Column::EnglishName.eq(english_name))
             .select_only();
 
         select_query.expr_as(Expr::val(1).count(), "count");
@@ -88,6 +90,18 @@ impl CategoryQuery {
             .await
             .into_diagnostic()
             .wrap_err("Failed while fetching category from database.")?;
+
+        Ok(query)
+    }
+
+    pub async fn get_all<C: ConnectionTrait + TransactionTrait>(
+        database: &C,
+    ) -> Result<Vec<category::Model>> {
+        let query = category::Entity::find()
+            .all(database)
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed while fetching all categories from database.")?;
 
         Ok(query)
     }

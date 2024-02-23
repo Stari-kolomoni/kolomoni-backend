@@ -1,6 +1,7 @@
 mod category;
 mod user;
 mod user_role;
+mod word;
 mod word_category;
 mod word_english;
 mod word_slovene;
@@ -10,6 +11,7 @@ mod word_translation_suggestion;
 pub use category::*;
 pub use user::*;
 pub use user_role::*;
+pub use word::*;
 pub use word_category::*;
 pub use word_english::*;
 pub use word_slovene::*;

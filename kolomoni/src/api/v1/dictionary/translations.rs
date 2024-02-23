@@ -39,7 +39,7 @@ pub struct TranslationRequest {
 /// This endpoint requires authentication and the `word.translation:create` permission.
 #[utoipa::path(
     post,
-    path = "/translation",
+    path = "/dictionary/translation",
     tag = "dictionary:translation",
     request_body(
         content = TranslationRequest
@@ -64,6 +64,9 @@ pub struct TranslationRequest {
         openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresTranslationCreate>,
         openapi::InternalServerErrorResponse,
+    ),
+    security(
+        ("access_token" = [])
     )
 )]
 #[post("")]
@@ -156,7 +159,7 @@ pub struct TranslationDeletionRequest {
 /// This endpoint requires authentication and the `word.translation:delete` permission.
 #[utoipa::path(
     delete,
-    path = "/translation",
+    path = "/dictionary/translation",
     tag = "dictionary:translation",
     request_body(
         content = TranslationDeletionRequest
@@ -179,6 +182,9 @@ pub struct TranslationDeletionRequest {
         openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresTranslationDelete>,
         openapi::InternalServerErrorResponse,
+    ),
+    security(
+        ("access_token" = [])
     )
 )]
 #[delete("")]

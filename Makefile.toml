@@ -27,7 +27,18 @@ args = [
 ]
 
 
-[tasks.run-migrations]
+[tasks.migrations]
+clear = true
+workspace = false
+command = "sea-orm-cli"
+args = [
+    "migrate",
+    "${@}",
+    "--migration-dir",
+    "./kolomoni_migrations"
+]
+
+[tasks.migrations-up]
 clear = true
 workspace = false
 command = "sea-orm-cli"

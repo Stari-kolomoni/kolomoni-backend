@@ -1,206 +1,21 @@
-use kolomoni::api::v1::dictionary::{english_word::{EnglishWord, EnglishWordCreationRequest, EnglishWordCreationResponse, EnglishWordInfoResponse, EnglishWordsResponse}, slovene_word::{SloveneWord, SloveneWordCreationRequest, SloveneWordCreationResponse, SloveneWordsResponse}, suggestions::{TranslationSuggestionDeletionRequest, TranslationSuggestionRequest}, translations::{TranslationDeletionRequest, TranslationRequest}};
+use kolomoni::api::v1::dictionary::{
+    english_word::{
+        EnglishWord,
+        EnglishWordCreationRequest,
+        EnglishWordCreationResponse,
+        EnglishWordInfoResponse,
+        EnglishWordsResponse,
+    },
+    slovene_word::{
+        SloveneWord,
+        SloveneWordCreationRequest,
+        SloveneWordCreationResponse,
+        SloveneWordsResponse,
+    },
+    suggestions::{TranslationSuggestionDeletionRequest, TranslationSuggestionRequest},
+    translations::{TranslationDeletionRequest, TranslationRequest},
+};
 use kolomoni_test_util::prelude::*;
-
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum SampleEnglishWord {
-    Ability,
-    Charisma,
-    Attack,
-    CriticalHit,
-    HitPoints,
-}
-
-impl SampleEnglishWord {
-    pub fn lemma(&self) -> &'static str {
-        match self {
-            SampleEnglishWord::Ability => "ability",
-            SampleEnglishWord::Charisma => "charisma",
-            SampleEnglishWord::Attack => "attack",
-            SampleEnglishWord::CriticalHit => "critical hit",
-            SampleEnglishWord::HitPoints => "hit points",
-        }
-    }
-
-    pub fn disambiguation(&self) -> Option<&'static str> {
-        match self {
-            SampleEnglishWord::Ability => None,
-            SampleEnglishWord::Charisma => Some("mechanical ability"),
-            SampleEnglishWord::Attack => Some("in combat"),
-            SampleEnglishWord::CriticalHit => None,
-            SampleEnglishWord::HitPoints => Some("game mechanic"),
-        }
-    }
-
-    #[rustfmt::skip]
-    pub fn description(&self) -> Option<&'static str> {
-        match self {
-            SampleEnglishWord::Ability => 
-                Some("A creature's assets as well as weaknesses."),
-            SampleEnglishWord::Charisma => 
-                Some("A measuring force of Personality."),
-            SampleEnglishWord::Attack => 
-                None,
-            SampleEnglishWord::CriticalHit => 
-                Some("When a player rolls a natural 20 on a check, save, or attack roll."),
-            SampleEnglishWord::HitPoints => 
-                Some(
-                    "A character's hit points define how tough your character is \
-                    in combat and other dangerous situations."
-                ),
-        }
-    }
-}
-
-
-
-pub enum SampleSloveneWord {
-    Sposobnost,
-    Karizma,
-    Napad,
-    Terna,
-    KriticniIzid,
-    UsodniZadetek,
-    ZivljenskaTocka,
-    Zdravje,
-}
-
-impl SampleSloveneWord {
-    pub fn lemma(&self) -> &'static str {
-        match self {
-            SampleSloveneWord::Sposobnost => "sposobnost",
-            SampleSloveneWord::Karizma => "karizma",
-            SampleSloveneWord::Napad => "napad",
-            SampleSloveneWord::Terna => "terna",
-            SampleSloveneWord::KriticniIzid => "kritični izid",
-            SampleSloveneWord::UsodniZadetek => "usodni zadetek",
-            SampleSloveneWord::ZivljenskaTocka => "življenska točka",
-            SampleSloveneWord::Zdravje => "zdravje",
-        }
-    }
-
-    pub fn disambiguation(&self) -> Option<&'static str> {
-        match self {
-            SampleSloveneWord::Sposobnost => None,
-            SampleSloveneWord::Karizma => None,
-            SampleSloveneWord::Napad => None,
-            SampleSloveneWord::Terna => None,
-            SampleSloveneWord::KriticniIzid => Some("met kocke"),
-            SampleSloveneWord::UsodniZadetek => None,
-            SampleSloveneWord::ZivljenskaTocka => None,
-            SampleSloveneWord::Zdravje => Some("igralna mehanika"),
-        }
-    }
-
-    #[rustfmt::skip]
-    pub fn description(&self) -> Option<&'static str> {
-        match self {
-            SampleSloveneWord::Sposobnost => None,
-            SampleSloveneWord::Karizma => 
-                Some("Moč osebnosti, sposobnost za vodenje drugih."),
-            SampleSloveneWord::Napad => None,
-            SampleSloveneWord::Terna => None,
-            SampleSloveneWord::KriticniIzid => None,
-            SampleSloveneWord::UsodniZadetek => None,
-            SampleSloveneWord::ZivljenskaTocka => None,
-            SampleSloveneWord::Zdravje => None,
-        }
-    }
-}
-
-
-pub async fn create_sample_english_word(
-    server: &TestServer,
-    access_token: &str,
-    sample_word: SampleEnglishWord,
-) -> EnglishWord {
-    let creation_response = server.request(
-        Method::POST,
-        "/api/v1/dictionary/english",
-    )
-        .with_json_body(EnglishWordCreationRequest {
-            lemma: sample_word.lemma().to_string(),
-            disambiguation: sample_word.disambiguation().map(str::to_string),
-            description: sample_word.description().map(str::to_string)
-        })
-        .with_access_token(access_token)
-        .send()
-        .await;
-
-    creation_response.assert_status_equals(StatusCode::OK);
-
-    let response_body = creation_response.json_body::<EnglishWordCreationResponse>();
-
-    response_body.word
-}
-
-pub async fn create_sample_slovene_word(
-    server: &TestServer,
-    access_token: &str,
-    sample_word: SampleSloveneWord,
-) -> SloveneWord {
-    let creation_response = server.request(
-        Method::POST,
-        "/api/v1/dictionary/slovene",
-    )
-        .with_json_body(SloveneWordCreationRequest {
-            lemma: sample_word.lemma().to_string(),
-            disambiguation: sample_word.disambiguation().map(str::to_string),
-            description: sample_word.description().map(str::to_string)
-        })
-        .with_access_token(access_token)
-        .send()
-        .await;
-
-    creation_response.assert_status_equals(StatusCode::OK);
-
-    let response_body = creation_response.json_body::<SloveneWordCreationResponse>();
-
-    response_body.word
-}
-
-pub async fn link_word_as_translation(
-    server: &TestServer,
-    access_token: &str,
-    english_word_id: &str,
-    slovene_word_id: &str,
-) {
-    let translation_response = server.request(
-        Method::POST,
-        "/api/v1/dictionary/translation"
-    )
-        .with_json_body(TranslationRequest {
-            english_word_id: english_word_id.to_string(),
-            slovene_word_id: slovene_word_id.to_string(),
-        })
-        .with_access_token(access_token)
-        .send()
-        .await;
-
-    translation_response.assert_status_equals(StatusCode::OK);
-}
-
-pub async fn link_word_as_suggested_translation(
-    server: &TestServer,
-    access_token: &str,
-    english_word_id: &str,
-    slovene_word_id: &str,
-) {
-    let suggestion_response = server.request(
-        Method::POST,
-        "/api/v1/dictionary/suggestion"
-    )
-        .with_json_body(TranslationSuggestionRequest {
-            english_word_id: english_word_id.to_string(),
-            slovene_word_id: slovene_word_id.to_string(),
-        })
-        .with_access_token(access_token)
-        .send()
-        .await;
-
-    suggestion_response.assert_status_equals(StatusCode::OK);
-}
-
 
 
 
@@ -250,8 +65,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await;
 
         query_response.assert_status_equals(StatusCode::OK);
-        
-        let english_word_list = query_response.json_body::<EnglishWordsResponse>().english_words;
+
+        let english_word_list = query_response
+            .json_body::<EnglishWordsResponse>()
+            .english_words;
         assert_eq!(english_word_list.len(), 0);
     }
 
@@ -304,12 +121,14 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
         creation_response.assert_status_equals(StatusCode::OK);
 
-        creation_response.json_body::<EnglishWordCreationResponse>().word
+        creation_response
+            .json_body::<EnglishWordCreationResponse>()
+            .word
     };
 
 
     {
-        // Total number of english words should have increased to 1 
+        // Total number of english words should have increased to 1
         // and the entry should match the word we just inserted.
         let query_response = server
             .request(Method::GET, "/api/v1/dictionary/english")
@@ -318,8 +137,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await;
 
         query_response.assert_status_equals(StatusCode::OK);
-        
-        let english_word_list = query_response.json_body::<EnglishWordsResponse>().english_words;
+
+        let english_word_list = query_response
+            .json_body::<EnglishWordsResponse>()
+            .english_words;
 
         assert_eq!(english_word_list.len(), 1);
 
@@ -330,39 +151,49 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
     {
         // Deleting an english word should require authentication.
-        server.request(
-            Method::DELETE, 
-            format!("/api/v1/dictionary/english/{}", new_english_test_word.word_id)
-        )
+        server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    new_english_test_word.word_id
+                ),
+            )
             .send()
             .await
             .assert_status_equals(StatusCode::UNAUTHORIZED);
 
         // Sending a request with an invalid UUID should fail.
-        server.request(
-            Method::DELETE, 
-            "/api/v1/dictionary/english/293875djkfsq"
-        )
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/english/293875djkfsq",
+            )
             .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::BAD_REQUEST);
 
         // Normal users should not be able to delete english words.
-        server.request(
-            Method::DELETE, 
-            format!("/api/v1/dictionary/english/{}", new_english_test_word.word_id)
-        )
+        server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    new_english_test_word.word_id
+                ),
+            )
             .with_access_token(&normal_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::FORBIDDEN);
 
         // Trying to delete a non-existent english word should fail with 404.
-        server.request(
-            Method::DELETE, 
-            "/api/v1/dictionary/english/018dcd50-8e5f-7e1e-8437-60898a3dc18c"
-        )
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/english/018dcd50-8e5f-7e1e-8437-60898a3dc18c",
+            )
             .with_access_token(&admin_user_access_token)
             .send()
             .await
@@ -370,10 +201,14 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
-        server.request(
-            Method::DELETE, 
-            format!("/api/v1/dictionary/english/{}", new_english_test_word.word_id)
-        )
+        server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    new_english_test_word.word_id
+                ),
+            )
             .with_access_token(&admin_user_access_token)
             .send()
             .await
@@ -390,8 +225,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await;
 
         query_response.assert_status_equals(StatusCode::OK);
-        
-        let english_word_list = query_response.json_body::<EnglishWordsResponse>().english_words;
+
+        let english_word_list = query_response
+            .json_body::<EnglishWordsResponse>()
+            .english_words;
         assert_eq!(english_word_list.len(), 0);
     }
 
@@ -402,7 +239,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
      * Test slovene word listing, creation and deletion
      */
 
-     {
+    {
         // Unauthenticated users should be able to list slovene words.
         server
             .request(Method::GET, "/api/v1/dictionary/slovene")
@@ -427,8 +264,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await;
 
         query_response.assert_status_equals(StatusCode::OK);
-        
-        let slovene_word_list = query_response.json_body::<SloveneWordsResponse>().slovene_words;
+
+        let slovene_word_list = query_response
+            .json_body::<SloveneWordsResponse>()
+            .slovene_words;
         assert_eq!(slovene_word_list.len(), 0);
     }
 
@@ -481,12 +320,14 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
         creation_response.assert_status_equals(StatusCode::OK);
 
-        creation_response.json_body::<SloveneWordCreationResponse>().word
+        creation_response
+            .json_body::<SloveneWordCreationResponse>()
+            .word
     };
 
 
     {
-        // Total number of slovene words should have increased to 1 
+        // Total number of slovene words should have increased to 1
         // and the entry should match the word we just inserted.
         let query_response = server
             .request(Method::GET, "/api/v1/dictionary/slovene")
@@ -495,8 +336,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await;
 
         query_response.assert_status_equals(StatusCode::OK);
-        
-        let slovene_word_list = query_response.json_body::<SloveneWordsResponse>().slovene_words;
+
+        let slovene_word_list = query_response
+            .json_body::<SloveneWordsResponse>()
+            .slovene_words;
         assert_eq!(slovene_word_list.len(), 1);
 
         let sample_word = &slovene_word_list[0];
@@ -506,39 +349,49 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
     {
         // Deleting a slovene word should require authentication.
-        server.request(
-            Method::DELETE, 
-            format!("/api/v1/dictionary/slovene/{}", new_slovene_test_word.word_id)
-        )
+        server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/slovene/{}",
+                    new_slovene_test_word.word_id
+                ),
+            )
             .send()
             .await
             .assert_status_equals(StatusCode::UNAUTHORIZED);
-        
+
         // Sending a request with an invalid UUID should fail.
-        server.request(
-            Method::DELETE, 
-            "/api/v1/dictionary/slovene/293875djkfsq"
-        )
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/slovene/293875djkfsq",
+            )
             .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::BAD_REQUEST);
 
         // Normal users should not be able to delete slovene words.
-        server.request(
-            Method::DELETE, 
-            format!("/api/v1/dictionary/slovene/{}", new_slovene_test_word.word_id)
-        )
+        server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/slovene/{}",
+                    new_slovene_test_word.word_id
+                ),
+            )
             .with_access_token(&normal_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::FORBIDDEN);
 
         // Trying to delete a non-existent slovene word should fail with 404.
-        server.request(
-            Method::DELETE, 
-            "/api/v1/dictionary/slovene/018dcd50-8e5f-7e1e-8437-60898a3dc18c"
-        )
+        server
+            .request(
+                Method::DELETE,
+                "/api/v1/dictionary/slovene/018dcd50-8e5f-7e1e-8437-60898a3dc18c",
+            )
             .with_access_token(&admin_user_access_token)
             .send()
             .await
@@ -546,10 +399,14 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
-        server.request(
-            Method::DELETE, 
-            format!("/api/v1/dictionary/slovene/{}", new_slovene_test_word.word_id)
-        )
+        server
+            .request(
+                Method::DELETE,
+                format!(
+                    "/api/v1/dictionary/slovene/{}",
+                    new_slovene_test_word.word_id
+                ),
+            )
             .with_access_token(&admin_user_access_token)
             .send()
             .await
@@ -566,8 +423,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await;
 
         query_response.assert_status_equals(StatusCode::OK);
-        
-        let slovene_word_list = query_response.json_body::<SloveneWordsResponse>().slovene_words;
+
+        let slovene_word_list = query_response
+            .json_body::<SloveneWordsResponse>()
+            .slovene_words;
         assert_eq!(slovene_word_list.len(), 0);
     }
 
@@ -577,13 +436,43 @@ async fn word_creation_with_suggestions_and_translations_works() {
      * Insert a bunch of sample words to test on.
      */
 
-    let word_ability = create_sample_english_word(&server, &admin_user_access_token, SampleEnglishWord::Ability).await;
-    let word_critical_hit = create_sample_english_word(&server, &admin_user_access_token, SampleEnglishWord::CriticalHit).await;
+    let word_ability = create_sample_english_word(
+        &server,
+        &admin_user_access_token,
+        SampleEnglishWord::Ability,
+    )
+    .await;
+    let word_critical_hit = create_sample_english_word(
+        &server,
+        &admin_user_access_token,
+        SampleEnglishWord::CriticalHit,
+    )
+    .await;
 
-    let word_sposobnost = create_sample_slovene_word(&server, &admin_user_access_token, SampleSloveneWord::Sposobnost).await;
-    let word_terna = create_sample_slovene_word(&server, &admin_user_access_token, SampleSloveneWord::Terna).await;
-    let word_kriticni_izid = create_sample_slovene_word(&server, &admin_user_access_token, SampleSloveneWord::KriticniIzid).await;
-    let word_usodni_zadetek = create_sample_slovene_word(&server, &admin_user_access_token, SampleSloveneWord::UsodniZadetek).await;
+    let word_sposobnost = create_sample_slovene_word(
+        &server,
+        &admin_user_access_token,
+        SampleSloveneWord::Sposobnost,
+    )
+    .await;
+    let word_terna = create_sample_slovene_word(
+        &server,
+        &admin_user_access_token,
+        SampleSloveneWord::Terna,
+    )
+    .await;
+    let word_kriticni_izid = create_sample_slovene_word(
+        &server,
+        &admin_user_access_token,
+        SampleSloveneWord::KriticniIzid,
+    )
+    .await;
+    let word_usodni_zadetek = create_sample_slovene_word(
+        &server,
+        &admin_user_access_token,
+        SampleSloveneWord::UsodniZadetek,
+    )
+    .await;
 
 
 
@@ -594,13 +483,15 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
     {
         // A valid JSON body must be provided.
-        server.request(Method::POST, "/api/v1/dictionary/suggestion")
+        server
+            .request(Method::POST, "/api/v1/dictionary/suggestion")
             .send()
             .await
             .assert_status_equals(StatusCode::BAD_REQUEST);
 
         // Creating a suggestion should require authentication.
-        server.request(Method::POST, "/api/v1/dictionary/suggestion")
+        server
+            .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: word_ability.word_id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -610,7 +501,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .assert_status_equals(StatusCode::UNAUTHORIZED);
 
         // The request should fail if any UUIDs are invalid.
-        server.request(Method::POST, "/api/v1/dictionary/suggestion")
+        server
+            .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: "asdo214sdaf".to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -621,7 +513,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .assert_status_equals(StatusCode::BAD_REQUEST);
 
         // The request should fail if any UUIDs don't exist.
-        server.request(Method::POST, "/api/v1/dictionary/suggestion")
+        server
+            .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: "018dcd50-8e5f-7e1e-8437-60898a3dc18c".to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -633,7 +526,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
-        let suggestion_response = server.request(Method::POST, "/api/v1/dictionary/suggestion")
+        let suggestion_response = server
+            .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: word_ability.word_id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -646,17 +540,26 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
 
 
-        let ability_word_response = server.request(
-            Method::GET,
-            format!("/api/v1/dictionary/english/{}", word_ability.word_id)
-        )
+        let ability_word_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    word_ability.word_id
+                ),
+            )
             .send()
             .await;
 
         ability_word_response.assert_status_equals(StatusCode::OK);
-        let ability_word_information = ability_word_response.json_body::<EnglishWordInfoResponse>().word;
+        let ability_word_information = ability_word_response
+            .json_body::<EnglishWordInfoResponse>()
+            .word;
 
-        assert_eq!(ability_word_information.suggested_translations.len(), 1);
+        assert_eq!(
+            ability_word_information.suggested_translations.len(),
+            1
+        );
         assert_eq!(
             &ability_word_information.suggested_translations[0],
             &word_sposobnost
@@ -665,7 +568,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
 
         // Trying to create the same suggestion again should fail with 409 Conflict.
-        server.request(Method::POST, "/api/v1/dictionary/suggestion")
+        server
+            .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: word_ability.word_id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -679,16 +583,18 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
     {
         // Failing to provide a JSON body should result in 400 Bad Request.
-        server.request(Method::DELETE, "/api/v1/dictionary/suggestion")
+        server
+            .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .send()
             .await
             .assert_status_equals(StatusCode::BAD_REQUEST);
 
         // Deleting a suggestion should require authentication.
-        server.request(Method::DELETE, "/api/v1/dictionary/suggestion")
+        server
+            .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionDeletionRequest {
                 english_word_id: word_critical_hit.word_id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string()
+                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .send()
             .await
@@ -696,14 +602,12 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
 
         // Trying to delete a non-existent suggestion should fail with 404 Not Found.
-        server.request(
-            Method::DELETE,
-            "/api/v1/dictionary/suggestion"
-        )
+        server
+            .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationSuggestionDeletionRequest {
                 english_word_id: word_critical_hit.word_id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string()
+                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .send()
             .await
@@ -711,10 +615,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
-        let suggestion_removal_response = server.request(
-            Method::DELETE,
-            "/api/v1/dictionary/suggestion"
-        )
+        let suggestion_removal_response = server
+            .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationSuggestionDeletionRequest {
                 english_word_id: word_ability.word_id.to_string(),
@@ -727,34 +629,45 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
-        let ability_word_response = server.request(
-            Method::GET,
-            format!("/api/v1/dictionary/english/{}", word_ability.word_id)
-        )
+        let ability_word_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    word_ability.word_id
+                ),
+            )
             .send()
             .await;
 
         ability_word_response.assert_status_equals(StatusCode::OK);
-        let ability_word_information = ability_word_response.json_body::<EnglishWordInfoResponse>().word;
+        let ability_word_information = ability_word_response
+            .json_body::<EnglishWordInfoResponse>()
+            .word;
 
-        assert_eq!(ability_word_information.suggested_translations.len(), 0);
+        assert_eq!(
+            ability_word_information.suggested_translations.len(),
+            0
+        );
     }
-    
+
 
 
     /***
      * Test translations (creation, querying and deletion).
      */
 
-     {
+    {
         // A valid JSON body must be provided.
-        server.request(Method::POST, "/api/v1/dictionary/translation")
+        server
+            .request(Method::POST, "/api/v1/dictionary/translation")
             .send()
             .await
             .assert_status_equals(StatusCode::BAD_REQUEST);
 
         // Creating a suggestion should require authentication.
-        server.request(Method::POST, "/api/v1/dictionary/translation")
+        server
+            .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: word_ability.word_id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -764,7 +677,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .assert_status_equals(StatusCode::UNAUTHORIZED);
 
         // The request should fail if any UUIDs are invalid.
-        server.request(Method::POST, "/api/v1/dictionary/translation")
+        server
+            .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: "asdo214sdaf".to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -775,7 +689,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .assert_status_equals(StatusCode::BAD_REQUEST);
 
         // The request should fail if any UUIDs don't exist.
-        server.request(Method::POST, "/api/v1/dictionary/translation")
+        server
+            .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: "018dcd50-8e5f-7e1e-8437-60898a3dc18c".to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -787,7 +702,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
-        let translation_response = server.request(Method::POST, "/api/v1/dictionary/translation")
+        let translation_response = server
+            .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: word_ability.word_id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -800,15 +716,21 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
 
 
-        let ability_word_response = server.request(
-            Method::GET,
-            format!("/api/v1/dictionary/english/{}", word_ability.word_id)
-        )
+        let ability_word_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    word_ability.word_id
+                ),
+            )
             .send()
             .await;
 
         ability_word_response.assert_status_equals(StatusCode::OK);
-        let ability_word_information = ability_word_response.json_body::<EnglishWordInfoResponse>().word;
+        let ability_word_information = ability_word_response
+            .json_body::<EnglishWordInfoResponse>()
+            .word;
 
         assert_eq!(ability_word_information.translations.len(), 1);
         assert_eq!(
@@ -819,7 +741,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
 
         // Trying to create the same translation again should fail with 409 Conflict.
-        server.request(Method::POST, "/api/v1/dictionary/translation")
+        server
+            .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: word_ability.word_id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
@@ -832,31 +755,31 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
     {
         // Failing to provide a JSON body should result in 400 Bad Request.
-        server.request(Method::DELETE, "/api/v1/dictionary/translation")
-        .with_access_token(&admin_user_access_token)
+        server
+            .request(Method::DELETE, "/api/v1/dictionary/translation")
+            .with_access_token(&admin_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::BAD_REQUEST);
 
         // Deleting a translation should require authentication.
-        server.request(Method::DELETE, "/api/v1/dictionary/translation")
+        server
+            .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_json_body(TranslationDeletionRequest {
                 english_word_id: word_critical_hit.word_id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string()
+                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .send()
             .await
             .assert_status_equals(StatusCode::UNAUTHORIZED);
 
         // Trying to delete a non-existent suggestion should fail with 404 Not Found.
-        server.request(
-            Method::DELETE,
-            "/api/v1/dictionary/translation"
-        )
+        server
+            .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationDeletionRequest {
                 english_word_id: word_critical_hit.word_id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string()
+                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .send()
             .await
@@ -864,10 +787,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
-        let translation_removal_response = server.request(
-            Method::DELETE,
-            "/api/v1/dictionary/translation"
-        )
+        let translation_removal_response = server
+            .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationDeletionRequest {
                 english_word_id: word_ability.word_id.to_string(),
@@ -880,15 +801,21 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
-        let ability_word_response = server.request(
-            Method::GET,
-            format!("/api/v1/dictionary/english/{}", word_ability.word_id)
-        )
+        let ability_word_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    word_ability.word_id
+                ),
+            )
             .send()
             .await;
 
         ability_word_response.assert_status_equals(StatusCode::OK);
-        let ability_word_information = ability_word_response.json_body::<EnglishWordInfoResponse>().word;
+        let ability_word_information = ability_word_response
+            .json_body::<EnglishWordInfoResponse>()
+            .word;
 
         assert_eq!(ability_word_information.translations.len(), 0);
     }
@@ -903,27 +830,31 @@ async fn word_creation_with_suggestions_and_translations_works() {
         &server,
         &admin_user_access_token,
         &word_ability.word_id,
-        &word_sposobnost.word_id
-    ).await;
+        &word_sposobnost.word_id,
+    )
+    .await;
 
     link_word_as_suggested_translation(
         &server,
         &admin_user_access_token,
         &word_critical_hit.word_id,
         &word_terna.word_id,
-    ).await;
+    )
+    .await;
     link_word_as_suggested_translation(
         &server,
         &admin_user_access_token,
         &word_critical_hit.word_id,
         &word_kriticni_izid.word_id,
-    ).await;
+    )
+    .await;
     link_word_as_suggested_translation(
         &server,
         &admin_user_access_token,
         &word_critical_hit.word_id,
         &word_usodni_zadetek.word_id,
-    ).await;
+    )
+    .await;
 
 
 
@@ -935,16 +866,18 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await;
 
         query_response.assert_status_equals(StatusCode::OK);
-        
-        let english_word_list = query_response.json_body::<EnglishWordsResponse>().english_words;
+
+        let english_word_list = query_response
+            .json_body::<EnglishWordsResponse>()
+            .english_words;
         assert_eq!(english_word_list.len(), 2);
 
-        assert!(
-            english_word_list.iter().any(|word| word.word_id == word_ability.word_id)
-        );
-        assert!(
-            english_word_list.iter().any(|word| word.word_id == word_critical_hit.word_id)
-        );
+        assert!(english_word_list
+            .iter()
+            .any(|word| word.word_id == word_ability.word_id));
+        assert!(english_word_list
+            .iter()
+            .any(|word| word.word_id == word_critical_hit.word_id));
 
         english_word_list
     };
@@ -957,38 +890,42 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await;
 
         query_response.assert_status_equals(StatusCode::OK);
-        
-        let slovene_word_list = query_response.json_body::<SloveneWordsResponse>().slovene_words;
+
+        let slovene_word_list = query_response
+            .json_body::<SloveneWordsResponse>()
+            .slovene_words;
         assert_eq!(slovene_word_list.len(), 4);
 
-        assert!(
-            slovene_word_list.iter().any(|word| word.word_id == word_sposobnost.word_id)
-        );
-        assert!(
-            slovene_word_list.iter().any(|word| word.word_id == word_terna.word_id)
-        );
-        assert!(
-            slovene_word_list.iter().any(|word| word.word_id == word_kriticni_izid.word_id)
-        );
-        assert!(
-            slovene_word_list.iter().any(|word| word.word_id == word_usodni_zadetek.word_id)
-        );
+        assert!(slovene_word_list
+            .iter()
+            .any(|word| word.word_id == word_sposobnost.word_id));
+        assert!(slovene_word_list
+            .iter()
+            .any(|word| word.word_id == word_terna.word_id));
+        assert!(slovene_word_list
+            .iter()
+            .any(|word| word.word_id == word_kriticni_izid.word_id));
+        assert!(slovene_word_list
+            .iter()
+            .any(|word| word.word_id == word_usodni_zadetek.word_id));
     }
 
 
     // Check that "ability" is translated into "sposobnost".
     {
-        let queried_word_ability = english_word_list.iter()
-        .find(|word| word.word_id == word_ability.word_id).unwrap();
+        let queried_word_ability = english_word_list
+            .iter()
+            .find(|word| word.word_id == word_ability.word_id)
+            .unwrap();
 
-        assert_eq!(queried_word_ability.suggested_translations.len(), 0);
+        assert_eq!(
+            queried_word_ability.suggested_translations.len(),
+            0
+        );
         assert_eq!(queried_word_ability.translations.len(), 1);
 
         let ability_translation = &queried_word_ability.translations[0];
-        assert_eq!(
-            ability_translation,
-            &word_sposobnost
-        );
+        assert_eq!(ability_translation, &word_sposobnost);
     }
 
 

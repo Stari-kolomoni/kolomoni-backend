@@ -26,17 +26,20 @@ pub mod translations;
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct Category {
     pub id: i32,
-    pub name: String,
+    pub slovene_name: String,
+    pub english_name: String,
 }
 
 impl Category {
     pub fn from_database_model(model: entities::category::Model) -> Self {
         Self {
             id: model.id,
-            name: model.name,
+            slovene_name: model.slovene_name,
+            english_name: model.english_name,
         }
     }
 }
+
 
 
 pub fn parse_string_into_uuid(potential_uuid: &str) -> Result<Uuid, APIError> {

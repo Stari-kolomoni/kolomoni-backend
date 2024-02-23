@@ -43,7 +43,7 @@ pub struct TranslationSuggestionRequest {
 /// This endpoint requires authentication and the `word.suggestion:create` permission.
 #[utoipa::path(
     post,
-    path = "/suggestion",
+    path = "/dictionary/suggestion",
     tag = "dictionary:suggestion",
     request_body(
         content = TranslationSuggestionRequest
@@ -68,6 +68,9 @@ pub struct TranslationSuggestionRequest {
         openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresSuggestionCreate>,
         openapi::InternalServerErrorResponse,
+    ),
+    security(
+        ("access_token" = [])
     )
 )]
 #[post("")]
@@ -161,7 +164,7 @@ pub struct TranslationSuggestionDeletionRequest {
 /// This endpoint requires authentication and the `word.suggestion:delete` permission.
 #[utoipa::path(
     delete,
-    path = "/suggestion",
+    path = "/dictionary/suggestion",
     tag = "dictionary:suggestion",
     request_body(
         content = TranslationSuggestionDeletionRequest
@@ -184,6 +187,9 @@ pub struct TranslationSuggestionDeletionRequest {
         openapi::MissingOrInvalidJsonRequestBodyResponse,
         openapi::FailedAuthenticationResponses<openapi::RequiresSuggestionDelete>,
         openapi::InternalServerErrorResponse,
+    ),
+    security(
+        ("access_token" = [])
     )
 )]
 #[delete("")]

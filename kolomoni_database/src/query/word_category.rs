@@ -1,8 +1,10 @@
 use miette::{Context, IntoDiagnostic, Result};
 use sea_orm::{
+    sea_query::Expr,
     ColumnTrait,
     ConnectionTrait,
     EntityTrait,
+    FromQueryResult,
     JoinType,
     QueryFilter,
     QuerySelect,
@@ -34,5 +36,35 @@ impl WordCategoryQuery {
             .wrap_err("Failed while looking up word categories by word UUID.")?;
 
         Ok(select_query)
+    }
+
+    pub async fn word_has_category<C: ConnectionTrait + TransactionTrait>(
+        database: &C,
+        word_uuid: Uuid,
+        category_id: i32,
+    ) -> Result<bool> {
+        #[derive(Debug, FromQueryResult, PartialEq, Eq, Hash)]
+        struct CountResult {
+            count: i64,
+        }
+
+        let mut query = word_category::Entity::find().select_only();
+
+        query.expr_as(Expr::val(1).count(), "count");
+
+        let count_result = query
+            .filter(word_category::Column::WordId.eq(word_uuid))
+            .filter(word_category::Column::CategoryId.eq(category_id))
+            .into_model::<CountResult>()
+            .one(database)
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed while looking up whether a word has a category.")?;
+
+
+        match count_result {
+            Some(count) => Ok(count.count == 1),
+            None => Ok(false),
+        }
     }
 }

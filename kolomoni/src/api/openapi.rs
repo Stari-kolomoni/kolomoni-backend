@@ -85,6 +85,9 @@ generate_standalone_requirement_struct!(SuggestionCreate);
 generate_standalone_requirement_struct!(SuggestionDelete);
 generate_standalone_requirement_struct!(TranslationCreate);
 generate_standalone_requirement_struct!(TranslationDelete);
+generate_standalone_requirement_struct!(CategoryCreate);
+generate_standalone_requirement_struct!(CategoryUpdate);
+generate_standalone_requirement_struct!(CategoryDelete);
 
 
 
