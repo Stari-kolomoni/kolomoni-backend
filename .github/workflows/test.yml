@@ -101,6 +101,7 @@ jobs:
       - name: "Run end-to-end tests"
         env:
           TEST_API_SERVER_URL: "http://127.0.0.1:8866"
+          RUST_BACKTRACE: "1"
         run: cd kolomoni_test && cargo test --verbose --test '*' -- --test-threads 1
       - name: "Stop API server"
         if: ${{ always() }}
