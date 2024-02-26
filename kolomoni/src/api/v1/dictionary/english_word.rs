@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use kolomoni_auth::Permission;
 use kolomoni_database::{
     entities,
-    mutation::{EnglishWordMutation, NewEnglishWord, UpdatedEnglishWord},
+    mutation::{EnglishWordMutation, NewEnglishWord, UpdatedEnglishWord, WordMutation},
     query::{
         self,
         EnglishWordQuery,
@@ -784,7 +784,7 @@ pub async fn delete_specific_english_word(
     }
 
 
-    EnglishWordMutation::delete(&state.database, target_word_uuid)
+    WordMutation::delete(&state.database, target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 

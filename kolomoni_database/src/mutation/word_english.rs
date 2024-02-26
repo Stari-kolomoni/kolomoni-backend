@@ -1,5 +1,5 @@
 use chrono::Utc;
-use miette::{miette, Context, IntoDiagnostic, Result};
+use miette::{Context, IntoDiagnostic, Result};
 use sea_orm::{ActiveModelTrait, ActiveValue, ConnectionTrait, TransactionTrait, TryIntoModel};
 use uuid::Uuid;
 
@@ -115,26 +115,5 @@ impl EnglishWordMutation {
         Ok(updated_word)
     }
 
-    pub async fn delete<C: ConnectionTrait + TransactionTrait>(
-        database: &C,
-        word_uuid: Uuid,
-    ) -> Result<()> {
-        let active_word_model = word_english::ActiveModel {
-            word_id: ActiveValue::Unchanged(word_uuid),
-            ..Default::default()
-        };
-
-        let deletion_result = active_word_model
-            .delete(database)
-            .await
-            .into_diagnostic()
-            .wrap_err("Failed while trying to delete english word.")?;
-
-        debug_assert!(deletion_result.rows_affected <= 1);
-        if deletion_result.rows_affected != 1 {
-            return Err(miette!("no word with the given UUID"));
-        }
-
-        Ok(())
-    }
+    // For deletion, see [`WordMutation::delete`][super::word::WordMutation::delete].
 }

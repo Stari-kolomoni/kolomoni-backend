@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use kolomoni_auth::Permission;
 use kolomoni_database::{
     entities,
-    mutation::{NewSloveneWord, SloveneWordMutation, UpdatedSloveneWord},
+    mutation::{NewSloveneWord, SloveneWordMutation, UpdatedSloveneWord, WordMutation},
     query::{self, SloveneWordQuery, WordCategoryQuery},
 };
 use serde::{Deserialize, Serialize};
@@ -591,7 +591,7 @@ pub async fn delete_specific_slovene_word(
     }
 
 
-    SloveneWordMutation::delete(&state.database, target_word_uuid)
+    WordMutation::delete(&state.database, target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 
