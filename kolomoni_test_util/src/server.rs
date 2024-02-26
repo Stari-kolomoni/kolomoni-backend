@@ -1,6 +1,6 @@
+use ::http::{HeaderMap, HeaderName};
 use actix_http::{header::HeaderValue, Method, StatusCode};
 use actix_web::http;
-use http::{HeaderMap, HeaderName};
 use kolomoni::testing::{GiveFullUserPermissionsRequest, ResetUserRolesRequest};
 use reqwest::{header, Client, ClientBuilder, RequestBuilder};
 use serde::Serialize;
