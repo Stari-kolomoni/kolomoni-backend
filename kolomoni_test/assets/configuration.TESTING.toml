@@ -1,4 +1,16 @@
 ###
+# Base paths
+#
+# This table establishes a set of base paths that
+# can be used as placeholders in the rest of the configuration.
+###
+[base_paths]
+base_data_directory_path = "./data"
+
+
+
+
+###
 # Logging
 ###
 [logging]
@@ -67,3 +79,12 @@ hash_salt = "VL4ZSnIYfkIUSvSmjMFkxZB885CgAwQR"
 [json_web_token]
 # JWT secret used to
 secret = "MzgLNBawTMjqL0SxZUj7r2CLX1lEcXYQ"
+
+
+
+
+###
+# Search-related configuration.
+###
+[search]
+search_index_directory_path = "{BASE_DATA_DIRECTORY}/search-index"
