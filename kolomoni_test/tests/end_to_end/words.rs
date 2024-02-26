@@ -376,7 +376,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
                 Method::DELETE,
                 format!(
                     "/api/v1/dictionary/slovene/{}",
-                    new_slovene_test_word.word_id
+                    new_slovene_test_word.id
                 ),
             )
             .send()
@@ -400,7 +400,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
                 Method::DELETE,
                 format!(
                     "/api/v1/dictionary/slovene/{}",
-                    new_slovene_test_word.word_id
+                    new_slovene_test_word.id
                 ),
             )
             .with_access_token(&normal_user_access_token)
@@ -426,7 +426,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
                 Method::DELETE,
                 format!(
                     "/api/v1/dictionary/slovene/{}",
-                    new_slovene_test_word.word_id
+                    new_slovene_test_word.id
                 ),
             )
             .with_access_token(&admin_user_access_token)
@@ -498,7 +498,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .send()
             .await
@@ -509,7 +509,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: "asdo214sdaf".to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -521,7 +521,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: "018dcd50-8e5f-7e1e-8437-60898a3dc18c".to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -536,7 +536,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&normal_user_access_token)
             .send()
@@ -587,7 +587,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
                 english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -609,7 +609,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionDeletionRequest {
                 english_word_id: word_critical_hit.id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
+                slovene_word_id: word_usodni_zadetek.id.to_string(),
             })
             .send()
             .await
@@ -620,7 +620,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionDeletionRequest {
                 english_word_id: word_critical_hit.id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
+                slovene_word_id: word_usodni_zadetek.id.to_string(),
             })
             .with_access_token(&normal_user_access_token)
             .send()
@@ -634,7 +634,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationSuggestionDeletionRequest {
                 english_word_id: word_critical_hit.id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
+                slovene_word_id: word_usodni_zadetek.id.to_string(),
             })
             .send()
             .await
@@ -649,7 +649,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationSuggestionDeletionRequest {
                 english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .send()
             .await;
@@ -692,7 +692,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
                 Method::GET,
                 format!(
                     "/api/v1/dictionary/slovene/{}",
-                    word_sposobnost.word_id
+                    word_sposobnost.id
                 ),
             )
             .send()
@@ -727,7 +727,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .send()
             .await
@@ -738,7 +738,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&normal_user_access_token)
             .send()
@@ -750,7 +750,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: "asdo214sdaf".to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -762,7 +762,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: "018dcd50-8e5f-7e1e-8437-60898a3dc18c".to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -777,7 +777,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -826,7 +826,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
                 english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -848,7 +848,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_json_body(TranslationDeletionRequest {
                 english_word_id: word_critical_hit.id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
+                slovene_word_id: word_usodni_zadetek.id.to_string(),
             })
             .send()
             .await
@@ -859,7 +859,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_json_body(TranslationDeletionRequest {
                 english_word_id: word_critical_hit.id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
+                slovene_word_id: word_usodni_zadetek.id.to_string(),
             })
             .with_access_token(&normal_user_access_token)
             .send()
@@ -872,7 +872,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationDeletionRequest {
                 english_word_id: word_critical_hit.id.to_string(),
-                slovene_word_id: word_usodni_zadetek.word_id.to_string(),
+                slovene_word_id: word_usodni_zadetek.id.to_string(),
             })
             .send()
             .await
@@ -887,7 +887,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationDeletionRequest {
                 english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.word_id.to_string(),
+                slovene_word_id: word_sposobnost.id.to_string(),
             })
             .send()
             .await;
@@ -926,7 +926,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
                 Method::GET,
                 format!(
                     "/api/v1/dictionary/slovene/{}",
-                    word_sposobnost.word_id
+                    word_sposobnost.id
                 ),
             )
             .send()
@@ -952,7 +952,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         &server,
         &admin_user_access_token,
         &word_ability.id,
-        &word_sposobnost.word_id,
+        &word_sposobnost.id,
     )
     .await;
 
@@ -960,21 +960,21 @@ async fn word_creation_with_suggestions_and_translations_works() {
         &server,
         &admin_user_access_token,
         &word_critical_hit.id,
-        &word_terna.word_id,
+        &word_terna.id,
     )
     .await;
     link_word_as_suggested_translation(
         &server,
         &admin_user_access_token,
         &word_critical_hit.id,
-        &word_kriticni_izid.word_id,
+        &word_kriticni_izid.id,
     )
     .await;
     link_word_as_suggested_translation(
         &server,
         &admin_user_access_token,
         &word_critical_hit.id,
-        &word_usodni_zadetek.word_id,
+        &word_usodni_zadetek.id,
     )
     .await;
 
@@ -1020,16 +1020,16 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
         assert!(slovene_word_list
             .iter()
-            .any(|word| word.word_id == word_sposobnost.word_id));
+            .any(|word| word.id == word_sposobnost.id));
         assert!(slovene_word_list
             .iter()
-            .any(|word| word.word_id == word_terna.word_id));
+            .any(|word| word.id == word_terna.id));
         assert!(slovene_word_list
             .iter()
-            .any(|word| word.word_id == word_kriticni_izid.word_id));
+            .any(|word| word.id == word_kriticni_izid.id));
         assert!(slovene_word_list
             .iter()
-            .any(|word| word.word_id == word_usodni_zadetek.word_id));
+            .any(|word| word.id == word_usodni_zadetek.id));
     }
 
 
@@ -1047,10 +1047,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         assert_eq!(queried_word_ability.translations.len(), 1);
 
         let ability_translation = &queried_word_ability.translations[0];
-        assert_eq!(
-            ability_translation.word_id,
-            word_sposobnost.word_id
-        );
+        assert_eq!(ability_translation.id, word_sposobnost.id);
     }
 
 
@@ -1071,30 +1068,27 @@ async fn word_creation_with_suggestions_and_translations_works() {
         let translated_terna = queried_word_critical_hit
             .suggested_translations
             .iter()
-            .find(|suggestion| suggestion.word_id == word_terna.word_id)
+            .find(|suggestion| suggestion.id == word_terna.id)
             .unwrap();
-        assert_eq!(translated_terna.word_id, word_terna.word_id);
+        assert_eq!(translated_terna.id, word_terna.id);
 
 
         let translated_kriticni_izid = queried_word_critical_hit
             .suggested_translations
             .iter()
-            .find(|suggestion| suggestion.word_id == word_kriticni_izid.word_id)
+            .find(|suggestion| suggestion.id == word_kriticni_izid.id)
             .unwrap();
-        assert_eq!(
-            translated_kriticni_izid.word_id,
-            word_kriticni_izid.word_id
-        );
+        assert_eq!(translated_kriticni_izid.id, word_kriticni_izid.id);
 
 
         let translated_usodni_zadetek = queried_word_critical_hit
             .suggested_translations
             .iter()
-            .find(|suggestion| suggestion.word_id == word_usodni_zadetek.word_id)
+            .find(|suggestion| suggestion.id == word_usodni_zadetek.id)
             .unwrap();
         assert_eq!(
-            translated_usodni_zadetek.word_id,
-            word_usodni_zadetek.word_id
+            translated_usodni_zadetek.id,
+            word_usodni_zadetek.id
         );
     }
 }
@@ -1234,7 +1228,7 @@ async fn lookup_by_lemma_works() {
     delete_slovene_word(
         &server,
         &admin_user_access_token,
-        Uuid::from_str(&word_napad_info.word_id).unwrap(),
+        Uuid::from_str(&word_napad_info.id).unwrap(),
     )
     .await;
 

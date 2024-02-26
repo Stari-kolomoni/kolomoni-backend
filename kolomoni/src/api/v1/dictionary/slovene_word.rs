@@ -42,7 +42,7 @@ use crate::{
 )]
 pub struct SloveneWord {
     /// Internal UUID of the word.
-    pub word_id: String,
+    pub id: String,
 
     /// An abstract or base form of the word.
     pub lemma: String,
@@ -75,7 +75,7 @@ impl SloveneWord {
 
 
         Self {
-            word_id: model.word_id.to_string(),
+            id: model.word_id.to_string(),
             lemma: model.lemma,
             disambiguation: model.disambiguation,
             description: model.description,
