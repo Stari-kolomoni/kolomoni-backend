@@ -1,10 +1,10 @@
 use actix_web::{delete, get, http::StatusCode, patch, post, web, HttpResponse};
 use kolomoni_auth::{Permission, Role};
 use kolomoni_database::{
+    begin_transaction,
     mutation,
     query::{self, UserQuery, UserRoleQuery},
 };
-use sea_orm::TransactionTrait;
 use serde::Deserialize;
 use tracing::info;
 use utoipa::ToSchema;
@@ -367,11 +367,8 @@ async fn update_specific_user_display_name(
 
 
     let json_data = json_data.into_inner();
-    let database_transaction = state
-        .database
-        .begin()
-        .await
-        .map_err(APIError::InternalDatabaseError)?;
+    let database_transaction =
+        begin_transaction!(&state.database).map_err(APIError::InternalError)?;
 
 
     // Modify requested user's display name.

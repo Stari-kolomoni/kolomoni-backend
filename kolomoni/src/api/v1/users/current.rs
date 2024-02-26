@@ -7,11 +7,11 @@ use actix_web::{
 };
 use kolomoni_auth::Permission;
 use kolomoni_database::{
+    begin_transaction,
     mutation,
     query::{self, UserQuery, UserRoleQuery},
 };
 use miette::IntoDiagnostic;
-use sea_orm::TransactionTrait;
 use tracing::info;
 
 use crate::{
@@ -315,11 +315,8 @@ async fn update_current_user_display_name(
 
 
     let json_data = json_data.into_inner();
-    let database_transaction = state
-        .database
-        .begin()
-        .await
-        .map_err(APIError::InternalDatabaseError)?;
+    let database_transaction =
+        begin_transaction!(&state.database).map_err(APIError::InternalError)?;
 
 
     // Ensure the display name is unique.

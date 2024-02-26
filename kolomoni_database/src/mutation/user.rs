@@ -9,7 +9,6 @@ use sea_orm::{
     ActiveValue,
     ColumnTrait,
     ConnectionTrait,
-    DbConn,
     EntityTrait,
     QueryFilter,
     TransactionTrait,
@@ -17,7 +16,7 @@ use sea_orm::{
 
 use super::super::entities::user;
 use crate::entities::user_role;
-use crate::query;
+use crate::{begin_transaction, commit_transaction, query};
 
 
 pub struct ArgonHasher {
@@ -78,16 +77,13 @@ pub struct UserMutation;
 
 impl UserMutation {
     /// Create a new user.
-    pub async fn create_user(
-        database: &DbConn,
+    pub async fn create_user<C: ConnectionTrait + TransactionTrait>(
+        database: &C,
         hasher: &ArgonHasher,
         registration_info: UserRegistrationInfo,
     ) -> Result<user::Model> {
-        let transaction = database
-            .begin()
-            .await
-            .into_diagnostic()
-            .wrap_err("Failed to begin database transaction.")?;
+        let transaction = begin_transaction!(database)?;
+
 
         // Hash password and register user into database.
         let hashed_password = hasher
@@ -126,12 +122,7 @@ impl UserMutation {
         })?;
 
 
-        transaction
-            .commit()
-            .await
-            .into_diagnostic()
-            .wrap_err("Failed to commit transaction.")?;
-
+        commit_transaction!(transaction)?;
         Ok(user)
     }
 

@@ -576,7 +576,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
         assert!(ability_word_information.last_edited_at <= time_just_after_suggestion);
 
         let suggestion_target_info = &ability_word_information.suggested_translations[0];
-        assert_eq!(suggestion_target_info, &word_sposobnost);
+        assert_ne!(
+            suggestion_target_info.last_edited_at,
+            word_sposobnost.last_edited_at
+        );
 
         assert!(suggestion_target_info.last_edited_at >= time_just_before_suggestion);
         assert!(suggestion_target_info.last_edited_at <= time_just_after_suggestion);
@@ -818,7 +821,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
         let translation_target_info = &ability_word_information.translations[0];
 
-        assert_eq!(translation_target_info, &word_sposobnost);
+        assert_ne!(
+            translation_target_info.last_edited_at,
+            word_sposobnost.last_edited_at
+        );
         assert!(translation_target_info.last_edited_at >= time_just_before_translation);
         assert!(translation_target_info.last_edited_at <= time_just_after_translation);
 
@@ -1053,7 +1059,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
         assert_eq!(queried_word_ability.translations.len(), 1);
 
         let ability_translation = &queried_word_ability.translations[0];
-        assert_eq!(ability_translation, &word_sposobnost);
+        assert_eq!(
+            ability_translation.word_id,
+            word_sposobnost.word_id
+        );
     }
 
 
@@ -1076,7 +1085,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .iter()
             .find(|suggestion| suggestion.word_id == word_terna.word_id)
             .unwrap();
-        assert_eq!(translated_terna, &word_terna);
+        assert_eq!(translated_terna.word_id, word_terna.word_id);
 
 
         let translated_kriticni_izid = queried_word_critical_hit
@@ -1084,7 +1093,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .iter()
             .find(|suggestion| suggestion.word_id == word_kriticni_izid.word_id)
             .unwrap();
-        assert_eq!(translated_kriticni_izid, &word_kriticni_izid);
+        assert_eq!(
+            translated_kriticni_izid.word_id,
+            word_kriticni_izid.word_id
+        );
 
 
         let translated_usodni_zadetek = queried_word_critical_hit
@@ -1092,7 +1104,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .iter()
             .find(|suggestion| suggestion.word_id == word_usodni_zadetek.word_id)
             .unwrap();
-        assert_eq!(translated_usodni_zadetek, &word_usodni_zadetek);
+        assert_eq!(
+            translated_usodni_zadetek.word_id,
+            word_usodni_zadetek.word_id
+        );
     }
 }
 

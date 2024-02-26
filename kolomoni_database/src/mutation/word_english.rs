@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use miette::{Context, IntoDiagnostic, Result};
 use sea_orm::{ActiveModelTrait, ActiveValue, ConnectionTrait, TransactionTrait, TryIntoModel};
 use uuid::Uuid;
@@ -110,6 +110,27 @@ impl EnglishWordMutation {
             .try_into_model()
             .into_diagnostic()
             .wrap_err("Failed to convert active english model to normal model.")?;
+
+
+        Ok(updated_word)
+    }
+
+    pub async fn set_last_modified_at<C: ConnectionTrait + TransactionTrait>(
+        database: &C,
+        word_uuid: Uuid,
+        new_last_edited_at: DateTime<Utc>,
+    ) -> Result<word_english::Model> {
+        let active_word_model = word_english::ActiveModel {
+            word_id: ActiveValue::Unchanged(word_uuid),
+            last_edited_at: ActiveValue::Set(new_last_edited_at.fixed_offset()),
+            ..Default::default()
+        };
+
+        let updated_word = active_word_model
+            .update(database)
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed while setting last modified datetime for english word.")?;
 
 
         Ok(updated_word)
