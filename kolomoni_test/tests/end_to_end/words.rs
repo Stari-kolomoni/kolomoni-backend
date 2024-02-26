@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use chrono::Utc;
 use kolomoni::api::v1::dictionary::{
     categories::{
         CategoriesResponse,
@@ -117,6 +118,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     let new_english_test_word = {
+        let time_created_after = Utc::now();
+
         let creation_response = server
             .request(Method::POST, "/api/v1/dictionary/english")
             .with_json_body(EnglishWordCreationRequest {
@@ -128,11 +131,21 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .send()
             .await;
 
+        let time_created_before = Utc::now();
+
         creation_response.assert_status_equals(StatusCode::OK);
 
-        creation_response
+        let new_word = creation_response
             .json_body::<EnglishWordCreationResponse>()
-            .word
+            .word;
+
+        assert!(new_word.added_at >= time_created_after);
+        assert!(new_word.added_at <= time_created_before);
+
+        assert!(new_word.last_edited_at >= time_created_after);
+        assert!(new_word.last_edited_at <= time_created_before);
+
+        new_word
     };
 
 
@@ -517,6 +530,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
+        let time_just_before_suggestion = Utc::now();
+
         let suggestion_response = server
             .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
@@ -527,9 +542,14 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .send()
             .await;
 
+        let time_just_after_suggestion = Utc::now();
+
         suggestion_response.assert_status_equals(StatusCode::OK);
 
 
+
+        // Ensure that the `last_edited_at` values have changed in both words
+        // and that there is now a single suggested translation.
 
         let ability_word_response = server
             .request(
@@ -551,11 +571,15 @@ async fn word_creation_with_suggestions_and_translations_works() {
             ability_word_information.suggested_translations.len(),
             1
         );
-        assert_eq!(
-            &ability_word_information.suggested_translations[0],
-            &word_sposobnost
-        );
 
+        assert!(ability_word_information.last_edited_at >= time_just_before_suggestion);
+        assert!(ability_word_information.last_edited_at <= time_just_after_suggestion);
+
+        let suggestion_target_info = &ability_word_information.suggested_translations[0];
+        assert_eq!(suggestion_target_info, &word_sposobnost);
+
+        assert!(suggestion_target_info.last_edited_at >= time_just_before_suggestion);
+        assert!(suggestion_target_info.last_edited_at <= time_just_after_suggestion);
 
 
         // Trying to create the same suggestion again should fail with 409 Conflict.
@@ -618,6 +642,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
+        let time_just_before_suggestion_removal = Utc::now();
+
         let suggestion_removal_response = server
             .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_access_token(&admin_user_access_token)
@@ -628,10 +654,15 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .send()
             .await;
 
-        suggestion_removal_response.assert_status_equals(StatusCode::OK);
-    }
+        let time_just_after_suggestion_removal = Utc::now();
 
-    {
+        suggestion_removal_response.assert_status_equals(StatusCode::OK);
+
+
+
+        // Ensure that the `last_edited_at` values have changed in both words
+        // and that there are no more listed suggested translations.
+
         let ability_word_response = server
             .request(
                 Method::GET,
@@ -644,14 +675,40 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .await;
 
         ability_word_response.assert_status_equals(StatusCode::OK);
+
         let ability_word_information = ability_word_response
             .json_body::<EnglishWordInfoResponse>()
             .word;
+
+        assert!(ability_word_information.last_edited_at >= time_just_before_suggestion_removal);
+        assert!(ability_word_information.last_edited_at <= time_just_after_suggestion_removal);
 
         assert_eq!(
             ability_word_information.suggested_translations.len(),
             0
         );
+
+
+
+        let sposobnost_word_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/slovene/{}",
+                    word_sposobnost.word_id
+                ),
+            )
+            .send()
+            .await;
+
+        sposobnost_word_response.assert_status_equals(StatusCode::OK);
+
+        let sposobnost_word_information = sposobnost_word_response
+            .json_body::<SloveneWordInfoResponse>()
+            .word;
+
+        assert!(sposobnost_word_information.last_edited_at >= time_just_before_suggestion_removal);
+        assert!(sposobnost_word_information.last_edited_at <= time_just_after_suggestion_removal);
     }
 
 
@@ -717,6 +774,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
+        let time_just_before_translation = Utc::now();
+
         let translation_response = server
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
@@ -727,9 +786,14 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .send()
             .await;
 
+        let time_just_after_translation = Utc::now();
+
         translation_response.assert_status_equals(StatusCode::OK);
 
 
+
+        // Ensure that the `last_edited_at` values have changed in both words
+        // and that there is now a single linked translation.
 
         let ability_word_response = server
             .request(
@@ -747,11 +811,16 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .json_body::<EnglishWordInfoResponse>()
             .word;
 
+        assert!(ability_word_information.last_edited_at >= time_just_before_translation);
+        assert!(ability_word_information.last_edited_at <= time_just_after_translation);
+
         assert_eq!(ability_word_information.translations.len(), 1);
-        assert_eq!(
-            &ability_word_information.translations[0],
-            &word_sposobnost
-        );
+
+        let translation_target_info = &ability_word_information.translations[0];
+
+        assert_eq!(translation_target_info, &word_sposobnost);
+        assert!(translation_target_info.last_edited_at >= time_just_before_translation);
+        assert!(translation_target_info.last_edited_at <= time_just_after_translation);
 
 
 
@@ -814,6 +883,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
     }
 
     {
+        let time_just_before_translation_removal = Utc::now();
+
         let translation_removal_response = server
             .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_access_token(&admin_user_access_token)
@@ -824,10 +895,16 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .send()
             .await;
 
-        translation_removal_response.assert_status_equals(StatusCode::OK);
-    }
+        let time_just_after_translation_removal = Utc::now();
 
-    {
+        translation_removal_response.assert_status_equals(StatusCode::OK);
+
+
+
+
+        // Ensure that the `last_edited_at` values have changed in both words
+        // and that there are no more linked translations.
+
         let ability_word_response = server
             .request(
                 Method::GET,
@@ -844,7 +921,31 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .json_body::<EnglishWordInfoResponse>()
             .word;
 
+        assert!(ability_word_information.last_edited_at >= time_just_before_translation_removal);
+        assert!(ability_word_information.last_edited_at <= time_just_after_translation_removal);
+
         assert_eq!(ability_word_information.translations.len(), 0);
+
+
+        let sposobnost_word_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/slovene/{}",
+                    word_sposobnost.word_id
+                ),
+            )
+            .send()
+            .await;
+
+        sposobnost_word_response.assert_status_equals(StatusCode::OK);
+
+        let sposobnost_word_information = sposobnost_word_response
+            .json_body::<SloveneWordInfoResponse>()
+            .word;
+
+        assert!(sposobnost_word_information.last_edited_at >= time_just_before_translation_removal);
+        assert!(sposobnost_word_information.last_edited_at <= time_just_after_translation_removal);
     }
 
 
