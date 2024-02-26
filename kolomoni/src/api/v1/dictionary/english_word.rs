@@ -117,7 +117,7 @@ async fn fetch_additional_english_word_information(
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 #[schema(
     example = json!({
-        "word_id": "018dbe00-266e-7398-abd2-0906df0aa345",
+        "id": "018dbe00-266e-7398-abd2-0906df0aa345",
         "lemma": "adventurer",
         "disambiguation": "character",
         "description": "Playable or non-playable character.",
@@ -126,7 +126,7 @@ async fn fetch_additional_english_word_information(
         "suggested_translations": [],
         "translations": [
             {
-                "word_id": "018dbe00-266e-7398-abd2-0906df0aa346",
+                "id": "018dbe00-266e-7398-abd2-0906df0aa346",
                 "lemma": "pustolovec",
                 "disambiguation": "lik",
                 "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino.",
