@@ -178,7 +178,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
                 Method::DELETE,
                 format!(
                     "/api/v1/dictionary/english/{}",
-                    new_english_test_word.word_id
+                    new_english_test_word.id
                 ),
             )
             .send()
@@ -202,7 +202,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
                 Method::DELETE,
                 format!(
                     "/api/v1/dictionary/english/{}",
-                    new_english_test_word.word_id
+                    new_english_test_word.id
                 ),
             )
             .with_access_token(&normal_user_access_token)
@@ -228,7 +228,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
                 Method::DELETE,
                 format!(
                     "/api/v1/dictionary/english/{}",
-                    new_english_test_word.word_id
+                    new_english_test_word.id
                 ),
             )
             .with_access_token(&admin_user_access_token)
@@ -497,7 +497,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         server
             .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
-                english_word_id: word_ability.word_id.to_string(),
+                english_word_id: word_ability.id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
             .send()
@@ -535,7 +535,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         let suggestion_response = server
             .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
-                english_word_id: word_ability.word_id.to_string(),
+                english_word_id: word_ability.id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
             .with_access_token(&normal_user_access_token)
@@ -554,10 +554,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         let ability_word_response = server
             .request(
                 Method::GET,
-                format!(
-                    "/api/v1/dictionary/english/{}",
-                    word_ability.word_id
-                ),
+                format!("/api/v1/dictionary/english/{}", word_ability.id),
             )
             .send()
             .await;
@@ -589,7 +586,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         server
             .request(Method::POST, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionRequest {
-                english_word_id: word_ability.word_id.to_string(),
+                english_word_id: word_ability.id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
@@ -611,7 +608,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         server
             .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionDeletionRequest {
-                english_word_id: word_critical_hit.word_id.to_string(),
+                english_word_id: word_critical_hit.id.to_string(),
                 slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .send()
@@ -622,7 +619,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         server
             .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_json_body(TranslationSuggestionDeletionRequest {
-                english_word_id: word_critical_hit.word_id.to_string(),
+                english_word_id: word_critical_hit.id.to_string(),
                 slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .with_access_token(&normal_user_access_token)
@@ -636,7 +633,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationSuggestionDeletionRequest {
-                english_word_id: word_critical_hit.word_id.to_string(),
+                english_word_id: word_critical_hit.id.to_string(),
                 slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .send()
@@ -651,7 +648,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::DELETE, "/api/v1/dictionary/suggestion")
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationSuggestionDeletionRequest {
-                english_word_id: word_ability.word_id.to_string(),
+                english_word_id: word_ability.id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
             .send()
@@ -669,10 +666,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         let ability_word_response = server
             .request(
                 Method::GET,
-                format!(
-                    "/api/v1/dictionary/english/{}",
-                    word_ability.word_id
-                ),
+                format!("/api/v1/dictionary/english/{}", word_ability.id),
             )
             .send()
             .await;
@@ -732,7 +726,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         server
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
-                english_word_id: word_ability.word_id.to_string(),
+                english_word_id: word_ability.id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
             .send()
@@ -743,7 +737,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         server
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
-                english_word_id: word_ability.word_id.to_string(),
+                english_word_id: word_ability.id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
             .with_access_token(&normal_user_access_token)
@@ -782,7 +776,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         let translation_response = server
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
-                english_word_id: word_ability.word_id.to_string(),
+                english_word_id: word_ability.id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
@@ -801,10 +795,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         let ability_word_response = server
             .request(
                 Method::GET,
-                format!(
-                    "/api/v1/dictionary/english/{}",
-                    word_ability.word_id
-                ),
+                format!("/api/v1/dictionary/english/{}", word_ability.id),
             )
             .send()
             .await;
@@ -834,7 +825,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         server
             .request(Method::POST, "/api/v1/dictionary/translation")
             .with_json_body(TranslationRequest {
-                english_word_id: word_ability.word_id.to_string(),
+                english_word_id: word_ability.id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
@@ -856,7 +847,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         server
             .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_json_body(TranslationDeletionRequest {
-                english_word_id: word_critical_hit.word_id.to_string(),
+                english_word_id: word_critical_hit.id.to_string(),
                 slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .send()
@@ -867,7 +858,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         server
             .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_json_body(TranslationDeletionRequest {
-                english_word_id: word_critical_hit.word_id.to_string(),
+                english_word_id: word_critical_hit.id.to_string(),
                 slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .with_access_token(&normal_user_access_token)
@@ -880,7 +871,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationDeletionRequest {
-                english_word_id: word_critical_hit.word_id.to_string(),
+                english_word_id: word_critical_hit.id.to_string(),
                 slovene_word_id: word_usodni_zadetek.word_id.to_string(),
             })
             .send()
@@ -895,7 +886,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .request(Method::DELETE, "/api/v1/dictionary/translation")
             .with_access_token(&admin_user_access_token)
             .with_json_body(TranslationDeletionRequest {
-                english_word_id: word_ability.word_id.to_string(),
+                english_word_id: word_ability.id.to_string(),
                 slovene_word_id: word_sposobnost.word_id.to_string(),
             })
             .send()
@@ -914,10 +905,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
         let ability_word_response = server
             .request(
                 Method::GET,
-                format!(
-                    "/api/v1/dictionary/english/{}",
-                    word_ability.word_id
-                ),
+                format!("/api/v1/dictionary/english/{}", word_ability.id),
             )
             .send()
             .await;
@@ -963,7 +951,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
     link_word_as_translation(
         &server,
         &admin_user_access_token,
-        &word_ability.word_id,
+        &word_ability.id,
         &word_sposobnost.word_id,
     )
     .await;
@@ -971,21 +959,21 @@ async fn word_creation_with_suggestions_and_translations_works() {
     link_word_as_suggested_translation(
         &server,
         &admin_user_access_token,
-        &word_critical_hit.word_id,
+        &word_critical_hit.id,
         &word_terna.word_id,
     )
     .await;
     link_word_as_suggested_translation(
         &server,
         &admin_user_access_token,
-        &word_critical_hit.word_id,
+        &word_critical_hit.id,
         &word_kriticni_izid.word_id,
     )
     .await;
     link_word_as_suggested_translation(
         &server,
         &admin_user_access_token,
-        &word_critical_hit.word_id,
+        &word_critical_hit.id,
         &word_usodni_zadetek.word_id,
     )
     .await;
@@ -1008,10 +996,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
         assert!(english_word_list
             .iter()
-            .any(|word| word.word_id == word_ability.word_id));
+            .any(|word| word.id == word_ability.id));
         assert!(english_word_list
             .iter()
-            .any(|word| word.word_id == word_critical_hit.word_id));
+            .any(|word| word.id == word_critical_hit.id));
 
         english_word_list
     };
@@ -1049,7 +1037,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
     {
         let queried_word_ability = english_word_list
             .iter()
-            .find(|word| word.word_id == word_ability.word_id)
+            .find(|word| word.id == word_ability.id)
             .unwrap();
 
         assert_eq!(
@@ -1070,7 +1058,7 @@ async fn word_creation_with_suggestions_and_translations_works() {
     {
         let queried_word_critical_hit = english_word_list
             .iter()
-            .find(|word| word.word_id == word_critical_hit.word_id)
+            .find(|word| word.id == word_critical_hit.id)
             .unwrap();
 
         assert_eq!(
@@ -1175,7 +1163,7 @@ async fn lookup_by_lemma_works() {
     delete_english_word(
         &server,
         &admin_user_access_token,
-        Uuid::from_str(&word_hit_points_info.word_id).unwrap(),
+        Uuid::from_str(&word_hit_points_info.id).unwrap(),
     )
     .await;
 
@@ -1688,7 +1676,7 @@ async fn word_categories_work() {
                 Method::POST,
                 format!(
                     "/api/v1/dictionary/category/{}/word-link/{}",
-                    category_character.id, word_ability.word_id,
+                    category_character.id, word_ability.id,
                 ),
             )
             .with_access_token(&admin_user_access_token)
@@ -1704,7 +1692,7 @@ async fn word_categories_work() {
                 Method::POST,
                 format!(
                     "/api/v1/dictionary/category/{}/word-link/{}",
-                    category_character.id, word_ability.word_id,
+                    category_character.id, word_ability.id,
                 ),
             )
             .with_access_token(&admin_user_access_token)
@@ -1718,10 +1706,7 @@ async fn word_categories_work() {
         let word_info_response = server
             .request(
                 Method::GET,
-                format!(
-                    "/api/v1/dictionary/english/{}",
-                    word_ability.word_id
-                ),
+                format!("/api/v1/dictionary/english/{}", word_ability.id),
             )
             .with_access_token(&admin_user_access_token)
             .send()
@@ -1794,7 +1779,7 @@ async fn word_categories_work() {
                 Method::DELETE,
                 format!(
                     "/api/v1/dictionary/category/987592/word-link/{}",
-                    word_ability.word_id
+                    word_ability.id
                 ),
             )
             .with_access_token(&admin_user_access_token)
@@ -1807,7 +1792,7 @@ async fn word_categories_work() {
                 Method::DELETE,
                 format!(
                     "/api/v1/dictionary/category/{}/word-link/{}",
-                    category_class.id, word_ability.word_id
+                    category_class.id, word_ability.id
                 ),
             )
             .with_access_token(&admin_user_access_token)
@@ -1822,7 +1807,7 @@ async fn word_categories_work() {
                 Method::DELETE,
                 format!(
                     "/api/v1/dictionary/category/{}/word-link/{}",
-                    category_character.id, word_ability.word_id
+                    category_character.id, word_ability.id
                 ),
             )
             .with_access_token(&admin_user_access_token)
@@ -1837,10 +1822,7 @@ async fn word_categories_work() {
         let word_info_response = server
             .request(
                 Method::GET,
-                format!(
-                    "/api/v1/dictionary/english/{}",
-                    word_ability.word_id
-                ),
+                format!("/api/v1/dictionary/english/{}", word_ability.id),
             )
             .with_access_token(&admin_user_access_token)
             .send()

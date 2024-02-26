@@ -113,6 +113,7 @@ async fn fetch_additional_english_word_information(
 
 
 
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 #[schema(
     example = json!({
@@ -137,7 +138,7 @@ async fn fetch_additional_english_word_information(
 )]
 pub struct EnglishWord {
     /// Internal UUID of the word.
-    pub word_id: String,
+    pub id: String,
 
     /// An abstract or base form of the word.
     pub lemma: String,
@@ -181,7 +182,7 @@ impl EnglishWord {
 
 
         Self {
-            word_id: english_model.word_id.to_string(),
+            id: english_model.word_id.to_string(),
             lemma: english_model.lemma,
             disambiguation: english_model.disambiguation,
             description: english_model.description,
