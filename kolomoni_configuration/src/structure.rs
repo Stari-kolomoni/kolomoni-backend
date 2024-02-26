@@ -4,26 +4,37 @@ use std::path::{Path, PathBuf};
 use miette::{Context, IntoDiagnostic, Result};
 use serde::Deserialize;
 
+mod base_paths;
 mod database;
 mod http;
 mod json_web_token;
 mod logging;
+mod search;
 mod secrets;
 
-pub use self::database::DatabaseConfiguration;
-use self::database::UnresolvedDatabaseConfiguration;
-pub use self::http::HttpConfiguration;
-use self::http::UnresolvedHttpConfiguration;
-pub use self::json_web_token::JsonWebTokenConfiguration;
-use self::json_web_token::UnresolvedJsonWebTokenConfiguration;
-use self::logging::{LoggingConfiguration, UnresolvedLoggingConfiguration};
-pub use self::secrets::SecretsConfiguration;
-use self::secrets::UnresolvedSecretsConfiguration;
+pub use base_paths::BasePathsConfiguration;
+use base_paths::UnresolvedBasePathsConfiguration;
+pub use database::DatabaseConfiguration;
+use database::UnresolvedDatabaseConfiguration;
+pub use http::HttpConfiguration;
+use http::UnresolvedHttpConfiguration;
+pub use json_web_token::JsonWebTokenConfiguration;
+use json_web_token::UnresolvedJsonWebTokenConfiguration;
+pub use logging::LoggingConfiguration;
+use logging::UnresolvedLoggingConfiguration;
+pub use search::SearchConfiguration;
+use search::UnresolvedSearchConfiguration;
+pub use secrets::SecretsConfiguration;
+use secrets::UnresolvedSecretsConfiguration;
+
 use crate::traits::{ResolvableConfiguration, ResolvableConfigurationWithContext};
 use crate::utilities::get_default_configuration_file_path;
 
 #[derive(Deserialize, Debug)]
 pub(crate) struct UnresolvedConfiguration {
+    /// Base paths.
+    base_paths: UnresolvedBasePathsConfiguration,
+
     /// Logging-related configuration.
     logging: UnresolvedLoggingConfiguration,
 
@@ -38,12 +49,18 @@ pub(crate) struct UnresolvedConfiguration {
 
     /// Json Web Token-related configuration.
     json_web_token: UnresolvedJsonWebTokenConfiguration,
+
+    /// Search-related configuration.
+    search: UnresolvedSearchConfiguration,
 }
 
 
 /// The entire Stari Kolomoni backend configuration.
 #[derive(Debug, Clone)]
 pub struct Configuration {
+    /// Base paths
+    pub base_paths: BasePathsConfiguration,
+
     /// This is the file path this `Config` instance was loaded from.
     pub file_path: PathBuf,
 
@@ -61,6 +78,9 @@ pub struct Configuration {
 
     /// Json Web Token-related configuration.
     pub json_web_token: JsonWebTokenConfiguration,
+
+    /// Search-related configuration.
+    pub search: SearchConfiguration,
 }
 
 
@@ -69,6 +89,11 @@ impl ResolvableConfigurationWithContext for UnresolvedConfiguration {
     type Context = PathBuf;
 
     fn resolve(self, context: Self::Context) -> Result<Self::Resolved> {
+        let base_paths = self
+            .base_paths
+            .resolve()
+            .wrap_err("Failed to resolve base_paths table.")?;
+
         let logging = self
             .logging
             .resolve()
@@ -94,14 +119,21 @@ impl ResolvableConfigurationWithContext for UnresolvedConfiguration {
             .resolve()
             .wrap_err("Failed to resolve json_web_token table.")?;
 
+        let search = self
+            .search
+            .resolve(base_paths.clone())
+            .wrap_err("Failed to resolve search table.")?;
+
 
         Ok(Configuration {
+            base_paths,
             file_path: context,
             logging,
             http,
             database,
             secrets,
             json_web_token,
+            search,
         })
     }
 }
