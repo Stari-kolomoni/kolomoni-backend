@@ -1,6 +1,6 @@
-use ::http::{HeaderMap, HeaderName};
 use actix_http::{header::HeaderValue, Method, StatusCode};
 use actix_web::http;
+use http::{HeaderMap, HeaderName};
 use kolomoni::testing::{GiveFullUserPermissionsRequest, ResetUserRolesRequest};
 use reqwest::{header, Client, ClientBuilder, RequestBuilder};
 use serde::Serialize;
@@ -29,7 +29,7 @@ impl TestServer {
         }
     }
 
-    pub async fn reset_server(&self) {
+    pub async fn reset_database(&self) {
         let response = self
             .request(Method::POST, "/testing/full-reset")
             .send()
@@ -156,7 +156,17 @@ impl TestRequestBuilder {
     }
 }
 
-pub async fn prepare_test_server_instance() -> TestServer {
+
+// thread_local! {
+//     pub static TEST_SERVER: OnceCell<Rc<TestServer>> = OnceCell::new();
+// }
+//
+// #[inline]
+// pub fn get_thread_local_test_server() -> Rc<TestServer> {
+//     TEST_SERVER.with(|server| server.get().unwrap().clone())
+// }
+
+pub async fn initialize_test_server() -> TestServer {
     const TEST_API_SERVER_ENV_VAR_NAME: &str = "TEST_API_SERVER_URL";
 
     let test_server_url = std::env::var(TEST_API_SERVER_ENV_VAR_NAME).unwrap_or_else(|_| {
@@ -167,7 +177,19 @@ pub async fn prepare_test_server_instance() -> TestServer {
     });
 
     let server = TestServer::new(test_server_url);
-    server.reset_server().await;
+    server.reset_database().await;
+
+    // let server_rc = Rc::new(server);
+
+    // TEST_SERVER.with(|server_cell| {
+    //     server_cell
+    //         .set(server_rc.clone())
+    //         .unwrap_or_else(|_| panic!("Failed to set thread-local TestServer."))
+    // });
+
+    // TODO Continue from here.
+
+    // server_rc
 
     server
 }

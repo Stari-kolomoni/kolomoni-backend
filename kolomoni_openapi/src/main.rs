@@ -56,6 +56,7 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::slovene_word::get_all_slovene_words,
         dictionary::slovene_word::create_slovene_word,
         dictionary::slovene_word::get_specific_slovene_word,
+        dictionary::slovene_word::get_specific_slovene_word_by_lemma,
         dictionary::slovene_word::update_specific_slovene_word,
         dictionary::slovene_word::delete_specific_slovene_word,
 
@@ -63,6 +64,7 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::english_word::get_all_english_words,
         dictionary::english_word::create_english_word,
         dictionary::english_word::get_specific_english_word,
+        dictionary::english_word::get_specific_english_word_by_lemma,
         dictionary::english_word::update_specific_english_word,
         dictionary::english_word::delete_specific_english_word,
 

@@ -350,6 +350,77 @@ pub async fn get_specific_slovene_word(
 
 
 
+/// Fina a slovene word by lemma
+///
+/// This endpoint returns information about a single slovene word from the dictionary,
+/// but takes a lemma as a parameter instead of the word ID.
+///
+/// Note that this is *not* intended as a search endpoint!
+///
+/// # Authentication
+/// Authentication is *not required* on this endpoint due to a blanket grant of
+/// the `word:read` permission to unauthenticated users.
+#[utoipa::path(
+    get,
+    path = "/dictionary/slovene/by-lemma/{word_lemma}",
+    tag = "dictionary:slovene",
+    params(
+        (
+            "word_lemma" = String,
+            Path,
+            description = "Slovene word lemma to look up."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Information about the requested slovene word.",
+            body = SloveneWordInfoResponse,
+        ),
+        (
+            status = 404,
+            description = "The requested slovene word does not exist."
+        ),
+        openapi::FailedAuthenticationResponses<openapi::RequiresWordRead>,
+        openapi::InternalServerErrorResponse,
+    )
+)]
+#[get("/by-lemma/{word_lemma}")]
+pub async fn get_specific_slovene_word_by_lemma(
+    state: ApplicationState,
+    authentication: UserAuthenticationExtractor,
+    parameters: web::Path<(String,)>,
+) -> EndpointResult {
+    require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
+
+
+    let target_word_lemma = parameters.into_inner().0;
+
+
+    let target_word = SloveneWordQuery::word_by_lemma(&state.database, target_word_lemma)
+        .await
+        .map_err(APIError::InternalError)?;
+
+    let Some(target_word) = target_word else {
+        return Err(APIError::not_found());
+    };
+
+
+    let word_categories =
+        WordCategoryQuery::word_categories_by_word_uuid(&state.database, target_word.word_id)
+            .await
+            .map_err(APIError::InternalError)?;
+
+
+    Ok(SloveneWordInfoResponse {
+        word: SloveneWord::new(target_word, word_categories),
+    }
+    .into_response())
+}
+
+
+
+
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
 pub struct SloveneWordUpdateRequest {
     pub lemma: Option<String>,
@@ -538,6 +609,7 @@ pub fn slovene_dictionary_router() -> Scope {
         .service(get_all_slovene_words)
         .service(create_slovene_word)
         .service(get_specific_slovene_word)
+        .service(get_specific_slovene_word_by_lemma)
         .service(update_specific_slovene_word)
         .service(delete_specific_slovene_word)
 }

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use kolomoni::api::v1::dictionary::{
     categories::{
         CategoriesResponse,
@@ -12,7 +14,12 @@ use kolomoni::api::v1::dictionary::{
         EnglishWordInfoResponse,
         EnglishWordsResponse,
     },
-    slovene_word::{SloveneWordCreationRequest, SloveneWordCreationResponse, SloveneWordsResponse},
+    slovene_word::{
+        SloveneWordCreationRequest,
+        SloveneWordCreationResponse,
+        SloveneWordInfoResponse,
+        SloveneWordsResponse,
+    },
     suggestions::{TranslationSuggestionDeletionRequest, TranslationSuggestionRequest},
     translations::{TranslationDeletionRequest, TranslationRequest},
 };
@@ -22,15 +29,15 @@ use kolomoni_test_util::prelude::*;
 
 #[tokio::test]
 async fn word_creation_with_suggestions_and_translations_works() {
-    let server = prepare_test_server_instance().await;
+    let server = initialize_test_server().await;
 
-    register_sample_user(&server, SampleUser::Janez).await;
-    register_sample_user(&server, SampleUser::Meta).await;
+    SampleUser::Janez.register(&server).await;
+    SampleUser::Meta.register(&server).await;
 
-    let admin_user_access_token = login_sample_user(&server, SampleUser::Janez).await;
-    let admin_user_info = get_sample_user_info(&server, &admin_user_access_token).await;
+    let admin_user_access_token = SampleUser::Janez.login(&server).await;
+    let admin_user_info = fetch_user_info(&server, &admin_user_access_token).await;
 
-    let normal_user_access_token = login_sample_user(&server, SampleUser::Meta).await;
+    let normal_user_access_token = SampleUser::Meta.login(&server).await;
 
     server
         .give_full_permissions_to_user(admin_user_info.id)
@@ -438,43 +445,25 @@ async fn word_creation_with_suggestions_and_translations_works() {
      * Insert a bunch of sample words to test on.
      */
 
-    let word_ability = create_sample_english_word(
-        &server,
-        &admin_user_access_token,
-        SampleEnglishWord::Ability,
-    )
-    .await;
-    let word_critical_hit = create_sample_english_word(
-        &server,
-        &admin_user_access_token,
-        SampleEnglishWord::CriticalHit,
-    )
-    .await;
+    let word_ability = SampleEnglishWord::Ability
+        .create(&server, &admin_user_access_token)
+        .await;
+    let word_critical_hit = SampleEnglishWord::CriticalHit
+        .create(&server, &admin_user_access_token)
+        .await;
 
-    let word_sposobnost = create_sample_slovene_word(
-        &server,
-        &admin_user_access_token,
-        SampleSloveneWord::Sposobnost,
-    )
-    .await;
-    let word_terna = create_sample_slovene_word(
-        &server,
-        &admin_user_access_token,
-        SampleSloveneWord::Terna,
-    )
-    .await;
-    let word_kriticni_izid = create_sample_slovene_word(
-        &server,
-        &admin_user_access_token,
-        SampleSloveneWord::KriticniIzid,
-    )
-    .await;
-    let word_usodni_zadetek = create_sample_slovene_word(
-        &server,
-        &admin_user_access_token,
-        SampleSloveneWord::UsodniZadetek,
-    )
-    .await;
+    let word_sposobnost = SampleSloveneWord::Sposobnost
+        .create(&server, &admin_user_access_token)
+        .await;
+    let word_terna = SampleSloveneWord::Terna
+        .create(&server, &admin_user_access_token)
+        .await;
+    let word_kriticni_izid = SampleSloveneWord::KriticniIzid
+        .create(&server, &admin_user_access_token)
+        .await;
+    let word_usodni_zadetek = SampleSloveneWord::UsodniZadetek
+        .create(&server, &admin_user_access_token)
+        .await;
 
 
 
@@ -1009,16 +998,178 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
 
 #[tokio::test]
+async fn lookup_by_lemma_works() {
+    let server = initialize_test_server().await;
+
+    {
+        let new_user = SampleUser::Kira.register(&server).await;
+        server.give_full_permissions_to_user(new_user.user.id).await;
+    }
+
+    let admin_user_access_token = SampleUser::Kira.login(&server).await;
+
+
+    /***
+     * Test english word lookup by lemma
+     */
+
+    let word_hit_points_lemma = SampleEnglishWord::HitPoints.lemma();
+
+    {
+        // The endpoint should not require authentication and
+        // return 404 Not Found if the word with the lemma does not exist.
+        server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/english/by-lemma/{}",
+                    word_hit_points_lemma
+                ),
+            )
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+    }
+
+    let word_hit_points_info = SampleEnglishWord::HitPoints
+        .create(&server, &admin_user_access_token)
+        .await;
+
+    {
+        // The endpoint should not require authentication.
+        let lookup_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/english/by-lemma/{}",
+                    word_hit_points_lemma
+                ),
+            )
+            .send()
+            .await;
+
+        lookup_response.assert_status_equals(StatusCode::OK);
+
+        let lookup_word = lookup_response.json_body::<EnglishWordInfoResponse>().word;
+
+        assert_eq!(word_hit_points_info, lookup_word);
+    }
+
+
+    delete_english_word(
+        &server,
+        &admin_user_access_token,
+        Uuid::from_str(&word_hit_points_info.word_id).unwrap(),
+    )
+    .await;
+
+    {
+        // The endpoint should return 404 again after the word is removed.
+        server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/english/by-lemma/{}",
+                    word_hit_points_lemma
+                ),
+            )
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+    }
+
+
+
+    /***
+     * Test slovene word lookup by lemma
+     */
+
+    let word_napad_lemma = SampleSloveneWord::Napad.lemma();
+
+    {
+        // The endpoint should not require authentication and
+        // return 404 Not Found if the word with the lemma does not exist.
+        server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/slovene/by-lemma/{}",
+                    word_napad_lemma
+                ),
+            )
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+    }
+
+    let word_napad_info = SampleSloveneWord::Napad
+        .create(&server, &admin_user_access_token)
+        .await;
+
+    {
+        // The endpoint should not require authentication.
+        let lookup_response = server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/slovene/by-lemma/{}",
+                    word_napad_lemma
+                ),
+            )
+            .send()
+            .await;
+
+        lookup_response.assert_status_equals(StatusCode::OK);
+
+        let lookup_word = lookup_response.json_body::<SloveneWordInfoResponse>().word;
+
+        assert_eq!(word_napad_info, lookup_word);
+    }
+
+
+    delete_slovene_word(
+        &server,
+        &admin_user_access_token,
+        Uuid::from_str(&word_napad_info.word_id).unwrap(),
+    )
+    .await;
+
+    {
+        // The endpoint should return 404 again after the word is removed.
+        server
+            .request(
+                Method::GET,
+                format!(
+                    "/api/v1/dictionary/slovene/by-lemma/{}",
+                    word_napad_lemma
+                ),
+            )
+            .send()
+            .await
+            .assert_status_equals(StatusCode::NOT_FOUND);
+    }
+}
+
+
+
+#[tokio::test]
 async fn word_categories_work() {
-    let server = prepare_test_server_instance().await;
+    let server = initialize_test_server().await;
 
-    register_sample_user(&server, SampleUser::Janez).await;
-    register_sample_user(&server, SampleUser::Meta).await;
+    {
+        let new_admin_user = SampleUser::Janez.register(&server).await;
+        SampleUser::Meta.register(&server).await;
 
-    let admin_user_access_token = login_sample_user(&server, SampleUser::Janez).await;
-    let admin_user_info = get_sample_user_info(&server, &admin_user_access_token).await;
+        server
+            .give_full_permissions_to_user(new_admin_user.user.id)
+            .await;
+    }
 
-    let normal_user_access_token = login_sample_user(&server, SampleUser::Meta).await;
+
+    let admin_user_access_token = SampleUser::Janez.login(&server).await;
+    let admin_user_info = fetch_user_info(&server, &admin_user_access_token).await;
+
+    let normal_user_access_token = SampleUser::Meta.login(&server).await;
 
     server
         .give_full_permissions_to_user(admin_user_info.id)
@@ -1344,25 +1495,16 @@ async fn word_categories_work() {
      * Test linking/unlinking words from categories.
      */
 
-    let word_ability = create_sample_english_word(
-        &server,
-        &admin_user_access_token,
-        SampleEnglishWord::Ability,
-    )
-    .await;
+    let word_ability = SampleEnglishWord::Ability
+        .create(&server, &admin_user_access_token)
+        .await;
 
-    let category_class = create_sample_category(
-        &server,
-        &admin_user_access_token,
-        SampleCategory::Razred,
-    )
-    .await;
-    let category_character = create_sample_category(
-        &server,
-        &admin_user_access_token,
-        SampleCategory::Lik,
-    )
-    .await;
+    let category_class = SampleCategory::Razred
+        .create(&server, &admin_user_access_token)
+        .await;
+    let category_character = SampleCategory::Lik
+        .create(&server, &admin_user_access_token)
+        .await;
 
 
     {

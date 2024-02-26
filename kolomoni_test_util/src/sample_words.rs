@@ -1,5 +1,6 @@
 use http::{Method, StatusCode};
 use kolomoni::api::v1::dictionary::{english_word::{EnglishWord, EnglishWordCreationRequest, EnglishWordCreationResponse}, slovene_word::{SloveneWord, SloveneWordCreationRequest, SloveneWordCreationResponse}, suggestions::TranslationSuggestionRequest, translations::TranslationRequest};
+use uuid::Uuid;
 
 use crate::TestServer;
 
@@ -50,6 +51,31 @@ impl SampleEnglishWord {
                     in combat and other dangerous situations."
                 ),
         }
+    }
+
+    pub async fn create(
+        &self,
+        server: &TestServer,
+        access_token: &str,
+    ) -> EnglishWord {
+        let creation_response = server.request(
+            Method::POST,
+            "/api/v1/dictionary/english",
+        )
+            .with_json_body(EnglishWordCreationRequest {
+                lemma: self.lemma().to_string(),
+                disambiguation: self.disambiguation().map(str::to_string),
+                description: self.description().map(str::to_string)
+            })
+            .with_access_token(access_token)
+            .send()
+            .await;
+    
+        creation_response.assert_status_equals(StatusCode::OK);
+    
+        let response_body = creation_response.json_body::<EnglishWordCreationResponse>();
+    
+        response_body.word
     }
 }
 
@@ -107,58 +133,58 @@ impl SampleSloveneWord {
             SampleSloveneWord::Zdravje => None,
         }
     }
+
+    pub async fn create(
+        &self,
+        server: &TestServer,
+        access_token: &str,
+    ) -> SloveneWord {
+        let creation_response = server.request(
+            Method::POST,
+            "/api/v1/dictionary/slovene",
+        )
+            .with_json_body(SloveneWordCreationRequest {
+                lemma: self.lemma().to_string(),
+                disambiguation: self.disambiguation().map(str::to_string),
+                description: self.description().map(str::to_string)
+            })
+            .with_access_token(access_token)
+            .send()
+            .await;
+    
+        creation_response.assert_status_equals(StatusCode::OK);
+    
+        let response_body = creation_response.json_body::<SloveneWordCreationResponse>();
+    
+        response_body.word
+    }
 }
 
 
-pub async fn create_sample_english_word(
-    server: &TestServer,
-    access_token: &str,
-    sample_word: SampleEnglishWord,
-) -> EnglishWord {
-    let creation_response = server.request(
-        Method::POST,
-        "/api/v1/dictionary/english",
-    )
-        .with_json_body(EnglishWordCreationRequest {
-            lemma: sample_word.lemma().to_string(),
-            disambiguation: sample_word.disambiguation().map(str::to_string),
-            description: sample_word.description().map(str::to_string)
-        })
+pub async fn delete_english_word(server: &TestServer, access_token: &str, word_uuid: Uuid) {
+    let deletion_response = server
+        .request(Method::DELETE, 
+            format!("/api/v1/dictionary/english/{}", word_uuid)
+        )
         .with_access_token(access_token)
         .send()
         .await;
 
-    creation_response.assert_status_equals(StatusCode::OK);
-
-    let response_body = creation_response.json_body::<EnglishWordCreationResponse>();
-
-    response_body.word
+    deletion_response.assert_status_equals(StatusCode::OK);
 }
 
-pub async fn create_sample_slovene_word(
-    server: &TestServer,
-    access_token: &str,
-    sample_word: SampleSloveneWord,
-) -> SloveneWord {
-    let creation_response = server.request(
-        Method::POST,
-        "/api/v1/dictionary/slovene",
-    )
-        .with_json_body(SloveneWordCreationRequest {
-            lemma: sample_word.lemma().to_string(),
-            disambiguation: sample_word.disambiguation().map(str::to_string),
-            description: sample_word.description().map(str::to_string)
-        })
+pub async fn delete_slovene_word(server: &TestServer, access_token: &str, word_uuid: Uuid) {
+    let deletion_response = server
+        .request(Method::DELETE, 
+            format!("/api/v1/dictionary/slovene/{}", word_uuid)
+        )
         .with_access_token(access_token)
         .send()
         .await;
 
-    creation_response.assert_status_equals(StatusCode::OK);
-
-    let response_body = creation_response.json_body::<SloveneWordCreationResponse>();
-
-    response_body.word
+    deletion_response.assert_status_equals(StatusCode::OK);
 }
+
 
 pub async fn link_word_as_translation(
     server: &TestServer,

@@ -24,7 +24,7 @@ use kolomoni_test_util::prelude::*;
 
 #[tokio::test]
 async fn user_registration_and_user_list_work() {
-    let server = prepare_test_server_instance().await;
+    let server = initialize_test_server().await;
 
 
     // Register a new user (username "janez", display name "Janez Veliki").
@@ -209,12 +209,12 @@ async fn user_registration_and_user_list_work() {
 
 #[tokio::test]
 async fn current_user_permissions_and_roles_work() {
-    let server = prepare_test_server_instance().await;
+    let server = initialize_test_server().await;
 
-    register_sample_user(&server, SampleUser::Janez).await;
-    register_sample_user(&server, SampleUser::Meta).await;
+    SampleUser::Janez.register(&server).await;
+    SampleUser::Meta.register(&server).await;
 
-    let access_token = login_sample_user(&server, SampleUser::Meta).await;
+    let access_token = SampleUser::Meta.login(&server).await;
 
 
 
@@ -412,17 +412,17 @@ async fn current_user_permissions_and_roles_work() {
 
 #[tokio::test]
 async fn specific_user_operations_work() {
-    let server = prepare_test_server_instance().await;
+    let server = initialize_test_server().await;
 
-    register_sample_user(&server, SampleUser::Janez).await;
-    register_sample_user(&server, SampleUser::Meta).await;
-    register_sample_user(&server, SampleUser::Kira).await;
+    SampleUser::Janez.register(&server).await;
+    SampleUser::Meta.register(&server).await;
+    SampleUser::Kira.register(&server).await;
 
-    let admin_user_access_token = login_sample_user(&server, SampleUser::Meta).await;
-    let admin_user_info = get_sample_user_info(&server, &admin_user_access_token).await;
+    let admin_user_access_token = SampleUser::Meta.login(&server).await;
+    let admin_user_info = fetch_user_info(&server, &admin_user_access_token).await;
 
-    let normal_user_access_token = login_sample_user(&server, SampleUser::Janez).await;
-    let aux_normal_user_access_token = login_sample_user(&server, SampleUser::Kira).await;
+    let normal_user_access_token = SampleUser::Janez.login(&server).await;
+    let second_normal_user_access_token = SampleUser::Kira.login(&server).await;
 
 
     {
@@ -950,7 +950,7 @@ async fn specific_user_operations_work() {
             .with_json_body(UserRoleRemoveRequest {
                 roles_to_remove: vec![Role::Administrator.name().to_string()],
             })
-            .with_access_token(&aux_normal_user_access_token)
+            .with_access_token(&second_normal_user_access_token)
             .send()
             .await
             .assert_status_equals(StatusCode::FORBIDDEN);

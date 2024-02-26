@@ -5,4 +5,4 @@ pub use uuid::Uuid;
 pub use super::sample_categories::*;
 pub use super::sample_users::*;
 pub use super::sample_words::*;
-pub use super::server::{prepare_test_server_instance, TestServer};
+pub use super::server::{initialize_test_server, TestServer};
