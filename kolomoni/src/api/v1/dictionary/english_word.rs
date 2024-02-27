@@ -121,8 +121,8 @@ async fn fetch_additional_english_word_information(
         "lemma": "adventurer",
         "disambiguation": "character",
         "description": "Playable or non-playable character.",
-        "added_at": "2023-06-27T20:34:27.217273Z",
-        "last_edited_at": "2023-06-27T20:34:27.217273Z",
+        "created_at": "2023-06-27T20:34:27.217273Z",
+        "last_modified_at": "2023-06-27T20:34:27.217273Z",
         "suggested_translations": [],
         "translations": [
             {
@@ -130,8 +130,8 @@ async fn fetch_additional_english_word_information(
                 "lemma": "pustolovec",
                 "disambiguation": "lik",
                 "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino.",
-                "added_at": "2023-06-27T20:34:27.217273Z",
-                "last_edited_at": "2023-06-27T20:34:27.217273Z"
+                "created_at": "2023-06-27T20:34:27.217273Z",
+                "last_modified_at": "2023-06-27T20:34:27.217273Z"
             }
         ]
     })
@@ -154,11 +154,14 @@ pub struct EnglishWord {
     pub description: Option<String>,
 
     /// When the word was created.
-    pub added_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
 
-    /// When the word was last edited.
-    pub last_edited_at: DateTime<Utc>,
+    /// When the word was last modified.
+    /// This includes the last creation or deletion time of the
+    /// suggestion or translation linked to this word.
+    pub last_modified_at: DateTime<Utc>,
 
+    /// A list of categories this word belongs in.
     pub categories: Vec<Category>,
 
     /// Suggested slovene translations of this word.
@@ -186,8 +189,8 @@ impl EnglishWord {
             lemma: english_model.lemma,
             disambiguation: english_model.disambiguation,
             description: english_model.description,
-            added_at: english_model.added_at.to_utc(),
-            last_edited_at: english_model.last_edited_at.to_utc(),
+            created_at: english_model.created_at.to_utc(),
+            last_modified_at: english_model.last_modified_at.to_utc(),
             categories,
             suggested_translations,
             translations,

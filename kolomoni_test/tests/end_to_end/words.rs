@@ -139,11 +139,11 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .json_body::<EnglishWordCreationResponse>()
             .word;
 
-        assert!(new_word.added_at >= time_created_after);
-        assert!(new_word.added_at <= time_created_before);
+        assert!(new_word.created_at >= time_created_after);
+        assert!(new_word.created_at <= time_created_before);
 
-        assert!(new_word.last_edited_at >= time_created_after);
-        assert!(new_word.last_edited_at <= time_created_before);
+        assert!(new_word.last_modified_at >= time_created_after);
+        assert!(new_word.last_modified_at <= time_created_before);
 
         new_word
     };
@@ -569,17 +569,17 @@ async fn word_creation_with_suggestions_and_translations_works() {
             1
         );
 
-        assert!(ability_word_information.last_edited_at >= time_just_before_suggestion);
-        assert!(ability_word_information.last_edited_at <= time_just_after_suggestion);
+        assert!(ability_word_information.last_modified_at >= time_just_before_suggestion);
+        assert!(ability_word_information.last_modified_at <= time_just_after_suggestion);
 
         let suggestion_target_info = &ability_word_information.suggested_translations[0];
         assert_ne!(
-            suggestion_target_info.last_edited_at,
-            word_sposobnost.last_edited_at
+            suggestion_target_info.last_modified_at,
+            word_sposobnost.last_modified_at
         );
 
-        assert!(suggestion_target_info.last_edited_at >= time_just_before_suggestion);
-        assert!(suggestion_target_info.last_edited_at <= time_just_after_suggestion);
+        assert!(suggestion_target_info.last_modified_at >= time_just_before_suggestion);
+        assert!(suggestion_target_info.last_modified_at <= time_just_after_suggestion);
 
 
         // Trying to create the same suggestion again should fail with 409 Conflict.
@@ -677,8 +677,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .json_body::<EnglishWordInfoResponse>()
             .word;
 
-        assert!(ability_word_information.last_edited_at >= time_just_before_suggestion_removal);
-        assert!(ability_word_information.last_edited_at <= time_just_after_suggestion_removal);
+        assert!(ability_word_information.last_modified_at >= time_just_before_suggestion_removal);
+        assert!(ability_word_information.last_modified_at <= time_just_after_suggestion_removal);
 
         assert_eq!(
             ability_word_information.suggested_translations.len(),
@@ -704,8 +704,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .json_body::<SloveneWordInfoResponse>()
             .word;
 
-        assert!(sposobnost_word_information.last_edited_at >= time_just_before_suggestion_removal);
-        assert!(sposobnost_word_information.last_edited_at <= time_just_after_suggestion_removal);
+        assert!(sposobnost_word_information.last_modified_at >= time_just_before_suggestion_removal);
+        assert!(sposobnost_word_information.last_modified_at <= time_just_after_suggestion_removal);
     }
 
 
@@ -805,19 +805,19 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .json_body::<EnglishWordInfoResponse>()
             .word;
 
-        assert!(ability_word_information.last_edited_at >= time_just_before_translation);
-        assert!(ability_word_information.last_edited_at <= time_just_after_translation);
+        assert!(ability_word_information.last_modified_at >= time_just_before_translation);
+        assert!(ability_word_information.last_modified_at <= time_just_after_translation);
 
         assert_eq!(ability_word_information.translations.len(), 1);
 
         let translation_target_info = &ability_word_information.translations[0];
 
         assert_ne!(
-            translation_target_info.last_edited_at,
-            word_sposobnost.last_edited_at
+            translation_target_info.last_modified_at,
+            word_sposobnost.last_modified_at
         );
-        assert!(translation_target_info.last_edited_at >= time_just_before_translation);
-        assert!(translation_target_info.last_edited_at <= time_just_after_translation);
+        assert!(translation_target_info.last_modified_at >= time_just_before_translation);
+        assert!(translation_target_info.last_modified_at <= time_just_after_translation);
 
 
 
@@ -915,8 +915,8 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .json_body::<EnglishWordInfoResponse>()
             .word;
 
-        assert!(ability_word_information.last_edited_at >= time_just_before_translation_removal);
-        assert!(ability_word_information.last_edited_at <= time_just_after_translation_removal);
+        assert!(ability_word_information.last_modified_at >= time_just_before_translation_removal);
+        assert!(ability_word_information.last_modified_at <= time_just_after_translation_removal);
 
         assert_eq!(ability_word_information.translations.len(), 0);
 
@@ -938,8 +938,10 @@ async fn word_creation_with_suggestions_and_translations_works() {
             .json_body::<SloveneWordInfoResponse>()
             .word;
 
-        assert!(sposobnost_word_information.last_edited_at >= time_just_before_translation_removal);
-        assert!(sposobnost_word_information.last_edited_at <= time_just_after_translation_removal);
+        assert!(
+            sposobnost_word_information.last_modified_at >= time_just_before_translation_removal
+        );
+        assert!(sposobnost_word_information.last_modified_at <= time_just_after_translation_removal);
     }
 
 

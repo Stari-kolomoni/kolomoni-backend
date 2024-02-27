@@ -17,8 +17,8 @@ pub struct Model {
     pub lemma: String,
     pub disambiguation: Option<String>,
     pub description: Option<String>,
-    pub added_at: DateTimeWithTimeZone,
-    pub last_edited_at: DateTimeWithTimeZone,
+    pub created_at: DateTimeWithTimeZone,
+    pub last_modified_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
@@ -27,8 +27,8 @@ pub enum Column {
     Lemma,
     Disambiguation,
     Description,
-    AddedAt,
-    LastEditedAt,
+    CreatedAt,
+    LastModifiedAt,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -58,8 +58,8 @@ impl ColumnTrait for Column {
             Self::Lemma => ColumnType::String(None).def(),
             Self::Disambiguation => ColumnType::String(None).def().null(),
             Self::Description => ColumnType::String(None).def().null(),
-            Self::AddedAt => ColumnType::TimestampWithTimeZone.def(),
-            Self::LastEditedAt => ColumnType::TimestampWithTimeZone.def(),
+            Self::CreatedAt => ColumnType::TimestampWithTimeZone.def(),
+            Self::LastModifiedAt => ColumnType::TimestampWithTimeZone.def(),
         }
     }
 }

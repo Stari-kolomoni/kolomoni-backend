@@ -36,7 +36,7 @@ impl EnglishWordMutation {
         let transaction = begin_transaction!(database)?;
 
         let random_uuid = generate_random_word_uuid();
-        let added_at = Utc::now();
+        let created_at = Utc::now();
 
 
         let active_word = word::ActiveModel {
@@ -56,8 +56,8 @@ impl EnglishWordMutation {
             lemma: ActiveValue::Set(english_word.lemma),
             disambiguation: ActiveValue::Set(english_word.disambiguation),
             description: ActiveValue::Set(english_word.description),
-            added_at: ActiveValue::Set(added_at.fixed_offset()),
-            last_edited_at: ActiveValue::Set(added_at.fixed_offset()),
+            created_at: ActiveValue::Set(created_at.fixed_offset()),
+            last_modified_at: ActiveValue::Set(created_at.fixed_offset()),
         };
 
         let new_english_word = active_english_word
@@ -84,7 +84,7 @@ impl EnglishWordMutation {
     ) -> Result<word_english::Model> {
         let mut active_word_model = word_english::ActiveModel {
             word_id: ActiveValue::Unchanged(word_uuid),
-            last_edited_at: ActiveValue::Set(Utc::now().fixed_offset()),
+            last_modified_at: ActiveValue::Set(Utc::now().fixed_offset()),
             ..Default::default()
         };
 
@@ -122,7 +122,7 @@ impl EnglishWordMutation {
     ) -> Result<word_english::Model> {
         let active_word_model = word_english::ActiveModel {
             word_id: ActiveValue::Unchanged(word_uuid),
-            last_edited_at: ActiveValue::Set(new_last_edited_at.fixed_offset()),
+            last_modified_at: ActiveValue::Set(new_last_edited_at.fixed_offset()),
             ..Default::default()
         };
 

@@ -38,11 +38,11 @@ pub enum WordSlovene {
     #[sea_orm(iden = "description")]
     Description,
 
-    #[sea_orm(iden = "added_at")]
-    AddedAt,
+    #[sea_orm(iden = "created_at")]
+    CreatedAt,
 
-    #[sea_orm(iden = "last_edited_at")]
-    LastEditedAt,
+    #[sea_orm(iden = "last_modified_at")]
+    LastModifiedAt,
 }
 
 const WORD_SLOVENE_PK_CONSTRAINT_NAME: &str = "pk__word_slovene";
@@ -67,11 +67,11 @@ pub enum WordEnglish {
     #[sea_orm(iden = "description")]
     Description,
 
-    #[sea_orm(iden = "added_at")]
-    AddedAt,
+    #[sea_orm(iden = "created_at")]
+    CreatedAt,
 
-    #[sea_orm(iden = "last_edited_at")]
-    LastEditedAt,
+    #[sea_orm(iden = "last_modified_at")]
+    LastModifiedAt,
 }
 
 const WORD_ENGLISH_PK_CONSTRAINT_NAME: &str = "pk__word_english";
@@ -146,14 +146,14 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new_with_type(
-                            WordSlovene::AddedAt,
+                            WordSlovene::CreatedAt,
                             ColumnType::TimestampWithTimeZone,
                         )
                         .not_null(),
                     )
                     .col(
                         ColumnDef::new_with_type(
-                            WordSlovene::LastEditedAt,
+                            WordSlovene::LastModifiedAt,
                             ColumnType::TimestampWithTimeZone,
                         )
                         .not_null(),
@@ -212,14 +212,14 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         ColumnDef::new_with_type(
-                            WordEnglish::AddedAt,
+                            WordEnglish::CreatedAt,
                             ColumnType::TimestampWithTimeZone,
                         )
                         .not_null(),
                     )
                     .col(
                         ColumnDef::new_with_type(
-                            WordEnglish::LastEditedAt,
+                            WordEnglish::LastModifiedAt,
                             ColumnType::TimestampWithTimeZone,
                         )
                         .not_null(),

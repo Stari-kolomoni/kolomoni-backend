@@ -36,8 +36,8 @@ use crate::{
         "lemma": "pustolovec",
         "disambiguation": "lik",
         "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino.",
-        "added_at": "2023-06-27T20:34:27.217273Z",
-        "last_edited_at": "2023-06-27T20:34:27.217273Z"
+        "created_at": "2023-06-27T20:34:27.217273Z",
+        "last_modified_at": "2023-06-27T20:34:27.217273Z"
     })
 )]
 pub struct SloveneWord {
@@ -55,10 +55,13 @@ pub struct SloveneWord {
     pub description: Option<String>,
 
     /// When the word was created.
-    pub added_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
 
-    /// When the word was last edited.
-    pub last_edited_at: DateTime<Utc>,
+    /// When the word was last modified.
+    ///
+    /// TODO In the future, this might include last modification time
+    ///      of the linked suggestion and translation relationships.
+    pub last_modified_at: DateTime<Utc>,
 
     pub categories: Vec<Category>,
 }
@@ -79,8 +82,8 @@ impl SloveneWord {
             lemma: model.lemma,
             disambiguation: model.disambiguation,
             description: model.description,
-            added_at: model.added_at.to_utc(),
-            last_edited_at: model.last_edited_at.to_utc(),
+            created_at: model.created_at.to_utc(),
+            last_modified_at: model.last_modified_at.to_utc(),
             categories,
         }
     }
