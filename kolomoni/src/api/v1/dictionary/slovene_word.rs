@@ -5,7 +5,7 @@ use kolomoni_auth::Permission;
 use kolomoni_database::{
     entities,
     mutation::{NewSloveneWord, SloveneWordMutation, UpdatedSloveneWord, WordMutation},
-    query::{self, SloveneWordQuery, WordCategoryQuery},
+    query::{self, SloveneWordQuery, SloveneWordsQueryOptions, WordCategoryQuery},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -101,6 +101,21 @@ impl_json_response_builder!(SloveneWordsResponse);
 
 
 
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
+#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
+pub struct SloveneWordFilters {
+    pub last_modified_after: Option<DateTime<Utc>>,
+}
+
+
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
+pub struct SloveneWordsListRequest {
+    pub filters: Option<SloveneWordFilters>,
+}
+
+
+
 /// List all slovene words
 ///
 /// This endpoint returns a list of all slovene words.
@@ -112,6 +127,9 @@ impl_json_response_builder!(SloveneWordsResponse);
     get,
     path = "/dictionary/slovene",
     tag = "dictionary:slovene",
+    request_body(
+        content = Option<SloveneWordsListRequest>
+    ),
     responses(
         (
             status = 200,
@@ -126,13 +144,30 @@ impl_json_response_builder!(SloveneWordsResponse);
 pub async fn get_all_slovene_words(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
+    request_body: Option<web::Json<SloveneWordsListRequest>>,
 ) -> EndpointResult {
     require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
 
+
+    let word_query_options = match request_body {
+        Some(body) => {
+            let body = body.into_inner();
+
+            match body.filters {
+                Some(filters) => SloveneWordsQueryOptions {
+                    only_words_modified_after: filters.last_modified_after,
+                },
+                None => SloveneWordsQueryOptions::default(),
+            }
+        }
+        None => SloveneWordsQueryOptions::default(),
+    };
+
     // Load words from the database.
-    let words = query::SloveneWordQuery::all_words(&state.database)
+    let words = query::SloveneWordQuery::all_words(&state.database, word_query_options)
         .await
         .map_err(APIError::InternalError)?;
+
 
 
     let mut words_as_api_structures = Vec::with_capacity(words.len());
@@ -424,7 +459,7 @@ pub async fn get_specific_slovene_word_by_lemma(
 
 
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
 pub struct SloveneWordUpdateRequest {
     pub lemma: Option<String>,
     pub disambiguation: Option<String>,

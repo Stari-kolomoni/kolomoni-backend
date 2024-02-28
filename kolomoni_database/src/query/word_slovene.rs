@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use miette::{Context, IntoDiagnostic, Result};
 use sea_orm::{
     sea_query::Expr,
@@ -12,6 +13,13 @@ use uuid::Uuid;
 
 use super::super::entities::prelude::WordSlovene;
 use crate::entities::word_slovene;
+
+
+#[derive(Default)]
+pub struct SloveneWordsQueryOptions {
+    pub only_words_modified_after: Option<DateTime<Utc>>,
+}
+
 
 pub struct SloveneWordQuery;
 
@@ -99,8 +107,18 @@ impl SloveneWordQuery {
             .wrap_err("Failed while seaching database for slovene word by lemma.")
     }
 
-    pub async fn all_words<C: ConnectionTrait>(database: &C) -> Result<Vec<word_slovene::Model>> {
-        WordSlovene::find()
+    pub async fn all_words<C: ConnectionTrait>(
+        database: &C,
+        options: SloveneWordsQueryOptions,
+    ) -> Result<Vec<word_slovene::Model>> {
+        let mut query = WordSlovene::find();
+
+        // Add modifiers onto the query based on `options`.
+        if let Some(only_words_modified_after) = options.only_words_modified_after {
+            query = query.filter(word_slovene::Column::LastModifiedAt.gt(only_words_modified_after));
+        }
+
+        query
             .all(database)
             .await
             .into_diagnostic()

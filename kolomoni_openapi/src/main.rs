@@ -118,6 +118,8 @@ use utoipa_rapidoc::RapiDoc;
             // dictionary/slovene_word.rs
             dictionary::slovene_word::SloveneWord,
             dictionary::slovene_word::SloveneWordsResponse,
+            dictionary::slovene_word::SloveneWordFilters,
+            dictionary::slovene_word::SloveneWordsListRequest,
             dictionary::slovene_word::SloveneWordCreationRequest,
             dictionary::slovene_word::SloveneWordCreationResponse,
             dictionary::slovene_word::SloveneWordInfoResponse,
@@ -126,6 +128,8 @@ use utoipa_rapidoc::RapiDoc;
             // dictionary/english_word.rs
             dictionary::english_word::EnglishWord,
             dictionary::english_word::EnglishWordsResponse,
+            dictionary::english_word::EnglishWordFilters,
+            dictionary::english_word::EnglishWordsListRequest,
             dictionary::english_word::EnglishWordCreationRequest,
             dictionary::english_word::EnglishWordCreationResponse,
             dictionary::english_word::EnglishWordInfoResponse,

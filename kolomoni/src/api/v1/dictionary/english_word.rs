@@ -8,6 +8,7 @@ use kolomoni_database::{
     query::{
         self,
         EnglishWordQuery,
+        EnglishWordsQueryOptions,
         TranslationQuery,
         TranslationSuggestionQuery,
         WordCategoryQuery,
@@ -44,6 +45,7 @@ struct AdditionalEnglishWordInfo {
 }
 
 
+// PERF: This might be a good candidate for optimization, probably with caching.
 async fn fetch_additional_english_word_information(
     database: &DatabaseConnection,
     word_uuid: Uuid,
@@ -209,6 +211,20 @@ impl_json_response_builder!(EnglishWordsResponse);
 
 
 
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
+#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
+pub struct EnglishWordFilters {
+    pub last_modified_after: Option<DateTime<Utc>>,
+}
+
+
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
+pub struct EnglishWordsListRequest {
+    pub filters: Option<EnglishWordFilters>,
+}
+
+
 /// List all english words
 ///
 /// This endpoint returns a list of all english words.
@@ -220,6 +236,9 @@ impl_json_response_builder!(EnglishWordsResponse);
     get,
     path = "/dictionary/english",
     tag = "dictionary:english",
+    request_body(
+        content = Option<EnglishWordsListRequest>
+    ),
     responses(
         (
             status = 200,
@@ -234,89 +253,44 @@ impl_json_response_builder!(EnglishWordsResponse);
 pub async fn get_all_english_words(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
+    request_body: Option<web::Json<EnglishWordsListRequest>>,
 ) -> EndpointResult {
     require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
 
-    let words = query::EnglishWordQuery::all_words(&state.database)
+
+
+    let word_query_options = match request_body {
+        Some(body) => {
+            let body = body.into_inner();
+
+            match body.filters {
+                Some(filters) => EnglishWordsQueryOptions {
+                    only_words_modified_after: filters.last_modified_after,
+                },
+                None => EnglishWordsQueryOptions::default(),
+            }
+        }
+        None => EnglishWordsQueryOptions::default(),
+    };
+
+    let words = query::EnglishWordQuery::all_words(&state.database, word_query_options)
         .await
         .map_err(APIError::InternalError)?;
+
 
 
     let mut words_as_api_structures: Vec<EnglishWord> = Vec::with_capacity(words.len());
 
-    // PERF: This might be a good candidate for optimization, probably with caching.
     for raw_english_word in words {
-        let categories = query::WordCategoryQuery::word_categories_by_word_uuid(
-            &state.database,
-            raw_english_word.word_id,
-        )
-        .await
-        .map_err(APIError::InternalError)?;
-
-
-        let suggested_translations = {
-            let suggested_translation_models =
-                query::TranslationSuggestionQuery::suggestions_for_english_word(
-                    &state.database,
-                    raw_english_word.word_id,
-                )
-                .await
-                .map_err(APIError::InternalError)?;
-
-
-            let mut suggested_translations = Vec::with_capacity(suggested_translation_models.len());
-            for suggested_translation_model in suggested_translation_models {
-                let suggested_translation_word_categories =
-                    WordCategoryQuery::word_categories_by_word_uuid(
-                        &state.database,
-                        suggested_translation_model.word_id,
-                    )
-                    .await
-                    .map_err(APIError::InternalError)?;
-
-                suggested_translations.push(SloveneWord::new(
-                    suggested_translation_model,
-                    suggested_translation_word_categories,
-                ))
-            }
-
-            suggested_translations
-        };
-
-
-        let translations = {
-            let translation_models = query::TranslationQuery::translations_for_english_word(
-                &state.database,
-                raw_english_word.word_id,
-            )
-            .await
-            .map_err(APIError::InternalError)?;
-
-
-            let mut translations = Vec::with_capacity(translation_models.len());
-            for translation_model in translation_models {
-                let translated_word_categories = WordCategoryQuery::word_categories_by_word_uuid(
-                    &state.database,
-                    translation_model.word_id,
-                )
-                .await
-                .map_err(APIError::InternalError)?;
-
-                translations.push(SloveneWord::new(
-                    translation_model,
-                    translated_word_categories,
-                ));
-            }
-
-            translations
-        };
-
+        let additional_information =
+            fetch_additional_english_word_information(&state.database, raw_english_word.word_id)
+                .await?;
 
         words_as_api_structures.push(EnglishWord::new(
             raw_english_word,
-            categories,
-            suggested_translations,
-            translations,
+            additional_information.categories,
+            additional_information.suggested_translations,
+            additional_information.translations,
         ));
     }
 
@@ -614,7 +588,7 @@ pub async fn get_specific_english_word_by_lemma(
 }
 
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
 pub struct EnglishWordUpdateRequest {
     pub lemma: Option<String>,
     pub disambiguation: Option<String>,

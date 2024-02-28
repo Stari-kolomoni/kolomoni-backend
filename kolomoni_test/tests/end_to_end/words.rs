@@ -12,13 +12,19 @@ use kolomoni::api::v1::dictionary::{
     english_word::{
         EnglishWordCreationRequest,
         EnglishWordCreationResponse,
+        EnglishWordFilters,
         EnglishWordInfoResponse,
+        EnglishWordUpdateRequest,
+        EnglishWordsListRequest,
         EnglishWordsResponse,
     },
     slovene_word::{
         SloveneWordCreationRequest,
         SloveneWordCreationResponse,
+        SloveneWordFilters,
         SloveneWordInfoResponse,
+        SloveneWordUpdateRequest,
+        SloveneWordsListRequest,
         SloveneWordsResponse,
     },
     suggestions::{TranslationSuggestionDeletionRequest, TranslationSuggestionRequest},
@@ -1831,5 +1837,209 @@ async fn word_categories_work() {
             .word;
 
         assert_eq!(fetched_word_info.categories.len(), 0);
+    }
+}
+
+
+
+
+#[tokio::test]
+async fn word_listing_with_filters_works() {
+    let server = initialize_test_server().await;
+
+    SampleUser::Kira.register(&server).await;
+
+    let admin_user_access_token = SampleUser::Kira.login(&server).await;
+    let admin_user_info = fetch_user_info(&server, &admin_user_access_token).await;
+
+    server
+        .give_full_permissions_to_user(admin_user_info.id)
+        .await;
+
+
+    /***
+     * Test english word listing, including last modification filters.
+     */
+
+
+    let time_just_before_initial_creation = Utc::now();
+
+    SampleEnglishWord::Ability
+        .create(&server, &admin_user_access_token)
+        .await;
+    let word_critical_hit = SampleEnglishWord::CriticalHit
+        .create(&server, &admin_user_access_token)
+        .await;
+
+    {
+        // Other aspects of this endpoint have already been tested
+        // in the `word_creation_with_suggestions_and_translations_works` test.
+
+        let list_response = server
+            .request(Method::GET, "/api/v1/dictionary/english")
+            .send()
+            .await;
+
+        list_response.assert_status_equals(StatusCode::OK);
+
+        let english_word_list = list_response.json_body::<EnglishWordsResponse>();
+
+        assert_eq!(english_word_list.english_words.len(), 2);
+    }
+
+
+    // Modify a word, then filter by the modification time.
+    let time_just_before_modification = Utc::now();
+
+    {
+        server
+            .request(
+                Method::PATCH,
+                format!(
+                    "/api/v1/dictionary/english/{}",
+                    word_critical_hit.id
+                ),
+            )
+            .with_access_token(&admin_user_access_token)
+            .with_json_body(EnglishWordUpdateRequest {
+                description: Some("Hello world.".to_string()),
+                ..Default::default()
+            })
+            .send()
+            .await
+            .assert_status_equals(StatusCode::OK);
+    }
+
+
+    {
+        let filtered_list_response = server
+            .request(Method::GET, "/api/v1/dictionary/english")
+            .with_json_body(EnglishWordsListRequest {
+                filters: Some(EnglishWordFilters {
+                    last_modified_after: Some(time_just_before_initial_creation),
+                }),
+            })
+            .send()
+            .await;
+
+        filtered_list_response.assert_status_equals(StatusCode::OK);
+
+        let english_word_list = filtered_list_response.json_body::<EnglishWordsResponse>();
+
+        assert_eq!(english_word_list.english_words.len(), 2);
+    }
+
+    {
+        let filtered_list_response = server
+            .request(Method::GET, "/api/v1/dictionary/english")
+            .with_json_body(EnglishWordsListRequest {
+                filters: Some(EnglishWordFilters {
+                    last_modified_after: Some(time_just_before_modification),
+                }),
+            })
+            .send()
+            .await;
+
+        filtered_list_response.assert_status_equals(StatusCode::OK);
+
+        let english_word_list = filtered_list_response.json_body::<EnglishWordsResponse>();
+
+        assert_eq!(english_word_list.english_words.len(), 1);
+        let updated_critical_hit_word = &english_word_list.english_words[0];
+
+        assert_eq!(updated_critical_hit_word.id, word_critical_hit.id);
+    }
+
+
+
+
+    /***
+     * Test slovene word listing, including last modification filters.
+     */
+
+    let time_just_before_initial_creation = Utc::now();
+
+    SampleSloveneWord::KriticniIzid
+        .create(&server, &admin_user_access_token)
+        .await;
+    let word_terna = SampleSloveneWord::Terna
+        .create(&server, &admin_user_access_token)
+        .await;
+
+
+    {
+        // Other aspects of this endpoint have already been tested
+        // in the `word_creation_with_suggestions_and_translations_works` test.
+
+        let list_response = server
+            .request(Method::GET, "/api/v1/dictionary/slovene")
+            .send()
+            .await;
+
+        list_response.assert_status_equals(StatusCode::OK);
+
+        let slovene_word_list = list_response.json_body::<SloveneWordsResponse>();
+
+        assert_eq!(slovene_word_list.slovene_words.len(), 2);
+    }
+
+
+    // Modify a word, then filter by the modification time.
+    let time_just_before_modification = Utc::now();
+
+    {
+        server
+            .request(
+                Method::PATCH,
+                format!("/api/v1/dictionary/slovene/{}", word_terna.id),
+            )
+            .with_access_token(&admin_user_access_token)
+            .with_json_body(SloveneWordUpdateRequest {
+                description: Some("Živjo svet!".to_string()),
+                ..Default::default()
+            })
+            .send()
+            .await
+            .assert_status_equals(StatusCode::OK);
+    }
+
+
+    {
+        let filtered_list_response = server
+            .request(Method::GET, "/api/v1/dictionary/slovene")
+            .with_json_body(SloveneWordsListRequest {
+                filters: Some(SloveneWordFilters {
+                    last_modified_after: Some(time_just_before_initial_creation),
+                }),
+            })
+            .send()
+            .await;
+
+        filtered_list_response.assert_status_equals(StatusCode::OK);
+
+        let slovene_word_list = filtered_list_response.json_body::<SloveneWordsResponse>();
+
+        assert_eq!(slovene_word_list.slovene_words.len(), 2);
+    }
+
+    {
+        let filtered_list_response = server
+            .request(Method::GET, "/api/v1/dictionary/slovene")
+            .with_json_body(SloveneWordsListRequest {
+                filters: Some(SloveneWordFilters {
+                    last_modified_after: Some(time_just_before_modification),
+                }),
+            })
+            .send()
+            .await;
+
+        filtered_list_response.assert_status_equals(StatusCode::OK);
+
+        let slovene_word_list = filtered_list_response.json_body::<SloveneWordsResponse>();
+
+        assert_eq!(slovene_word_list.slovene_words.len(), 1);
+        let updated_terna_word = &slovene_word_list.slovene_words[0];
+
+        assert_eq!(updated_terna_word.id, word_terna.id);
     }
 }
