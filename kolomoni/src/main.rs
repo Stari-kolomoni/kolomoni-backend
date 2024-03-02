@@ -2,9 +2,7 @@ use actix_web::error::JsonPayloadError;
 use actix_web::{web, HttpServer};
 use clap::Parser;
 use kolomoni::connect_and_set_up_database;
-use kolomoni_auth::JsonWebTokenManager;
 use kolomoni_configuration::Configuration;
-use kolomoni_database::mutation::ArgonHasher;
 use miette::{Context, IntoDiagnostic, Result};
 use tracing::info;
 
@@ -76,17 +74,16 @@ async fn main() -> Result<()> {
 
     // TODO Introduce request rate-limiting.
 
-    // Initialize database connection and other static structs.
-    let database = connect_and_set_up_database(&configuration).await?;
-    let hasher = ArgonHasher::new(&configuration)?;
-    let json_web_token_manager = JsonWebTokenManager::new(&configuration.json_web_token.secret);
+    let mut state_inner = ApplicationStateInner::new(configuration.clone()).await?;
 
-    let state = web::Data::new(ApplicationStateInner {
-        configuration: configuration.clone(),
-        hasher,
-        database,
-        jwt_manager: json_web_token_manager,
-    });
+    // TODO Need dynamic updating.
+    state_inner
+        .search
+        .word_index
+        .initialize_with_fresh_words()
+        .await?;
+
+    let state = web::Data::new(state_inner);
 
 
     // Initialize and start the actix HTTP server.

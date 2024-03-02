@@ -75,6 +75,9 @@ use utoipa_rapidoc::RapiDoc;
         // dictionary/translations.rs
         dictionary::translations::create_translation,
         dictionary::translations::delete_translation,
+
+        // dictionary/search.rs
+        dictionary::search::perform_search,
     ),
     components(
         schemas(
@@ -115,6 +118,9 @@ use utoipa_rapidoc::RapiDoc;
             // ../errors.rs
             errors::ErrorReasonResponse,
 
+            // dictionary.rs
+            dictionary::Category,
+
             // dictionary/slovene_word.rs
             dictionary::slovene_word::SloveneWord,
             dictionary::slovene_word::SloveneWordsResponse,
@@ -142,6 +148,11 @@ use utoipa_rapidoc::RapiDoc;
             // dictionary/translations.rs
             dictionary::translations::TranslationRequest,
             dictionary::translations::TranslationDeletionRequest,
+
+            // dictionary/search.rs
+            dictionary::search::SearchRequest,
+            dictionary::search::SearchResults,
+            dictionary::search::SearchResponse,
         ),
     ),
     info(

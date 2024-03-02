@@ -28,3 +28,4 @@ data/*.toml
 data/!*.TEMPLATE.toml
 .vscode
 logs
+data/search-index

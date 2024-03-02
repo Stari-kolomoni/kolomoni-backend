@@ -10,6 +10,7 @@ use utoipa::ToSchema;
 use self::{
     categories::categories_router,
     english_word::english_dictionary_router,
+    search::search_router,
     slovene_word::slovene_dictionary_router,
     suggestions::suggested_translations_router,
     translations::translations_router,
@@ -18,6 +19,7 @@ use crate::api::errors::APIError;
 
 pub mod categories;
 pub mod english_word;
+pub mod search;
 pub mod slovene_word;
 pub mod suggestions;
 pub mod translations;
@@ -59,4 +61,5 @@ pub fn dictionary_router() -> Scope {
         .service(suggested_translations_router())
         .service(translations_router())
         .service(categories_router())
+        .service(search_router())
 }

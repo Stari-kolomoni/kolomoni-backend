@@ -66,6 +66,7 @@ paste = "1.0.14"
 bytes = "1.5.0"
 
 reqwest = "0.11.24"
+tantivy = "0.21.1"
 
 
 [workspace.dependencies.sea-orm]
@@ -103,6 +104,7 @@ kolomoni_migrations = { path = "./kolomoni_migrations" }
 kolomoni_configuration = { path = "./kolomoni_configuration" }
 kolomoni_auth = { path = "./kolomoni_auth" }
 kolomoni_database = { path = "./kolomoni_database" }
+kolomoni_search = { path = "./kolomoni_search" }
 
 clap = { workspace = true }
 
@@ -142,4 +144,8 @@ paste = { workspace = true }
 
 [features]
 with_test_facilities = []
+
+
+[profile.dev.build-override]
+opt-level = 3
 

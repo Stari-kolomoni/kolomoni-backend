@@ -4,7 +4,11 @@ use actix_web::web::Data;
 use kolomoni_auth::JsonWebTokenManager;
 use kolomoni_configuration::Configuration;
 use kolomoni_database::mutation::ArgonHasher;
+use kolomoni_search::KolomoniSearchEngine;
+use miette::Result;
 use sea_orm::DatabaseConnection;
+
+use crate::connect_and_set_up_database;
 
 
 
@@ -29,6 +33,25 @@ pub struct ApplicationStateInner {
 
     /// Authentication token manager (JSON Web Token).
     pub jwt_manager: JsonWebTokenManager,
+
+    pub search: KolomoniSearchEngine,
+}
+
+impl ApplicationStateInner {
+    pub async fn new(configuration: Configuration) -> Result<Self> {
+        let hasher = ArgonHasher::new(&configuration)?;
+        let database = connect_and_set_up_database(&configuration).await?;
+        let jwt_manager = JsonWebTokenManager::new(&configuration.json_web_token.secret);
+        let search = KolomoniSearchEngine::new(&configuration).await?;
+
+        Ok(Self {
+            configuration,
+            hasher,
+            database,
+            jwt_manager,
+            search,
+        })
+    }
 }
 
 
@@ -39,7 +62,7 @@ pub struct ApplicationStateInner {
 /// See <https://actix.rs/docs/application#state> for more information.
 ///
 /// # Examples
-/// ```
+/// ```no_run
 /// # use actix_web::{post, web};
 /// # use kolomoni::api::errors::EndpointResult;
 /// # use kolomoni::state::ApplicationState;

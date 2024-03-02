@@ -6,3 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+kolomoni_database = { path = "../kolomoni_database" }
+kolomoni_configuration = { path = "../kolomoni_configuration" }
+
+sea-orm = { workspace = true }
+tokio = { workspace = true }
+
+tantivy = { workspace = true }
+miette = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+
+chrono = { workspace = true }

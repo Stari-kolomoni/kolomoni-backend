@@ -9,13 +9,11 @@ use kolomoni_database::{
         self,
         EnglishWordQuery,
         EnglishWordsQueryOptions,
-        TranslationQuery,
-        TranslationSuggestionQuery,
-        WordCategoryQuery,
+        ExpandedEnglishWordInfo,
+        RelatedEnglishWordInfo,
     },
 };
 use miette::Result;
-use sea_orm::{prelude::Uuid, DatabaseConnection};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use utoipa::ToSchema;
@@ -36,83 +34,6 @@ use crate::{
     require_permission_with_optional_authentication,
     state::ApplicationState,
 };
-
-
-struct AdditionalEnglishWordInfo {
-    categories: Vec<entities::category::Model>,
-    suggested_translations: Vec<SloveneWord>,
-    translations: Vec<SloveneWord>,
-}
-
-
-// PERF: This might be a good candidate for optimization, probably with caching.
-async fn fetch_additional_english_word_information(
-    database: &DatabaseConnection,
-    word_uuid: Uuid,
-) -> Result<AdditionalEnglishWordInfo, APIError> {
-    let categories = query::WordCategoryQuery::word_categories_by_word_uuid(database, word_uuid)
-        .await
-        .map_err(APIError::InternalError)?;
-
-
-    let suggested_translations = {
-        let suggested_translation_models =
-            TranslationSuggestionQuery::suggestions_for_english_word(database, word_uuid)
-                .await
-                .map_err(APIError::InternalError)?;
-
-
-        let mut suggested_translations = Vec::with_capacity(suggested_translation_models.len());
-        for suggested_translation_model in suggested_translation_models {
-            let suggested_translation_word_categories =
-                WordCategoryQuery::word_categories_by_word_uuid(
-                    database,
-                    suggested_translation_model.word_id,
-                )
-                .await
-                .map_err(APIError::InternalError)?;
-
-            suggested_translations.push(SloveneWord::new(
-                suggested_translation_model,
-                suggested_translation_word_categories,
-            ))
-        }
-
-        suggested_translations
-    };
-
-
-    let translations = {
-        let translation_models =
-            TranslationQuery::translations_for_english_word(database, word_uuid)
-                .await
-                .map_err(APIError::InternalError)?;
-
-
-        let mut translations = Vec::with_capacity(translation_models.len());
-        for translation_model in translation_models {
-            let translated_word_categories =
-                WordCategoryQuery::word_categories_by_word_uuid(database, translation_model.word_id)
-                    .await
-                    .map_err(APIError::InternalError)?;
-
-            translations.push(SloveneWord::new(
-                translation_model,
-                translated_word_categories,
-            ));
-        }
-
-        translations
-    };
-
-
-    Ok(AdditionalEnglishWordInfo {
-        categories,
-        suggested_translations,
-        translations,
-    })
-}
-
 
 
 
@@ -174,18 +95,7 @@ pub struct EnglishWord {
 }
 
 impl EnglishWord {
-    pub fn new(
-        english_model: entities::word_english::Model,
-        categories: Vec<entities::category::Model>,
-        suggested_translations: Vec<SloveneWord>,
-        translations: Vec<SloveneWord>,
-    ) -> Self {
-        let categories = categories
-            .into_iter()
-            .map(Category::from_database_model)
-            .collect();
-
-
+    pub fn new_without_expanded_info(english_model: entities::word_english::Model) -> Self {
         Self {
             id: english_model.word_id.to_string(),
             lemma: english_model.lemma,
@@ -193,6 +103,75 @@ impl EnglishWord {
             description: english_model.description,
             created_at: english_model.created_at.to_utc(),
             last_modified_at: english_model.last_modified_at.to_utc(),
+            categories: Vec::new(),
+            suggested_translations: Vec::new(),
+            translations: Vec::new(),
+        }
+    }
+
+    pub fn from_word_and_related_info(
+        word_model: entities::word_english::Model,
+        related_english_word_info: RelatedEnglishWordInfo,
+    ) -> Self {
+        let categories = related_english_word_info
+            .categories
+            .into_iter()
+            .map(Category::from_database_model)
+            .collect();
+
+        let suggested_translations = related_english_word_info
+            .suggested_translations
+            .into_iter()
+            .map(SloveneWord::from_expanded_word_info)
+            .collect();
+
+        let translations = related_english_word_info
+            .translations
+            .into_iter()
+            .map(SloveneWord::from_expanded_word_info)
+            .collect();
+
+
+        Self {
+            id: word_model.word_id.to_string(),
+            lemma: word_model.lemma,
+            disambiguation: word_model.disambiguation,
+            description: word_model.description,
+            created_at: word_model.created_at.to_utc(),
+            last_modified_at: word_model.last_modified_at.to_utc(),
+            categories,
+            suggested_translations,
+            translations,
+        }
+    }
+
+    pub fn from_expanded_word_info(expanded_english_word_info: ExpandedEnglishWordInfo) -> Self {
+        let categories = expanded_english_word_info
+            .categories
+            .into_iter()
+            .map(Category::from_database_model)
+            .collect();
+
+        let suggested_translations = expanded_english_word_info
+            .suggested_translations
+            .into_iter()
+            .map(SloveneWord::from_expanded_word_info)
+            .collect();
+
+        let translations = expanded_english_word_info
+            .translations
+            .into_iter()
+            .map(SloveneWord::from_expanded_word_info)
+            .collect();
+
+
+        Self {
+            id: expanded_english_word_info.word.word_id.to_string(),
+            lemma: expanded_english_word_info.word.lemma,
+            disambiguation: expanded_english_word_info.word.disambiguation,
+            description: expanded_english_word_info.word.description,
+            created_at: expanded_english_word_info.word.created_at.to_utc(),
+            last_modified_at: expanded_english_word_info.word.last_modified_at.to_utc(),
             categories,
             suggested_translations,
             translations,
@@ -273,26 +252,15 @@ pub async fn get_all_english_words(
         None => EnglishWordsQueryOptions::default(),
     };
 
-    let words = query::EnglishWordQuery::all_words(&state.database, word_query_options)
-        .await
-        .map_err(APIError::InternalError)?;
+    let words_with_additional_info =
+        query::EnglishWordQuery::all_words_expanded(&state.database, word_query_options)
+            .await
+            .map_err(APIError::InternalError)?;
 
-
-
-    let mut words_as_api_structures: Vec<EnglishWord> = Vec::with_capacity(words.len());
-
-    for raw_english_word in words {
-        let additional_information =
-            fetch_additional_english_word_information(&state.database, raw_english_word.word_id)
-                .await?;
-
-        words_as_api_structures.push(EnglishWord::new(
-            raw_english_word,
-            additional_information.categories,
-            additional_information.suggested_translations,
-            additional_information.translations,
-        ));
-    }
+    let words_as_api_structures = words_with_additional_info
+        .into_iter()
+        .map(EnglishWord::from_expanded_word_info)
+        .collect();
 
 
     Ok(EnglishWordsResponse {
@@ -418,12 +386,7 @@ pub async fn create_english_word(
 
     Ok(EnglishWordCreationResponse {
         // A newly-created word can not have any suggestions or translations yet.
-        word: EnglishWord::new(
-            newly_created_word,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        ),
+        word: EnglishWord::new_without_expanded_info(newly_created_word),
     }
     .into_response())
 }
@@ -490,7 +453,7 @@ pub async fn get_specific_english_word(
     let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
 
 
-    let target_word = EnglishWordQuery::word_by_uuid(&state.database, target_word_uuid)
+    let target_word = EnglishWordQuery::expanded_word_by_uuid(&state.database, target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -499,18 +462,8 @@ pub async fn get_specific_english_word(
     };
 
 
-    let target_word_additional_info =
-        fetch_additional_english_word_information(&state.database, target_word.word_id).await?;
-
-
-
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::new(
-            target_word,
-            target_word_additional_info.categories,
-            target_word_additional_info.suggested_translations,
-            target_word_additional_info.translations,
-        ),
+        word: EnglishWord::from_expanded_word_info(target_word),
     }
     .into_response())
 }
@@ -563,7 +516,7 @@ pub async fn get_specific_english_word_by_lemma(
 
     let target_word_lemma = parameters.into_inner().0;
 
-    let target_word = EnglishWordQuery::word_by_lemma(&state.database, target_word_lemma)
+    let target_word = EnglishWordQuery::expanded_word_by_lemma(&state.database, target_word_lemma)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -572,17 +525,8 @@ pub async fn get_specific_english_word_by_lemma(
     };
 
 
-    let target_word_additional_info =
-        fetch_additional_english_word_information(&state.database, target_word.word_id).await?;
-
-
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::new(
-            target_word,
-            target_word_additional_info.categories,
-            target_word_additional_info.suggested_translations,
-            target_word_additional_info.translations,
-        ),
+        word: EnglishWord::from_expanded_word_info(target_word),
     }
     .into_response())
 }
@@ -682,19 +626,15 @@ pub async fn update_specific_english_word(
     .map_err(APIError::InternalError)?;
 
 
-
     let target_word_additional_info =
-        fetch_additional_english_word_information(&state.database, target_word_uuid).await?;
+        EnglishWordQuery::related_word_information_only(&state.database, target_word_uuid)
+            .await
+            .map_err(APIError::InternalError)?;
 
 
 
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::new(
-            updated_model,
-            target_word_additional_info.categories,
-            target_word_additional_info.suggested_translations,
-            target_word_additional_info.translations,
-        ),
+        word: EnglishWord::from_word_and_related_info(updated_model, target_word_additional_info),
     }
     .into_response())
 }

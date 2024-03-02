@@ -5,7 +5,13 @@ use kolomoni_auth::Permission;
 use kolomoni_database::{
     entities,
     mutation::{NewSloveneWord, SloveneWordMutation, UpdatedSloveneWord, WordMutation},
-    query::{self, SloveneWordQuery, SloveneWordsQueryOptions, WordCategoryQuery},
+    query::{
+        self,
+        ExpandedSloveneWordInfo,
+        RelatedSloveneWordInfo,
+        SloveneWordQuery,
+        SloveneWordsQueryOptions,
+    },
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -67,23 +73,57 @@ pub struct SloveneWord {
 }
 
 impl SloveneWord {
-    pub fn new(
-        model: entities::word_slovene::Model,
-        categories: Vec<entities::category::Model>,
+    pub fn new_without_expanded_info(slovene_model: entities::word_slovene::Model) -> Self {
+        Self {
+            id: slovene_model.word_id.to_string(),
+            lemma: slovene_model.lemma,
+            disambiguation: slovene_model.disambiguation,
+            description: slovene_model.description,
+            created_at: slovene_model.created_at.to_utc(),
+            last_modified_at: slovene_model.last_modified_at.to_utc(),
+            categories: Vec::new(),
+        }
+    }
+
+    pub fn from_word_and_related_info(
+        word_model: entities::word_slovene::Model,
+        related_slovene_word_info: RelatedSloveneWordInfo,
     ) -> Self {
-        let categories = categories
+        let categories = related_slovene_word_info
+            .categories
             .into_iter()
             .map(Category::from_database_model)
             .collect();
 
 
         Self {
-            id: model.word_id.to_string(),
-            lemma: model.lemma,
-            disambiguation: model.disambiguation,
-            description: model.description,
-            created_at: model.created_at.to_utc(),
-            last_modified_at: model.last_modified_at.to_utc(),
+            id: word_model.word_id.to_string(),
+            lemma: word_model.lemma,
+            disambiguation: word_model.disambiguation,
+            description: word_model.description,
+            created_at: word_model.created_at.to_utc(),
+            last_modified_at: word_model.last_modified_at.to_utc(),
+            categories,
+        }
+    }
+
+    pub fn from_expanded_word_info(expanded_slovene_word: ExpandedSloveneWordInfo) -> Self {
+        let word = expanded_slovene_word.word;
+
+        let categories = expanded_slovene_word
+            .categories
+            .into_iter()
+            .map(Category::from_database_model)
+            .collect();
+
+
+        Self {
+            id: word.word_id.to_string(),
+            lemma: word.lemma,
+            disambiguation: word.disambiguation,
+            description: word.description,
+            created_at: word.created_at.to_utc(),
+            last_modified_at: word.last_modified_at.to_utc(),
             categories,
         }
     }
@@ -164,21 +204,15 @@ pub async fn get_all_slovene_words(
     };
 
     // Load words from the database.
-    let words = query::SloveneWordQuery::all_words(&state.database, word_query_options)
+    let words = query::SloveneWordQuery::all_words_expanded(&state.database, word_query_options)
         .await
         .map_err(APIError::InternalError)?;
 
 
-
-    let mut words_as_api_structures = Vec::with_capacity(words.len());
-    for word_model in words {
-        let categories =
-            WordCategoryQuery::word_categories_by_word_uuid(&state.database, word_model.word_id)
-                .await
-                .map_err(APIError::InternalError)?;
-
-        words_as_api_structures.push(SloveneWord::new(word_model, categories));
-    }
+    let words_as_api_structures = words
+        .into_iter()
+        .map(SloveneWord::from_expanded_word_info)
+        .collect();
 
 
     Ok(SloveneWordsResponse {
@@ -297,7 +331,7 @@ pub async fn create_slovene_word(
 
     Ok(SloveneWordCreationResponse {
         // Newly created words do not belong to any categories.
-        word: SloveneWord::new(newly_created_word, Vec::new()),
+        word: SloveneWord::new_without_expanded_info(newly_created_word),
     }
     .into_response())
 }
@@ -365,7 +399,7 @@ pub async fn get_specific_slovene_word(
     let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
 
 
-    let target_word = SloveneWordQuery::word_by_uuid(&state.database, target_word_uuid)
+    let target_word = SloveneWordQuery::expanded_word_by_uuid(&state.database, target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -374,14 +408,8 @@ pub async fn get_specific_slovene_word(
     };
 
 
-    let word_categories =
-        WordCategoryQuery::word_categories_by_word_uuid(&state.database, target_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
-
-
     Ok(SloveneWordInfoResponse {
-        word: SloveneWord::new(target_word, word_categories),
+        word: SloveneWord::from_expanded_word_info(target_word),
     }
     .into_response())
 }
@@ -435,7 +463,7 @@ pub async fn get_specific_slovene_word_by_lemma(
     let target_word_lemma = parameters.into_inner().0;
 
 
-    let target_word = SloveneWordQuery::word_by_lemma(&state.database, target_word_lemma)
+    let target_word = SloveneWordQuery::expanded_word_by_lemma(&state.database, target_word_lemma)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -444,14 +472,8 @@ pub async fn get_specific_slovene_word_by_lemma(
     };
 
 
-    let word_categories =
-        WordCategoryQuery::word_categories_by_word_uuid(&state.database, target_word.word_id)
-            .await
-            .map_err(APIError::InternalError)?;
-
-
     Ok(SloveneWordInfoResponse {
-        word: SloveneWord::new(target_word, word_categories),
+        word: SloveneWord::from_expanded_word_info(target_word),
     }
     .into_response())
 }
@@ -553,14 +575,14 @@ pub async fn update_specific_slovene_word(
     .map_err(APIError::InternalError)?;
 
 
-    let word_categories =
-        WordCategoryQuery::word_categories_by_word_uuid(&state.database, target_word_uuid)
+    let related_word_info =
+        SloveneWordQuery::related_word_information_only(&state.database, updated_word.word_id)
             .await
             .map_err(APIError::InternalError)?;
 
 
     Ok(SloveneWordInfoResponse {
-        word: SloveneWord::new(updated_word, word_categories),
+        word: SloveneWord::from_word_and_related_info(updated_word, related_word_info),
     }
     .into_response())
 }
