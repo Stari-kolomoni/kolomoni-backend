@@ -82,7 +82,7 @@ jobs:
           echo "File ./logs/server.log exists, waiting until server is ready."
           while true
           do
-            if tail -n100 ./logs/server.log | grep -q "server initialized and running"
+            if tail -n100 ./logs/server.log | grep -q "initialized and running"
             then
               echo "Server is ready!"
               break

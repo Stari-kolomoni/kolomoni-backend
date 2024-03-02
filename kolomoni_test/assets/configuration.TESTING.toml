@@ -19,13 +19,13 @@ base_data_directory_path = "./data"
 # 
 # For more details about setting up this logging level and a guide on more granular settings, 
 # see <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives>).
-console_output_level_filter = "debug,sqlx=warn,hyper=warn,reqwest=warn"
+console_output_level_filter = "debug,sqlx=warn,hyper=warn,reqwest=warn,tantivy=info"
 # The log file output level.
 # This value is not overriden by the RUST_LOG environment variable.
 # 
 # For more details about setting up this logging level and a guide on more granular settings, 
 # see <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives>).
-log_file_output_level_filter = "info,sqlx=warn,hyper=warn,reqwest=warn"
+log_file_output_level_filter = "info,sqlx=warn,hyper=warn,reqwest=warn,tantivy=info"
 
 # Log file output directory.
 log_file_output_directory = "./logs/"

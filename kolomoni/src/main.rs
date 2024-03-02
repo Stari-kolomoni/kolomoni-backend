@@ -154,6 +154,18 @@ async fn main() -> Result<()> {
         .into_diagnostic()
         .wrap_err("Failed to set up actix HTTP server.")?;
 
+
+    #[cfg(feature = "with_test_facilities")]
+    {
+        // We use this line to check (in the logs) that the server
+        // is alive and running. We use println instead of tracing
+        // because it goes directly to stdout.
+
+        // TODO Maybe a proper health check (e.g. a /ping) would be better?
+
+        println!("Server initialized and running.");
+    }
+
     info!(
         host = configuration.http.host.as_str(),
         port = configuration.http.port as u16,
