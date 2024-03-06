@@ -1,4 +1,4 @@
-use actix_web::{get, web, Scope};
+use actix_web::{post, web, Scope};
 use kolomoni_search::SearchResult;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -71,7 +71,7 @@ impl_json_response_builder!(SearchResponse);
 /// # Authentication
 /// Authentication is not required on this endpoint.
 #[utoipa::path(
-    get,
+    post,
     path = "/dictionary/search",
     tag = "dictionary:search",
     request_body(
@@ -87,7 +87,7 @@ impl_json_response_builder!(SearchResponse);
         openapi::InternalServerErrorResponse
     )
 )]
-#[get("")]
+#[post("")]
 pub async fn perform_search(
     state: ApplicationState,
     request_body: web::Json<SearchRequest>,
