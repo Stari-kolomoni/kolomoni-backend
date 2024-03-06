@@ -1,5 +1,5 @@
 use actix_web::{get, web, Scope};
-use kolomoni_search::CachedWord;
+use kolomoni_search::SearchResult;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -100,24 +100,24 @@ pub async fn perform_search(
 
     let search_results = state
         .search
-        .word_index
         .search(&search_query)
+        .await
         .map_err(APIError::InternalError)?;
 
 
     let mut english_results: Vec<EnglishWord> = Vec::new();
     let mut slovene_results: Vec<SloveneWord> = Vec::new();
 
-    for search_result in search_results {
+    for search_result in search_results.words {
         match search_result {
-            CachedWord::English(english_result) => {
+            SearchResult::English(english_result) => {
                 english_results.push(EnglishWord::from_expanded_word_info(
-                    english_result.to_expanded_word_info(),
+                    english_result,
                 ));
             }
-            CachedWord::Slovene(slovene_result) => {
+            SearchResult::Slovene(slovene_result) => {
                 slovene_results.push(SloveneWord::from_expanded_word_info(
-                    slovene_result.to_expanded_word_info(),
+                    slovene_result,
                 ));
             }
         }

@@ -3,7 +3,8 @@ use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
 use kolomoni_auth::Permission;
 use kolomoni_database::{
     mutation::{CategoryMutation, NewCategory, UpdatedCategory, WordCategoryMutation},
-    query::{CategoryQuery, WordCategoryQuery, WordQuery},
+    query::{CategoriesQueryOptions, CategoryQuery, WordCategoryQuery, WordQuery},
+    shared::WordLanguage,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -134,6 +135,13 @@ pub async fn create_category(
     )
     .await
     .map_err(APIError::InternalError)?;
+
+
+    state
+        .search
+        .on_category_created_or_updated(new_category.id)
+        .await
+        .map_err(APIError::InternalError)?;
 
 
     Ok(CategoryCreationResponse {
@@ -387,6 +395,13 @@ pub async fn update_specific_category(
     .map_err(APIError::InternalError)?;
 
 
+    state
+        .search
+        .on_category_created_or_updated(updated_category.id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+
     Ok(CategoryResponse {
         category: Category::from_database_model(updated_category),
     }
@@ -455,6 +470,13 @@ pub async fn delete_specific_category(
 
 
     CategoryMutation::delete(&state.database, target_category_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+
+    state
+        .search
+        .on_category_removed(target_category_id)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -538,14 +560,15 @@ pub async fn link_word_to_category(
     }
 
 
-    let target_word_exists = WordQuery::exists_by_uuid(&state.database, target_word_uuid)
+    let potential_base_target_word = WordQuery::get_by_uuid(&state.database, target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
-    if !target_word_exists {
+
+    let Some(base_target_word) = potential_base_target_word else {
         return Err(APIError::not_found_with_reason(
             "word does not exist.",
         ));
-    }
+    };
 
 
     let already_has_category = WordCategoryQuery::word_has_category(
@@ -570,6 +593,24 @@ pub async fn link_word_to_category(
     )
     .await
     .map_err(APIError::InternalError)?;
+
+
+    // Signals to the background search indexer that the word has changed.
+    match base_target_word
+        .language()
+        .map_err(APIError::InternalError)?
+    {
+        WordLanguage::Slovene => state
+            .search
+            .on_slovene_word_created_or_updated(base_target_word.id)
+            .await
+            .map_err(APIError::InternalError)?,
+        WordLanguage::English => state
+            .search
+            .on_english_word_created_or_updated(base_target_word.id)
+            .await
+            .map_err(APIError::InternalError)?,
+    };
 
 
     Ok(HttpResponse::Ok().finish())
@@ -678,6 +719,35 @@ pub async fn unlink_word_from_category(
     )
     .await
     .map_err(APIError::InternalError)?;
+
+
+
+    // Signals to the background search indexer that the word has changed.
+
+    let base_target_word = WordQuery::get_by_uuid(&state.database, target_word_uuid)
+        .await
+        .map_err(APIError::InternalError)?
+        .ok_or_else(|| {
+            APIError::internal_reason(
+                "BUG: Word dissapeared between category removal and index update.",
+            )
+        })?;
+
+    match base_target_word
+        .language()
+        .map_err(APIError::InternalError)?
+    {
+        WordLanguage::Slovene => state
+            .search
+            .on_slovene_word_created_or_updated(base_target_word.id)
+            .await
+            .map_err(APIError::InternalError)?,
+        WordLanguage::English => state
+            .search
+            .on_english_word_created_or_updated(base_target_word.id)
+            .await
+            .map_err(APIError::InternalError)?,
+    };
 
 
     Ok(HttpResponse::Ok().finish())

@@ -135,6 +135,20 @@ pub async fn create_translation(
     .map_err(APIError::InternalError)?;
 
 
+
+    // Signals to the search engine that both words have been updated.
+    state
+        .search
+        .on_english_word_created_or_updated(english_word_uuid)
+        .await
+        .map_err(APIError::InternalError)?;
+    state
+        .search
+        .on_slovene_word_created_or_updated(slovene_word_uuid)
+        .await
+        .map_err(APIError::InternalError)?;
+
+
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -249,6 +263,20 @@ pub async fn delete_translation(
     )
     .await
     .map_err(APIError::InternalError)?;
+
+
+
+    // Signals to the search engine that both words have been updated.
+    state
+        .search
+        .on_english_word_created_or_updated(english_word_uuid)
+        .await
+        .map_err(APIError::InternalError)?;
+    state
+        .search
+        .on_slovene_word_created_or_updated(slovene_word_uuid)
+        .await
+        .map_err(APIError::InternalError)?;
 
 
     Ok(HttpResponse::Ok().finish())

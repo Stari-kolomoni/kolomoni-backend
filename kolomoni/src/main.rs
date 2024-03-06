@@ -76,12 +76,12 @@ async fn main() -> Result<()> {
 
     let mut state_inner = ApplicationStateInner::new(configuration.clone()).await?;
 
-    // TODO Need dynamic updating.
     state_inner
         .search
-        .word_index
-        .initialize_with_fresh_words()
+        .engine
+        .initialize_with_fresh_entries()
         .await?;
+
 
     let state = web::Data::new(state_inner);
 

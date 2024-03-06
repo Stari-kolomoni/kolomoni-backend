@@ -17,4 +17,5 @@ miette = { workspace = true }
 uuid = { workspace = true }
 tracing = { workspace = true }
 
+slotmap = { workspace = true }
 chrono = { workspace = true }

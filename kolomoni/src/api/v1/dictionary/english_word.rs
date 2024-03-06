@@ -384,6 +384,15 @@ pub async fn create_english_word(
         "Created new english word: {}", newly_created_word.lemma,
     );
 
+
+    // Signals to the the search indexer that the word has been created.
+    state
+        .search
+        .on_english_word_created_or_updated(newly_created_word.word_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+
     Ok(EnglishWordCreationResponse {
         // A newly-created word can not have any suggestions or translations yet.
         word: EnglishWord::new_without_expanded_info(newly_created_word),
@@ -633,6 +642,14 @@ pub async fn update_specific_english_word(
 
 
 
+    // Signals to the the search indexer that the word has been updated.
+    state
+        .search
+        .on_english_word_created_or_updated(updated_model.word_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+
     Ok(EnglishWordInfoResponse {
         word: EnglishWord::from_word_and_related_info(updated_model, target_word_additional_info),
     }
@@ -703,6 +720,15 @@ pub async fn delete_specific_english_word(
 
 
     WordMutation::delete(&state.database, target_word_uuid)
+        .await
+        .map_err(APIError::InternalError)?;
+
+
+
+    // Signals to the the search indexer that the word has been removed.
+    state
+        .search
+        .on_english_word_removed(target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 

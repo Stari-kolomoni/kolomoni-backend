@@ -329,6 +329,14 @@ pub async fn create_slovene_word(
     .map_err(APIError::InternalError)?;
 
 
+    // Signals to the the search indexer that the word has been created.
+    state
+        .search
+        .on_slovene_word_created_or_updated(newly_created_word.word_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+
     Ok(SloveneWordCreationResponse {
         // Newly created words do not belong to any categories.
         word: SloveneWord::new_without_expanded_info(newly_created_word),
@@ -581,6 +589,15 @@ pub async fn update_specific_slovene_word(
             .map_err(APIError::InternalError)?;
 
 
+
+    // Signals to the the search indexer that the word has been updated.
+    state
+        .search
+        .on_slovene_word_created_or_updated(updated_word.word_id)
+        .await
+        .map_err(APIError::InternalError)?;
+
+
     Ok(SloveneWordInfoResponse {
         word: SloveneWord::from_word_and_related_info(updated_word, related_word_info),
     }
@@ -652,6 +669,14 @@ pub async fn delete_specific_slovene_word(
 
 
     WordMutation::delete(&state.database, target_word_uuid)
+        .await
+        .map_err(APIError::InternalError)?;
+
+
+    // Signals to the the search indexer that the word has been removed.
+    state
+        .search
+        .on_slovene_word_removed(target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 

@@ -4,11 +4,81 @@ use actix_web::web::Data;
 use kolomoni_auth::JsonWebTokenManager;
 use kolomoni_configuration::Configuration;
 use kolomoni_database::mutation::ArgonHasher;
-use kolomoni_search::KolomoniSearchEngine;
-use miette::Result;
-use sea_orm::DatabaseConnection;
+use kolomoni_search::{ChangeEvent, KolomoniSearchEngine, SearchResults};
+use miette::{Context, IntoDiagnostic, Result};
+use sea_orm::{prelude::Uuid, DatabaseConnection};
+use tokio::sync::mpsc;
 
 use crate::connect_and_set_up_database;
+
+
+pub struct KolomoniSearchInner {
+    pub engine: KolomoniSearchEngine,
+    change_sender: mpsc::Sender<ChangeEvent>,
+}
+
+impl KolomoniSearchInner {
+    #[inline]
+    pub async fn search(&self, word_search_query: &str) -> Result<SearchResults> {
+        self.engine.search(word_search_query).await
+    }
+
+    #[inline]
+    pub async fn on_english_word_created_or_updated(&self, word_uuid: Uuid) -> Result<()> {
+        self.change_sender
+            .send(ChangeEvent::EnglishWordCreatedOrUpdated { word_uuid })
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed to send \"english word created/updated\" event.")
+    }
+
+    #[inline]
+    pub async fn on_english_word_removed(&self, word_uuid: Uuid) -> Result<()> {
+        self.change_sender
+            .send(ChangeEvent::EnglishWordRemoved { word_uuid })
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed to send \"english word removed\" event.")
+    }
+
+
+    #[inline]
+    pub async fn on_slovene_word_created_or_updated(&self, word_uuid: Uuid) -> Result<()> {
+        self.change_sender
+            .send(ChangeEvent::SloveneWordCreatedOrUpdated { word_uuid })
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed to send \"slovene word created/updated\" event.")
+    }
+
+    #[inline]
+    pub async fn on_slovene_word_removed(&self, word_uuid: Uuid) -> Result<()> {
+        self.change_sender
+            .send(ChangeEvent::SloveneWordRemoved { word_uuid })
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed to send \"slovene word removed\" event.")
+    }
+
+
+    #[inline]
+    pub async fn on_category_created_or_updated(&self, category_id: i32) -> Result<()> {
+        self.change_sender
+            .send(ChangeEvent::CategoryCreatedOrUpdated { category_id })
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed to send \"category created/updated\" event.")
+    }
+
+    #[inline]
+    pub async fn on_category_removed(&self, category_id: i32) -> Result<()> {
+        self.change_sender
+            .send(ChangeEvent::CategoryRemoved { category_id })
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed to send \"category removed\" event.")
+    }
+}
 
 
 
@@ -34,7 +104,7 @@ pub struct ApplicationStateInner {
     /// Authentication token manager (JSON Web Token).
     pub jwt_manager: JsonWebTokenManager,
 
-    pub search: KolomoniSearchEngine,
+    pub search: KolomoniSearchInner,
 }
 
 impl ApplicationStateInner {
@@ -42,7 +112,16 @@ impl ApplicationStateInner {
         let hasher = ArgonHasher::new(&configuration)?;
         let database = connect_and_set_up_database(&configuration).await?;
         let jwt_manager = JsonWebTokenManager::new(&configuration.json_web_token.secret);
-        let search = KolomoniSearchEngine::new(&configuration).await?;
+
+        let search = {
+            let engine = KolomoniSearchEngine::new(&configuration).await?;
+            let sender = engine.change_event_sender();
+
+            KolomoniSearchInner {
+                engine,
+                change_sender: sender,
+            }
+        };
 
         Ok(Self {
             configuration,
