@@ -142,6 +142,8 @@ async fn main() -> Result<()> {
 
         #[cfg(feature = "with_test_facilities")]
         {
+            info!("Enabling testing endpoints.");
+
             app = app.service(testing::testing_router());
         }
 
