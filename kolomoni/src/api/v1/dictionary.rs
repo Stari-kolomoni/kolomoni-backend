@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use actix_web::{web, Scope};
+use chrono::{DateTime, Utc};
 use kolomoni_database::entities;
 use miette::IntoDiagnostic;
 use sea_orm::prelude::Uuid;
@@ -28,8 +29,12 @@ pub mod translations;
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct Category {
     pub id: i32,
+
     pub slovene_name: String,
     pub english_name: String,
+
+    pub created_at: DateTime<Utc>,
+    pub last_modified_at: DateTime<Utc>,
 }
 
 impl Category {
@@ -38,6 +43,8 @@ impl Category {
             id: model.id,
             slovene_name: model.slovene_name,
             english_name: model.english_name,
+            created_at: model.created_at.to_utc(),
+            last_modified_at: model.last_modified_at.to_utc(),
         }
     }
 }

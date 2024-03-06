@@ -16,6 +16,8 @@ pub struct Model {
     pub id: i32,
     pub english_name: String,
     pub slovene_name: String,
+    pub created_at: DateTimeWithTimeZone,
+    pub last_modified_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
@@ -23,6 +25,8 @@ pub enum Column {
     Id,
     EnglishName,
     SloveneName,
+    CreatedAt,
+    LastModifiedAt,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -49,6 +53,8 @@ impl ColumnTrait for Column {
             Self::Id => ColumnType::Integer.def(),
             Self::EnglishName => ColumnType::String(None).def(),
             Self::SloveneName => ColumnType::String(None).def(),
+            Self::CreatedAt => ColumnType::TimestampWithTimeZone.def(),
+            Self::LastModifiedAt => ColumnType::TimestampWithTimeZone.def(),
         }
     }
 }

@@ -11,11 +11,22 @@ use sea_orm::{
 };
 use uuid::Uuid;
 
-use crate::entities::word;
+use crate::entities::{self, word};
 
 pub struct WordQuery;
 
 impl WordQuery {
+    pub async fn get_by_uuid<C: ConnectionTrait + TransactionTrait>(
+        database: &C,
+        word_uuid: Uuid,
+    ) -> Result<Option<entities::word::Model>> {
+        word::Entity::find_by_id(word_uuid)
+            .one(database)
+            .await
+            .into_diagnostic()
+            .wrap_err("Failed while looking up base word by UUID.")
+    }
+
     pub async fn exists_by_uuid<C: ConnectionTrait + TransactionTrait>(
         database: &C,
         word_uuid: Uuid,

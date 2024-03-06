@@ -48,6 +48,8 @@ pub struct CategoryCreationRequest {
             "id": 1,
             "slovene_name": "Dejavnosti in spopad",
             "english_name": "Activities and Combat",
+            "created_at": "2023-06-27T20:34:27.217273Z",
+            "last_modified_at": "2023-06-27T20:34:27.217273Z",
         }
     })
 )]
@@ -174,7 +176,7 @@ impl_json_response_builder!(CategoriesResponse);
 )]
 #[get("")]
 pub async fn get_all_categories(state: ApplicationState) -> EndpointResult {
-    let category_models = CategoryQuery::get_all(&state.database)
+    let category_models = CategoryQuery::all(&state.database, CategoriesQueryOptions::default())
         .await
         .map_err(APIError::InternalError)?;
 

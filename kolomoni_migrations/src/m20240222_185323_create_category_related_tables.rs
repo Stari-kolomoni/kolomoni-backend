@@ -15,6 +15,12 @@ enum Category {
 
     #[sea_orm(iden = "english_name")]
     EnglishName,
+
+    #[sea_orm(iden = "created_at")]
+    CreatedAt,
+
+    #[sea_orm(iden = "last_modified_at")]
+    LastModifiedAt,
 }
 
 const CATEGORY_PK_CONSTRAINT_NAME: &str = "pk__category";
@@ -61,6 +67,20 @@ impl MigrationTrait for Migration {
                     .col(
                         ColumnDef::new_with_type(Category::SloveneName, ColumnType::String(None))
                             .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new_with_type(
+                            Category::CreatedAt,
+                            ColumnType::TimestampWithTimeZone,
+                        )
+                        .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new_with_type(
+                            Category::LastModifiedAt,
+                            ColumnType::TimestampWithTimeZone,
+                        )
+                        .not_null(),
                     )
                     .primary_key(
                         Index::create()

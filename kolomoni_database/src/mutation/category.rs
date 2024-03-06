@@ -1,3 +1,4 @@
+use chrono::Utc;
 use miette::{miette, Context, IntoDiagnostic, Result};
 use sea_orm::{ActiveModelTrait, ActiveValue, ConnectionTrait, TransactionTrait};
 
@@ -25,9 +26,13 @@ impl CategoryMutation {
         database: &C,
         category: NewCategory,
     ) -> Result<category::Model> {
+        let creation_time = Utc::now().fixed_offset();
+
         let active_category = category::ActiveModel {
             slovene_name: ActiveValue::Set(category.slovene_name),
             english_name: ActiveValue::Set(category.english_name),
+            created_at: ActiveValue::Set(creation_time),
+            last_modified_at: ActiveValue::Set(creation_time),
             ..Default::default()
         };
 
@@ -47,6 +52,7 @@ impl CategoryMutation {
     ) -> Result<category::Model> {
         let mut active_category = category::ActiveModel {
             id: ActiveValue::Unchanged(category_id),
+            last_modified_at: ActiveValue::Set(Utc::now().fixed_offset()),
             ..Default::default()
         };
 

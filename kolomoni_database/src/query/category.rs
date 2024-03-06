@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use miette::{Context, IntoDiagnostic, Result};
 use sea_orm::{
     sea_query::Expr,
@@ -11,6 +12,13 @@ use sea_orm::{
 };
 
 use crate::entities::category;
+
+
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct CategoriesQueryOptions {
+    pub only_categories_modified_after: Option<DateTime<Utc>>,
+}
+
 
 pub struct CategoryQuery;
 
@@ -94,15 +102,24 @@ impl CategoryQuery {
         Ok(query)
     }
 
-    pub async fn get_all<C: ConnectionTrait + TransactionTrait>(
+    pub async fn all<C: ConnectionTrait + TransactionTrait>(
         database: &C,
+        options: CategoriesQueryOptions,
     ) -> Result<Vec<category::Model>> {
-        let query = category::Entity::find()
+        let mut query = category::Entity::find();
+
+        if let Some(only_categories_modified_after) = options.only_categories_modified_after {
+            query =
+                query.filter(category::Column::LastModifiedAt.gt(only_categories_modified_after));
+        }
+
+
+        let categories = query
             .all(database)
             .await
             .into_diagnostic()
             .wrap_err("Failed while fetching all categories from database.")?;
 
-        Ok(query)
+        Ok(categories)
     }
 }
