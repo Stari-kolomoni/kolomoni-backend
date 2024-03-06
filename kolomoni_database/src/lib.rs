@@ -1,3 +1,5 @@
+#![allow(rustdoc::private_intra_doc_links)]
+
 //! This crate contains raw database entities in combination
 //! with the "business logic", i.e. query and mutation methods for them.
 //!

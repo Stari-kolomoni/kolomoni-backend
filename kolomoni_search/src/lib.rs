@@ -40,7 +40,10 @@ use uuid::Uuid;
 
 mod cache;
 
-/// Indexed language type.
+/// Specialized language type enum used for storage in the word index.
+///
+/// **Do not use outside [`kolomoni_search`][crate]!
+/// Use [`WordLanguage`][kolomoni_database::shared::WordLanguage] instead!**
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum IndexedWordLanguage {
     Slovene,
@@ -69,33 +72,47 @@ impl IndexedWordLanguage {
 }
 
 
+/// Represents a single english or slovene word search result.
 pub enum SearchResult {
     English(ExpandedEnglishWordInfo),
     Slovene(ExpandedSloveneWordInfo),
 }
 
+/// Represents a set of search results.
 pub struct SearchResults {
+    /// Words that fuzzily match the given search query.
     pub words: Vec<SearchResult>,
 }
 
 
-// TODO Next up: need a handler for create/update and delete operations on words and categories
-//      so we can keep the cache and index up-to-date as the changes get made.
-
-
+/// A change event in relation to english words, slovene words and categories.
+///
+/// The variants of this enum are used as a message that is sent to the [`WordIndexChangeHandler`]
+/// in order to signal that something has changed in the database and needs to be reindexed/recached.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ChangeEvent {
+    /// English word has been created or updated.
     EnglishWordCreatedOrUpdated { word_uuid: Uuid },
+
+    /// English word has been removed.
     EnglishWordRemoved { word_uuid: Uuid },
+
+    /// Slovene word has been created or updated.
     SloveneWordCreatedOrUpdated { word_uuid: Uuid },
+
+    /// Slovene word has been removed.
     SloveneWordRemoved { word_uuid: Uuid },
+
+    /// Word category has been created or updated.
     CategoryCreatedOrUpdated { category_id: i32 },
+
+    /// Word category has been removed.
     CategoryRemoved { category_id: i32 },
 }
 
 
+/// A
 pub struct WordIndexChangeHandler {
-    // TODO Implement sending these events from application state and implement receiving the messages and updating the index/cache.
     sender: mpsc::Sender<ChangeEvent>,
 
     receiver_task_handle: Mutex<Option<JoinHandle<Result<()>>>>,
@@ -106,8 +123,9 @@ pub struct WordIndexChangeHandler {
 }
 
 impl WordIndexChangeHandler {
-    // TODO
-
+    /// Initialize a new [`WordIndexChangeHandler`], starting a background async task
+    /// that will handle [`ChangeEvent`]s after they are sent through the associated event channel
+    /// (see [`Self::sender`]).
     pub(crate) async fn new(
         inner: Arc<RwLock<WordIndexInner>>,
         database: DatabaseConnection,
@@ -129,10 +147,26 @@ impl WordIndexChangeHandler {
         arc_self
     }
 
+    /// Obtain a multi-producer, single-consumer [`Sender`][mpsc::Sender] in order
+    /// to be able to send [`ChangeEvent`]s to the incremental indexer. This is a bounded sender,
+    /// which means that sending through it *can* block (but it likely won't).
+    ///
+    /// For example: when an english word is created as a result of e.g. an API call
+    /// to the backend, the backend should signal to the indexer via this `Sender` that
+    /// it needs to process the new word.
+    ///
+    /// In reality, sending things through this channel is abstracted away inside the
+    /// [`KolomoniSearch`](../kolomoni/state/struct.KolomoniSearchInner.html) struct
+    /// by using the `signal_*` methods.
     pub fn sender(&self) -> mpsc::Sender<ChangeEvent> {
         self.sender.clone()
     }
 
+    /// The main [`ChangeEvent`] receiver loop. This task is spawned inside [`Self::new`].
+    ///
+    /// The job of this function is to simply process incoming [`ChangeEvent`] and
+    /// incrementally update the index and cache. The processing of each posssible message
+    /// is then delegated to a corresponding `on_*` method on this struct.
     async fn receiver_loop(
         self: Arc<Self>,
         mut receiver: mpsc::Receiver<ChangeEvent>,
@@ -432,6 +466,7 @@ pub(crate) struct WordIndexSchemaFields {
 }
 
 
+/// Construct a [`tantivy`] [`Schema`] and its fields that we need for a word dictionary index.
 fn construct_indexing_schema() -> (Schema, WordIndexSchemaFields) {
     let mut word_schema_builder = Schema::builder();
 
@@ -476,8 +511,9 @@ fn construct_indexing_schema() -> (Schema, WordIndexSchemaFields) {
 
 
 
-
-async fn clear_index_and_cache(inner: &mut RwLockWriteGuard<'_, WordIndexInner>) -> Result<()> {
+/// Given mutable access to [`WordIndexInner`], this function
+/// clears the dictionary index and the cache.
+async fn clear_index_and_cache(inner: &mut WordIndexInner) -> Result<()> {
     // Clear existing index.
     {
         let mut index_writer = inner
@@ -501,7 +537,6 @@ async fn clear_index_and_cache(inner: &mut RwLockWriteGuard<'_, WordIndexInner>)
 
     Ok(())
 }
-
 
 /*
 /// Reindex and cache words that have been modified since the last call
@@ -637,7 +672,7 @@ async fn refresh_modified_entities(index_inner: &Arc<RwLock<WordIndexInner>>) ->
 
 
 
-
+/// Internal search engine implementation.
 pub(crate) struct WordIndexInner {
     word_index: Index,
 
@@ -649,7 +684,7 @@ pub(crate) struct WordIndexInner {
 
 /// A search engine implementation for Stari Kolomoni.
 ///
-/// Allows fuzzy matching with a maximum Levenshtein distance of 2.
+/// Allows per-term fuzzy matching with a maximum Levenshtein distance of 2.
 pub struct KolomoniSearchEngine {
     change_handler: Arc<WordIndexChangeHandler>,
 
@@ -719,11 +754,23 @@ impl KolomoniSearchEngine {
         })
     }
 
+    /// Obtain a multi-producer, single-consumer [`Sender`][mpsc::Sender] in order
+    /// to be able to send [`ChangeEvent`]s to the incremental indexer. This is a bounded sender,
+    /// which means that sending through it *can* block (but it likely won't).
+    ///
+    /// For example: when an english word is created as a result of e.g. an API call
+    /// to the backend, the backend should signal to the indexer via this `Sender` that
+    /// it needs to process the new word.
+    ///
+    /// In reality, sending things through this channel is abstracted away inside the
+    /// [`KolomoniSearch`](../kolomoni/state/struct.KolomoniSearchInner.html) struct
+    /// by using the `signal_*` methods.
     pub fn change_event_sender(&self) -> mpsc::Sender<ChangeEvent> {
         self.change_handler.sender()
     }
 
     /// Returns matching english and slovene words for the given search query.
+    ///
     /// Does not perform any database lookups, and instead relies on the index and cache being up-to-date.
     pub async fn search(&self, word_search_query: &str) -> Result<SearchResults> {
         let inner = self.inner.read().await;
@@ -823,7 +870,7 @@ impl KolomoniSearchEngine {
     }
 
 
-    /// Clear the index and cache and refresh their contents from a full database scan.
+    /// Clear the index (and cache) and then seed them from a full database scan.
     pub async fn initialize_with_fresh_entries(&mut self) -> Result<()> {
         let mut inner = self.inner.write().await;
 
@@ -905,7 +952,7 @@ impl KolomoniSearchEngine {
 
             // TODO If (or when) the database will start to contain more complex references
             //      (e.g. english words linked to other english words), we'll need to modify this approach:
-            //      we'll create a queue and try to insert entities into the cache until no elements are remaining.
+            //      we'll need weak links between entries, allowing us to insert an entity whose related entities aren't present in the cache yet.
             let cached_word_entry =
                 CachedSloveneWord::from_expanded_database_info(slovene_word_info, &inner.cache)
                     .expect("failed to convert expanded slovene word info into a cached word");

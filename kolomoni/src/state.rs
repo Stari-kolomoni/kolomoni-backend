@@ -12,17 +12,28 @@ use tokio::sync::mpsc;
 use crate::connect_and_set_up_database;
 
 
-pub struct KolomoniSearchInner {
+/// A dictionary search engine.
+///
+/// Handles searching, seeding and incrementally updating the internal index and cache.
+pub struct KolomoniSearch {
     pub engine: KolomoniSearchEngine,
     change_sender: mpsc::Sender<ChangeEvent>,
 }
 
-impl KolomoniSearchInner {
+impl KolomoniSearch {
+    /// Run a fuzzy word search with the given `word_search_query`.
+    /// Returns a list of both slovene and english search results.
     #[inline]
     pub async fn search(&self, word_search_query: &str) -> Result<SearchResults> {
         self.engine.search(word_search_query).await
     }
 
+    /// Signals to the search indexer that an english word has been created or updated.
+    ///
+    /// This method does not block unless the communication channel is full (which is unlikely).
+    /// The indexing (and caching) of the created or updated word will be performed in
+    /// a separate async task as soon as the receiver can pick it up, which will very likely be in
+    /// less than a second after sending.
     #[inline]
     pub async fn signal_english_word_created_or_updated(&self, word_uuid: Uuid) -> Result<()> {
         self.change_sender
@@ -32,6 +43,11 @@ impl KolomoniSearchInner {
             .wrap_err("Failed to send \"english word created/updated\" event.")
     }
 
+    /// Signals to the search indexer that an english word has been removed from the database.
+    ///
+    /// This method does not block unless the communication channel is full (which is unlikely).
+    /// Removal from index and cache will be performed in a separate async task as soon
+    /// as the receiver can pick it up, which will very likely be in less than a second after sending.
     #[inline]
     pub async fn signal_english_word_removed(&self, word_uuid: Uuid) -> Result<()> {
         self.change_sender
@@ -42,6 +58,12 @@ impl KolomoniSearchInner {
     }
 
 
+    /// Signals to the search indexer that a slovene word has been created or updated.
+    ///
+    /// This method does not block unless the communication channel is full (which is unlikely).
+    /// The indexing (and caching) of the created or updated word will be performed in
+    /// a separate async task as soon as the receiver can pick it up, which will very likely be in
+    /// less than a second after sending.
     #[inline]
     pub async fn signal_slovene_word_created_or_updated(&self, word_uuid: Uuid) -> Result<()> {
         self.change_sender
@@ -51,6 +73,11 @@ impl KolomoniSearchInner {
             .wrap_err("Failed to send \"slovene word created/updated\" event.")
     }
 
+    /// Signals to the search indexer that a slovene word has been removed from the database.
+    ///
+    /// This method does not block unless the communication channel is full (which is unlikely).
+    /// Removal from index and cache will be performed in a separate async task as soon
+    /// as the receiver can pick it up, which will very likely be in less than a second after sending.
     #[inline]
     pub async fn signal_slovene_word_removed(&self, word_uuid: Uuid) -> Result<()> {
         self.change_sender
@@ -61,6 +88,12 @@ impl KolomoniSearchInner {
     }
 
 
+    /// Signals to the search indexer that a category has been created or updated.
+    ///
+    /// This method does not block unless the communication channel is full (which is unlikely).
+    /// The indexing (and caching) of the created or updated category will be performed in
+    /// a separate async task as soon as the receiver can pick it up, which will very likely be in
+    /// less than a second after sending.
     #[inline]
     pub async fn signal_category_created_or_updated(&self, category_id: i32) -> Result<()> {
         self.change_sender
@@ -70,6 +103,11 @@ impl KolomoniSearchInner {
             .wrap_err("Failed to send \"category created/updated\" event.")
     }
 
+    /// Signals to the search indexer that a category has been removed from the database.
+    ///
+    /// This method does not block unless the communication channel is full (which is unlikely).
+    /// Removal from index and cache will be performed in a separate async task as soon
+    /// as the receiver can pick it up, which will very likely be in less than a second after sending.
     #[inline]
     pub async fn signal_category_removed(&self, category_id: i32) -> Result<()> {
         self.change_sender
@@ -104,7 +142,7 @@ pub struct ApplicationStateInner {
     /// Authentication token manager (JSON Web Token).
     pub jwt_manager: JsonWebTokenManager,
 
-    pub search: KolomoniSearchInner,
+    pub search: KolomoniSearch,
 }
 
 impl ApplicationStateInner {
@@ -117,7 +155,7 @@ impl ApplicationStateInner {
             let engine = KolomoniSearchEngine::new(&configuration).await?;
             let sender = engine.change_event_sender();
 
-            KolomoniSearchInner {
+            KolomoniSearch {
                 engine,
                 change_sender: sender,
             }

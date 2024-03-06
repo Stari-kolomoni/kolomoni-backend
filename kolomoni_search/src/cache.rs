@@ -14,6 +14,7 @@ new_key_type! { struct SloveneWordSlotMapKey; }
 new_key_type! { struct CategorySlotMapKey; }
 
 
+/// An english word present in the search indexer cache.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CachedEnglishWord {
     /// Base english word.
@@ -30,6 +31,11 @@ pub struct CachedEnglishWord {
 }
 
 impl CachedEnglishWord {
+    /// Obtain a [`CachedEnglishWord`] given an [`ExpandedEnglishWordInfo`]
+    /// (which you can get by fetching info from the database) and access to the indexer cache.
+    ///
+    /// `None` can be returned if the word has invalid links to slovene words or categories
+    /// (i.e. when the linked words/categories don't exist in the cache yet).
     pub fn from_expanded_database_info(
         expanded_info: ExpandedEnglishWordInfo,
         cache: &KolomoniEntityCache,
@@ -76,10 +82,15 @@ impl CachedEnglishWord {
         })
     }
 
+    /// Obtain the [`Uuid`] associated with this english word.
     pub fn uuid(&self) -> &Uuid {
         &self.word.word_id
     }
 
+    /// Convert this [`CachedEnglishWord`] back into an [`ExpandedEnglishWordInfo`].
+    ///
+    /// This will require access to the slot maps of the indexer cache
+    /// (which we need to convert weak slovene word / category references back into their explicit form).
     fn into_expanded_word_info(
         self,
         slot_context: &EntitySlotMapContext,
@@ -143,6 +154,7 @@ impl CachedEnglishWord {
 
 
 
+/// A slovene word present in the search indexer cache.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CachedSloveneWord {
     pub word: entities::word_slovene::Model,
@@ -151,6 +163,11 @@ pub struct CachedSloveneWord {
 }
 
 impl CachedSloveneWord {
+    /// Obtain a [`CachedSloveneWord`] given an [`ExpandedSloveneWordInfo`]
+    /// (which you can get by fetching info from the database) and access to the indexer cache.
+    ///
+    /// `None` can be returned if the word has invalid links to categories
+    /// (i.e. when the categories don't exist in the cache yet).
     pub fn from_expanded_database_info(
         expanded_info: ExpandedSloveneWordInfo,
         cache: &KolomoniEntityCache,
@@ -172,10 +189,15 @@ impl CachedSloveneWord {
         })
     }
 
+    /// Obtain the [`Uuid`] associated with this sloveney word.
     pub fn uuid(&self) -> &Uuid {
         &self.word.word_id
     }
 
+    /// Convert this [`CachedSloveneWord`] back into an [`ExpandedSloveneWordInfo`].
+    ///
+    /// This will require access to the slot maps of the indexer cache
+    /// (which we need to convert weak category references back into their explicit form).
     fn into_expanded_word_info(
         self,
         slot_context: &EntitySlotMapContext,
@@ -199,6 +221,7 @@ impl CachedSloveneWord {
 
 
 
+/// A category present in the search indexer cache.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CachedCategory {
     pub category: entities::category::Model,
@@ -219,6 +242,10 @@ impl CachedCategory {
 }
 
 
+/// An internal context struct that we use to pass a set of
+/// accesses to [`SlotMap`]s residing inside [`KolomoniEntityCache`].
+///
+/// This is an implementation detail and not visible externally.
 struct EntitySlotMapContext<'e, 's, 'c> {
     #[allow(dead_code)]
     english_word_slot_map: &'e SlotMap<EnglishWordSlotMapKey, CachedEnglishWord>,
@@ -229,6 +256,16 @@ struct EntitySlotMapContext<'e, 's, 'c> {
 }
 
 
+/// A cache containing english and slovene words as well as word categories.
+///
+/// All entities are stored using [`SlotMap`]s, allowing us to establish weak links between them.
+///
+/// For example, this allow us to simply hold weak slot map keys inside the [`translations`][CachedEnglishWord::translations]
+/// `Vec` field of the english word.
+/// This means that each english word weakly references corresponding slovene words
+/// that are linked as translations instead of holding their entire information in themselves, improving memory usage.
+/// Another upside to this approach is that modifying a slovene word is immediately reflected in all english words
+/// it is a translation of, simplifying word updates.
 pub struct KolomoniEntityCache {
     english_word_slot_map: SlotMap<EnglishWordSlotMapKey, CachedEnglishWord>,
     english_word_uuid_to_key_map: HashMap<Uuid, EnglishWordSlotMapKey>,
@@ -241,6 +278,7 @@ pub struct KolomoniEntityCache {
 }
 
 impl KolomoniEntityCache {
+    /// Initialize an empty entity cache.
     pub fn new() -> Self {
         let english_word_slot_map = SlotMap::<EnglishWordSlotMapKey, CachedEnglishWord>::with_key();
         let english_word_uuid_to_key_map = HashMap::new();
@@ -262,6 +300,7 @@ impl KolomoniEntityCache {
         }
     }
 
+    /// Clear the entity cache.
     pub fn clear(&mut self) {
         self.english_word_slot_map.clear();
         self.english_word_uuid_to_key_map.clear();
@@ -273,6 +312,7 @@ impl KolomoniEntityCache {
         self.category_id_to_key_map.clear();
     }
 
+
     fn slot_context(&self) -> EntitySlotMapContext {
         EntitySlotMapContext {
             english_word_slot_map: &self.english_word_slot_map,
@@ -282,6 +322,7 @@ impl KolomoniEntityCache {
     }
 
 
+    /// Obtain an [`ExpandedEnglishWordInfo`] given its [`Uuid`], if present in the cache and if containing valid connections.
     pub fn english_word(&self, word_uuid: Uuid) -> Option<ExpandedEnglishWordInfo> {
         let Some(english_word_slot_map_key) = self.english_word_uuid_to_key_map.get(&word_uuid)
         else {
@@ -302,11 +343,16 @@ impl KolomoniEntityCache {
             .into_expanded_word_info(&self.slot_context())
     }
 
+    /// Obtain an [`EnglishWordSlotMapKey`] slot map key given its [`Uuid`], if present in the cache.
     #[allow(dead_code)]
     fn english_word_key(&self, word_uuid: Uuid) -> Option<EnglishWordSlotMapKey> {
         self.english_word_uuid_to_key_map.get(&word_uuid).copied()
     }
 
+    /// Insert (or overwrite) an english word into the entity cache.
+    ///
+    /// For conversion from [`ExpandedEnglishWordInfo`] to [`CachedEnglishWord`],
+    /// see [`CachedEnglishWord::from_expanded_database_info`].
     pub fn insert_or_update_english_word(&mut self, english_word: CachedEnglishWord) {
         let word_uuid = *english_word.uuid();
 
@@ -336,6 +382,9 @@ impl KolomoniEntityCache {
         self.english_word_uuid_to_key_map.insert(word_uuid, new_key);
     }
 
+    /// Remove an english word from the entity cache.
+    ///
+    /// Returns `Err(())` if the word wasn't present if the cache.
     pub fn remove_english_word(&mut self, word_uuid: Uuid) -> Result<(), ()> {
         let Some(english_word_slot_map_key) = self.english_word_uuid_to_key_map.get(&word_uuid)
         else {
@@ -358,6 +407,7 @@ impl KolomoniEntityCache {
     }
 
 
+    /// Obtain an [`ExpandedSloveneWordInfo`] given its [`Uuid`], if present in the cache and if containing valid connections.
     pub fn slovene_word(&self, word_uuid: Uuid) -> Option<ExpandedSloveneWordInfo> {
         let Some(slovene_word_slot_map_key) = self.slovene_word_uuid_to_key_map.get(&word_uuid)
         else {
@@ -378,10 +428,15 @@ impl KolomoniEntityCache {
             .into_expanded_word_info(&self.slot_context())
     }
 
+    /// Obtain an [`SloveneWordSlotMapKey`] slot map key given its [`Uuid`], if present in the cache.
     fn slovene_word_key(&self, word_uuid: Uuid) -> Option<SloveneWordSlotMapKey> {
         self.slovene_word_uuid_to_key_map.get(&word_uuid).copied()
     }
 
+    /// Insert (or overwrite) a slovene word into the entity cache.
+    ///
+    /// For conversion from [`ExpandedSloveneWordInfo`] to [`CachedSloveneWord`],
+    /// see [`CachedSloveneWord::from_expanded_database_info`].
     pub fn insert_or_update_slovene_word(&mut self, slovene_word: CachedSloveneWord) {
         let word_uuid = *slovene_word.uuid();
 
@@ -411,6 +466,9 @@ impl KolomoniEntityCache {
         self.slovene_word_uuid_to_key_map.insert(word_uuid, new_key);
     }
 
+    /// Remove a slovene word from the entity cache.
+    ///
+    /// Returns `Err(())` if the word wasn't present if the cache.
     pub fn remove_slovene_word(&mut self, word_uuid: Uuid) -> Result<(), ()> {
         let Some(slovene_word_slot_map_key) = self.slovene_word_uuid_to_key_map.get(&word_uuid)
         else {
@@ -433,6 +491,7 @@ impl KolomoniEntityCache {
     }
 
 
+    /// Obtain information about a category given its ID, if present in the cache.
     #[allow(dead_code)]
     pub fn category(&self, category_id: i32) -> Option<entities::category::Model> {
         let Some(category_slot_map_key) = self.category_id_to_key_map.get(&category_id) else {
@@ -448,10 +507,15 @@ impl KolomoniEntityCache {
         Some(cached_category.clone().into_inner())
     }
 
+    /// Obtain a [`CategorySlotMapKey`] slot map key given the category's ID, if present in the cache.
     fn category_key(&self, category_id: i32) -> Option<CategorySlotMapKey> {
         self.category_id_to_key_map.get(&category_id).copied()
     }
 
+    /// Insert (or overwrite) a category into the entity cache.
+    ///
+    /// For conversion from the database category model to [`CachedCategory`],
+    /// see [`CachedCategory::from_database_model`].
     pub fn insert_or_update_category(&mut self, category: CachedCategory) {
         let category_id = category.id();
 
@@ -481,6 +545,9 @@ impl KolomoniEntityCache {
         self.category_id_to_key_map.insert(category_id, new_key);
     }
 
+    /// Remove a category from the entity cache.
+    ///
+    /// Returns `Err(())` if the category wasn't present if the cache.
     pub fn remove_category(&mut self, category_id: i32) -> Result<(), ()> {
         let Some(category_slot_map_key) = self.category_id_to_key_map.get(&category_id) else {
             return Err(());
