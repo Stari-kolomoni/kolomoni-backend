@@ -332,7 +332,7 @@ pub async fn create_slovene_word(
     // Signals to the the search indexer that the word has been created.
     state
         .search
-        .on_slovene_word_created_or_updated(newly_created_word.word_id)
+        .signal_slovene_word_created_or_updated(newly_created_word.word_id)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -593,7 +593,7 @@ pub async fn update_specific_slovene_word(
     // Signals to the the search indexer that the word has been updated.
     state
         .search
-        .on_slovene_word_created_or_updated(updated_word.word_id)
+        .signal_slovene_word_created_or_updated(updated_word.word_id)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -676,7 +676,7 @@ pub async fn delete_specific_slovene_word(
     // Signals to the the search indexer that the word has been removed.
     state
         .search
-        .on_slovene_word_removed(target_word_uuid)
+        .signal_slovene_word_removed(target_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 

@@ -24,7 +24,7 @@ impl KolomoniSearchInner {
     }
 
     #[inline]
-    pub async fn on_english_word_created_or_updated(&self, word_uuid: Uuid) -> Result<()> {
+    pub async fn signal_english_word_created_or_updated(&self, word_uuid: Uuid) -> Result<()> {
         self.change_sender
             .send(ChangeEvent::EnglishWordCreatedOrUpdated { word_uuid })
             .await
@@ -33,7 +33,7 @@ impl KolomoniSearchInner {
     }
 
     #[inline]
-    pub async fn on_english_word_removed(&self, word_uuid: Uuid) -> Result<()> {
+    pub async fn signal_english_word_removed(&self, word_uuid: Uuid) -> Result<()> {
         self.change_sender
             .send(ChangeEvent::EnglishWordRemoved { word_uuid })
             .await
@@ -43,7 +43,7 @@ impl KolomoniSearchInner {
 
 
     #[inline]
-    pub async fn on_slovene_word_created_or_updated(&self, word_uuid: Uuid) -> Result<()> {
+    pub async fn signal_slovene_word_created_or_updated(&self, word_uuid: Uuid) -> Result<()> {
         self.change_sender
             .send(ChangeEvent::SloveneWordCreatedOrUpdated { word_uuid })
             .await
@@ -52,7 +52,7 @@ impl KolomoniSearchInner {
     }
 
     #[inline]
-    pub async fn on_slovene_word_removed(&self, word_uuid: Uuid) -> Result<()> {
+    pub async fn signal_slovene_word_removed(&self, word_uuid: Uuid) -> Result<()> {
         self.change_sender
             .send(ChangeEvent::SloveneWordRemoved { word_uuid })
             .await
@@ -62,7 +62,7 @@ impl KolomoniSearchInner {
 
 
     #[inline]
-    pub async fn on_category_created_or_updated(&self, category_id: i32) -> Result<()> {
+    pub async fn signal_category_created_or_updated(&self, category_id: i32) -> Result<()> {
         self.change_sender
             .send(ChangeEvent::CategoryCreatedOrUpdated { category_id })
             .await
@@ -71,7 +71,7 @@ impl KolomoniSearchInner {
     }
 
     #[inline]
-    pub async fn on_category_removed(&self, category_id: i32) -> Result<()> {
+    pub async fn signal_category_removed(&self, category_id: i32) -> Result<()> {
         self.change_sender
             .send(ChangeEvent::CategoryRemoved { category_id })
             .await

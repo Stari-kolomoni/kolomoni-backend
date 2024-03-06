@@ -145,12 +145,12 @@ pub async fn suggest_translation(
     // Signals to the search engine that both words have been updated.
     state
         .search
-        .on_english_word_created_or_updated(english_word_uuid)
+        .signal_english_word_created_or_updated(english_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
     state
         .search
-        .on_slovene_word_created_or_updated(slovene_word_uuid)
+        .signal_slovene_word_created_or_updated(slovene_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -277,12 +277,12 @@ pub async fn delete_suggestion(
     // Signals to the search engine that both words have been updated.
     state
         .search
-        .on_english_word_created_or_updated(english_word_uuid)
+        .signal_english_word_created_or_updated(english_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
     state
         .search
-        .on_slovene_word_created_or_updated(slovene_word_uuid)
+        .signal_slovene_word_created_or_updated(slovene_word_uuid)
         .await
         .map_err(APIError::InternalError)?;
 

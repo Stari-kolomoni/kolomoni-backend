@@ -139,7 +139,7 @@ pub async fn create_category(
 
     state
         .search
-        .on_category_created_or_updated(new_category.id)
+        .signal_category_created_or_updated(new_category.id)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -397,7 +397,7 @@ pub async fn update_specific_category(
 
     state
         .search
-        .on_category_created_or_updated(updated_category.id)
+        .signal_category_created_or_updated(updated_category.id)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -476,7 +476,7 @@ pub async fn delete_specific_category(
 
     state
         .search
-        .on_category_removed(target_category_id)
+        .signal_category_removed(target_category_id)
         .await
         .map_err(APIError::InternalError)?;
 
@@ -602,12 +602,12 @@ pub async fn link_word_to_category(
     {
         WordLanguage::Slovene => state
             .search
-            .on_slovene_word_created_or_updated(base_target_word.id)
+            .signal_slovene_word_created_or_updated(base_target_word.id)
             .await
             .map_err(APIError::InternalError)?,
         WordLanguage::English => state
             .search
-            .on_english_word_created_or_updated(base_target_word.id)
+            .signal_english_word_created_or_updated(base_target_word.id)
             .await
             .map_err(APIError::InternalError)?,
     };
@@ -739,12 +739,12 @@ pub async fn unlink_word_from_category(
     {
         WordLanguage::Slovene => state
             .search
-            .on_slovene_word_created_or_updated(base_target_word.id)
+            .signal_slovene_word_created_or_updated(base_target_word.id)
             .await
             .map_err(APIError::InternalError)?,
         WordLanguage::English => state
             .search
-            .on_english_word_created_or_updated(base_target_word.id)
+            .signal_english_word_created_or_updated(base_target_word.id)
             .await
             .map_err(APIError::InternalError)?,
     };
