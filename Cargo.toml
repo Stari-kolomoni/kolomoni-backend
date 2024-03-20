@@ -57,7 +57,7 @@ itertools = "0.12.1"
 argon2 = "0.5.3"
 jsonwebtoken = "9.2.0"
 chrono = "0.4.35"
-http = "0.2.11"
+http = "1.1.0"
 mime = "0.3.17"
 uuid = { version = "1.8.0", features = ["v7"] }
 httpdate = "1.0.3"
