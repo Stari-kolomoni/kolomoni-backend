@@ -1,4 +1,4 @@
-//! A test-only API. Compiled into the binary and enabled only when
+//! A test-only API. Included only when
 //! the `with_test_facilities` feature flag is enabled.
 
 use actix_web::{post, web, HttpResponse, Scope};

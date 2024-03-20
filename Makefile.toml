@@ -13,7 +13,7 @@ CARGO_MAKE_USE_WORKSPACE_PROFILE = false
 
 
 
-[tasks.create-migration]
+[tasks."migrations:create"]
 clear = true
 workspace = false
 command = "sea-orm-cli"
@@ -27,7 +27,7 @@ args = [
 ]
 
 
-[tasks.migrations]
+[tasks."migrations"]
 clear = true
 workspace = false
 command = "sea-orm-cli"
@@ -38,7 +38,7 @@ args = [
     "./kolomoni_migrations"
 ]
 
-[tasks.migrations-up]
+[tasks."migrations:up"]
 clear = true
 workspace = false
 command = "sea-orm-cli"
@@ -51,7 +51,7 @@ args = [
 
 
 
-[tasks.generate-entities]
+[tasks."entities:generate"]
 clear = true
 workspace = false
 command = "sea-orm-cli"
@@ -65,7 +65,7 @@ args = [
 
 
 
-[tasks.initialize-database]
+[tasks."database:initialize"]
 clear = true
 workspace = false
 condition = { platforms = ["windows"]}
@@ -76,7 +76,7 @@ args = [
 
 
 
-[tasks.run-database]
+[tasks."database:run"]
 clear = true
 workspace = false
 condition = { platforms = ["windows"]}
@@ -85,7 +85,7 @@ args = [
     "./scripts/database/run-database.ps1"
 ]
 
-[tasks.start-database]
+[tasks."database:start"]
 clear = true
 workspace = false
 condition = { platforms = ["windows"]}
@@ -94,7 +94,7 @@ args = [
     "./scripts/database/manually-start-database.ps1"
 ]
 
-[tasks.stop-database]
+[tasks."database:stop"]
 clear = true
 workspace = false
 condition = { platforms = ["windows"]}
@@ -116,29 +116,19 @@ args = [
     "--open"
 ]
 
-[tasks.run-backend]
+[tasks."backend:run"]
 clear = true
 workspace = true
 command = "cargo"
 args = ["run", "--release"]
 cwd = "."
 
-[tasks.run-openapi-backend]
+[tasks."openapi-backend:run"]
 clear = true
 workspace = true
 command = "cargo"
 args = ["run", "--release"]
 cwd = "./kolomoni_openapi"
-
-
-[tasks.run-entire-backend]
-clear = true
-workspace = true
-[tasks.run-entire-backend.run_task]
-name = ["start-database", "run-backend", "run-openapi-backend"]
-fork = true
-parallel = true
-cleanup_task = "stop-database"
 
 
 
