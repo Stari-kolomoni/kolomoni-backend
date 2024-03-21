@@ -127,14 +127,16 @@ pub async fn login(
     let access_token_claims = JWTClaims::create(
         logged_in_user.id,
         Utc::now(),
-        Duration::days(1),
+        // PANIC SAFETY: 1 is a valid number of days.
+        Duration::try_days(1).unwrap(),
         JWTTokenType::Access,
     );
 
     let refresh_token_claims = JWTClaims::create(
         logged_in_user.id,
         Utc::now(),
-        Duration::days(7),
+        // PANIC SAFETY: 7 is a valid number of days.
+        Duration::try_days(7).unwrap(),
         JWTTokenType::Refresh,
     );
 
@@ -296,7 +298,8 @@ pub async fn refresh_login(
     let access_token_claims = JWTClaims::create(
         refresh_token_claims.user_id,
         Utc::now(),
-        Duration::days(1),
+        // PANIC SAFETY: 1 is a valid number of days.
+        Duration::try_days(1).unwrap(),
         JWTTokenType::Access,
     );
     let access_token = state
