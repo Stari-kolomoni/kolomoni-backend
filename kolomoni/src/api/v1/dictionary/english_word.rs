@@ -292,7 +292,7 @@ pub struct EnglishWordCreationRequest {
 #[schema(
     example = json!({
         "word": {
-            "word_id": "018dbe00-266e-7398-abd2-0906df0aa345",
+            "id": "018dbe00-266e-7398-abd2-0906df0aa345",
             "lemma": "adventurer",
             "disambiguation": "character",
             "description": "Playable or non-playable character.",
