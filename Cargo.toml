@@ -23,17 +23,17 @@ members = [
 
 
 [workspace.dependencies]
-clap = { version = "4.5.3", features = ["derive"] }
+clap = { version = "4.5.4", features = ["derive"] }
 
-tokio = { version = "1.36.0", features = ["full"] }
+tokio = { version = "1.37.0", features = ["full"] }
 
-serde = { version = "1.0.197", features = ["derive"] }
+serde = { version = "1.0.198", features = ["derive"] }
 serde_with = { version = "3.7.0", features = ["chrono"] }
-serde_json = "1.0.114"
+serde_json = "1.0.116"
 toml = "0.8.12"
 
 miette = "7.2.0"
-thiserror = "1.0.58"
+thiserror = "1.0.59"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tracing-appender = "0.2.3"
@@ -55,18 +55,18 @@ utoipa-rapidoc = { git = "https://github.com/simongoricar/utoipa.git", rev = "fc
 
 itertools = "0.12.1"
 argon2 = "0.5.3"
-jsonwebtoken = "9.2.0"
-chrono = "0.4.35"
-http = "0.2.11"
+jsonwebtoken = "9.3.0"
+chrono = "0.4.38"
+http = "0.2.12"
 mime = "0.3.17"
 uuid = { version = "1.8.0", features = ["v7"] }
 httpdate = "1.0.3"
 futures-util = "0.3.30"
 paste = "1.0.14"
-bytes = "1.5.0"
+bytes = "1.6.0"
 
-reqwest = "0.11.24"
-tantivy = "0.21.1"
+reqwest = "0.11.27"
+tantivy = "0.22.0"
 slotmap = "1.0.7"
 
 

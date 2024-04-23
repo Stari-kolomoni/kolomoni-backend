@@ -28,6 +28,8 @@ use tantivy::{
         Value,
     },
     Index,
+    IndexWriter,
+    TantivyDocument,
     Term,
 };
 use tokio::{
@@ -295,7 +297,7 @@ impl WordIndexChangeHandler {
         })?;
 
 
-        let mut index_writer = inner
+        let mut index_writer: IndexWriter<TantivyDocument> = inner
             .word_index
             .writer(1024 * 1024 * 16)
             .into_diagnostic()
@@ -389,7 +391,7 @@ impl WordIndexChangeHandler {
         })?;
 
 
-        let mut index_writer = inner
+        let mut index_writer: IndexWriter<TantivyDocument> = inner
             .word_index
             .writer(1024 * 1024 * 16)
             .into_diagnostic()
@@ -516,7 +518,7 @@ fn construct_indexing_schema() -> (Schema, WordIndexSchemaFields) {
 async fn clear_index_and_cache(inner: &mut WordIndexInner) -> Result<()> {
     // Clear existing index.
     {
-        let mut index_writer = inner
+        let mut index_writer: IndexWriter<TantivyDocument> = inner
             .word_index
             .writer(50_000_000)
             .into_diagnostic()
@@ -796,7 +798,7 @@ impl KolomoniSearchEngine {
 
         let mut resulting_words = Vec::new();
         for (_score, doc_address) in search_results {
-            let document = searcher
+            let document: TantivyDocument = searcher
                 .doc(doc_address)
                 .into_diagnostic()
                 .wrap_err("Failed to retrieve search result.")?;
@@ -807,14 +809,14 @@ impl KolomoniSearchEngine {
                     .get_first(self.schema_fields.language)
                     .ok_or_else(|| miette!("BUG: Failed to look up word language after search."))?;
 
-                let Value::U64(word_language_index) = word_language_value else {
+                let Some(word_language_index) = word_language_value.as_u64() else {
                     return Err(miette!(
                         "BUG: Failed to extract word language index after search: {:?}.",
                         word_language_value
                     ));
                 };
 
-                IndexedWordLanguage::from_id(*word_language_index).ok_or_else(|| {
+                IndexedWordLanguage::from_id(word_language_index).ok_or_else(|| {
                     miette!(
                         "BUG: Invalid word language index: {}",
                         word_language_index
@@ -827,7 +829,7 @@ impl KolomoniSearchEngine {
                     .get_first(self.schema_fields.uuid)
                     .ok_or_else(|| miette!("BUG: Failed to look up word UUID after search."))?;
 
-                let Value::Str(word_uuid_string) = word_uuid_value else {
+                let Some(word_uuid_string) = word_uuid_value.as_str() else {
                     return Err(miette!(
                         "BUG: Failed to extract word UUID after search: {:?}.",
                         word_uuid_value
