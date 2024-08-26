@@ -9,7 +9,7 @@ edition = "2021"
 kolomoni_database = { path = "../kolomoni_database" }
 kolomoni_configuration = { path = "../kolomoni_configuration" }
 
-sea-orm = { workspace = true }
+# sea-orm = { workspace = true }
 tokio = { workspace = true }
 
 tantivy = { workspace = true }

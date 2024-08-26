@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 tokio = { workspace = true }
 actix-web = { workspace = true }
-sea-orm = { workspace = true }
+# sea-orm = { workspace = true }
 miette = { workspace = true }
 actix-utils = { workspace = true }
 tracing = { workspace = true }

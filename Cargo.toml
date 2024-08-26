@@ -13,8 +13,9 @@ publish = false
 members = [
     "kolomoni_auth",
     "kolomoni_configuration",
-    "kolomoni_database",
+    # "kolomoni_database",
     "kolomoni_migrations",
+    # "kolomoni_migrations_old",
     "kolomoni_openapi",
     "kolomoni_search",
     "kolomoni_test",
@@ -54,7 +55,10 @@ utoipa = { git = "https://github.com/simongoricar/utoipa.git", rev = "fce3e3a1f1
 utoipa-rapidoc = { git = "https://github.com/simongoricar/utoipa.git", rev = "fce3e3a1f1c6dede38eab8965ddf074a47196752", features = ["actix-web"] }
 
 itertools = "0.12.1"
+
 argon2 = "0.5.3"
+sha2 = "0.10.8"
+
 jsonwebtoken = "9.3.0"
 chrono = "0.4.38"
 http = "0.2.12"
@@ -69,24 +73,37 @@ reqwest = "0.11.27"
 tantivy = "0.22.0"
 slotmap = "1.0.7"
 
+fs-more = "0.7.1"
 
-[workspace.dependencies.sea-orm]
-version = "0.12.15"
-default-features = false
-features = [
-    "macros",
-    "with-chrono",
-    "with-uuid",
-    "runtime-tokio-rustls",
-    "sqlx-postgres",
-] 
 
-[workspace.dependencies.sea-orm-migration]
-version = "0.12.15"
+[workspace.dependencies.sqlx]
+version = "0.8.0"	
 features = [
-    "runtime-tokio-rustls",
-    "sqlx-postgres"
+    "runtime-tokio",
+    "tls-native-tls",
+    "postgres",
+    "uuid",
+    "chrono",
 ]
+
+
+# [workspace.dependencies.sea-orm]
+# version = "0.12.15"
+# default-features = false
+# features = [
+#     "macros",
+#     "with-chrono",
+#     "with-uuid",
+#     "runtime-tokio-rustls",
+#     "sqlx-postgres",
+# ] 
+# 
+# [workspace.dependencies.sea-orm-migration]
+# version = "0.12.15"
+# features = [
+#     "runtime-tokio-rustls",
+#     "sqlx-postgres"
+# ]
 
 
 
@@ -129,8 +146,8 @@ actix-cors = { workspace = true }
 
 utoipa = { workspace = true }
 
-sea-orm = { workspace = true }
-sea-orm-migration = { workspace = true }
+# sea-orm = { workspace = true }
+# sea-orm-migration = { workspace = true }
 
 dunce = { workspace = true }
 chrono = { workspace = true }

@@ -1,0 +1,33 @@
+###
+# Migration
+#   version 0001
+#   name    initialize-database
+#
+# Created on: 2024-08-24
+###
+#
+# Note that it is impossible to modify the version or name of the migration in 
+# this configuration file *by design*. Both the version and name are 
+# *always* parsed from the parent directory name for consistency.
+#
+
+
+##
+# Configuration that impacts the up.sql migration script.
+##
+[up]
+# Certain statements, such as CREATE INDEX CONCURRENTLY, cannot be run inside a transaction.
+# Using those statements in your migration script will require you to run the migration
+# without a transaction.
+run_inside_transaction = false
+
+
+
+##
+# Configuration that impacts the down.sql rollback script.
+##
+[down]
+# Certain statements, such as CREATE INDEX CONCURRENTLY, cannot be run inside a transaction.
+# Using those statements in your migration script will require you to run the migration
+# without a transaction.
+run_inside_transaction = false

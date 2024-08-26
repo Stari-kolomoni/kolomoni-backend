@@ -13,7 +13,7 @@ kolomoni_configuration = { path = "../kolomoni_configuration" }
 thiserror = { workspace = true }
 miette = { workspace = true }
 
-sea-orm = { workspace = true }
+# sea-orm = { workspace = true }
 
 argon2 = { workspace = true }
 chrono = { workspace = true }
