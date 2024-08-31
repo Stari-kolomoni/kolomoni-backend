@@ -151,10 +151,10 @@ CREATE TABLE kolomoni.word (
     CONSTRAINT pk__word PRIMARY KEY (id)
 );
 
-CREATE INDEX CONCURRENTLY index__word__id
+CREATE INDEX index__word__id
     ON kolomoni.word (id);
 
-CREATE INDEX CONCURRENTLY index__word__language_code
+CREATE INDEX index__word__language_code
     ON kolomoni.word USING hash (language_code);
 
 

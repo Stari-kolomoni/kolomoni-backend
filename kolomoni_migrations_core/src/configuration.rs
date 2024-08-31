@@ -4,6 +4,8 @@ use std::{
 };
 
 use chrono::{DateTime, SecondsFormat, Utc};
+use proc_macro2::TokenStream;
+use quote::{quote, ToTokens, TokenStreamExt};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -43,7 +45,7 @@ pub enum MigrationConfigurationError {
         file_path: PathBuf,
 
         #[source]
-        error: toml::de::Error,
+        error: Box<toml::de::Error>,
     },
 }
 
@@ -65,6 +67,18 @@ impl Default for MigrationUpConfiguration {
     }
 }
 
+impl ToTokens for MigrationUpConfiguration {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let run_inside_transaction = self.run_inside_transaction;
+
+        tokens.append_all(quote! {
+            kolomoni_migrations_core::configuration::MigrationUpConfiguration {
+                run_inside_transaction: #run_inside_transaction
+            }
+        });
+    }
+}
+
 
 
 /// Configuration that impacts the down.sql rollback script.
@@ -83,6 +97,20 @@ impl Default for MigrationDownConfiguration {
         }
     }
 }
+
+impl ToTokens for MigrationDownConfiguration {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let run_inside_transaction = self.run_inside_transaction;
+
+        tokens.append_all(quote! {
+            kolomoni_migrations_core::configuration::MigrationDownConfiguration {
+                run_inside_transaction: #run_inside_transaction
+            }
+        });
+    }
+}
+
+
 
 /// Migration configuration, generally loaded from `migration.toml`
 /// inside a single migration's directory.
@@ -131,14 +159,19 @@ impl MigrationConfiguration {
             })?;
 
 
-        toml::from_str(&configuration_contents).map_err(|error| {
-            MigrationConfigurationError::UnableToParseContents {
-                file_path: configuration_file_path.to_path_buf(),
-                error,
-            }
-        })
+        let config: MigrationConfiguration =
+            toml::from_str(&configuration_contents).map_err(|error| {
+                MigrationConfigurationError::UnableToParseContents {
+                    file_path: configuration_file_path.to_path_buf(),
+                    error: Box::new(error),
+                }
+            })?;
+
+
+        Ok(Some(config))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn load_from_str(
         migration_configuration_toml_str: &str,
     ) -> Result<Self, toml::de::Error> {
@@ -187,6 +220,21 @@ run_inside_transaction = true
         )
     }
 }
+
+impl ToTokens for MigrationConfiguration {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let up_field_tokens = self.up.to_token_stream();
+        let down_field_tokens = self.down.to_token_stream();
+
+        tokens.append_all(quote! {
+            kolomoni_migrations_core::configuration::MigrationConfiguration {
+                up: #up_field_tokens,
+                down: #down_field_tokens
+            }
+        });
+    }
+}
+
 
 
 #[cfg(test)]

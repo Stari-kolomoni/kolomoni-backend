@@ -19,7 +19,7 @@
 # Certain statements, such as CREATE INDEX CONCURRENTLY, cannot be run inside a transaction.
 # Using those statements in your migration script will require you to run the migration
 # without a transaction.
-run_inside_transaction = false
+run_inside_transaction = true
 
 
 
@@ -30,4 +30,4 @@ run_inside_transaction = false
 # Certain statements, such as CREATE INDEX CONCURRENTLY, cannot be run inside a transaction.
 # Using those statements in your migration script will require you to run the migration
 # without a transaction.
-run_inside_transaction = false
+run_inside_transaction = true

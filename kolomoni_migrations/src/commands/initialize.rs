@@ -1,38 +1,11 @@
-use std::{
-    env::{self, VarError},
-    fs,
-    path::Path,
-};
+use std::env::{self, VarError};
 
+use kolomoni_migrations_core::connect_to_database;
 use miette::{miette, Context, IntoDiagnostic, Result};
-use sqlx::{Connection, PgConnection};
+use sqlx::Connection;
 
-use crate::{cli::InitializeCommandArguments, connect_to_database, errors::RemoteMigrationError};
+use crate::cli::InitializeCommandArguments;
 
-
-
-
-pub(crate) async fn set_up_migration_table_if_needed(
-    connection: &mut PgConnection,
-) -> Result<(), RemoteMigrationError> {
-    sqlx::query!(
-        r#"
-        CREATE TABLE IF NOT EXISTS kolomoni.schema_migrations (
-            version bigint NOT NULL,
-            name text NOT NULL,
-            up_sql_sha256_hash bytea NOT NULL,
-            down_sql_sha256_hash bytea,
-            applied_at timestamp with time zone NOT NULL,
-            CONSTRAINT pk__schema_migrations PRIMARY KEY (version)
-        )
-        "#
-    )
-    .execute(&mut *connection)
-    .await
-    .map_err(|error| RemoteMigrationError::UnableToCreateMigrationsTable { error })?;
-
-    Ok(())
-}
 
 
 
@@ -47,6 +20,9 @@ pub fn cli_initialize(arguments: InitializeCommandArguments) -> Result<()> {
 }
 
 async fn cli_initialize_inner(arguments: InitializeCommandArguments) -> Result<()> {
+    let manager = crate::migrations::manager();
+
+
     let database_url = match arguments.database_url {
         Some(database_url_from_cli) => database_url_from_cli,
         None => match env::var("DATABASE_URL") {
@@ -71,17 +47,20 @@ async fn cli_initialize_inner(arguments: InitializeCommandArguments) -> Result<(
 
     let mut database_connection = connect_to_database(database_url.as_str())
         .await
-        .map_err(|error| RemoteMigrationError::UnableToAccessDatabase { error })
-        .into_diagnostic()?;
+        .into_diagnostic()
+        .wrap_err("unable to conneect to database")?;
 
     println!("  [Connected!]");
 
 
     print!("Setting up migration table if missing...");
-    set_up_migration_table_if_needed(&mut database_connection)
+
+    manager
+        .initialize_migration_tracking_in_database(&mut database_connection)
         .await
         .into_diagnostic()
-        .wrap_err("failed to set up migrations table in database")?;
+        .wrap_err("failed to initialize migration table in database")?;
+
     println!("  [Done!]");
 
 
@@ -100,29 +79,13 @@ async fn cli_initialize_inner(arguments: InitializeCommandArguments) -> Result<(
 
     print!("Checking for migrations directory, creating one if needed...");
 
-    create_migrations_directory_if_missing(&arguments.migrations_directory_path)?;
+    manager
+        .initialize_migrations_directory(&arguments.migrations_directory_path)
+        .into_diagnostic()
+        .wrap_err("failed to initialize migrations directory on disk")?;
 
     println!("  [Done!]");
 
-
-    Ok(())
-}
-
-
-fn create_migrations_directory_if_missing(migrations_directory_path: &Path) -> Result<()> {
-    if migrations_directory_path.exists() {
-        if !migrations_directory_path.is_dir() {
-            return Err(miette!(
-                "the provided migrations path exists, but is not a directory"
-            ));
-        }
-
-        return Ok(());
-    }
-
-    fs::create_dir_all(migrations_directory_path)
-        .into_diagnostic()
-        .wrap_err("failed to create migrations directory")?;
 
     Ok(())
 }

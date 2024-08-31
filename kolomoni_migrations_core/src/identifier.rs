@@ -17,14 +17,21 @@ pub struct MigrationIdentifier {
 }
 
 impl MigrationIdentifier {
-    pub(crate) fn new(version: i64, name: String) -> Self {
-        Self { version, name }
+    #[inline]
+    pub fn new<S>(version: i64, name: S) -> Self
+    where
+        S: Into<String>,
+    {
+        Self {
+            version,
+            name: name.into(),
+        }
     }
 
     pub fn parse_from_str(identifier: &str) -> Result<Self, InvalidMigrationIdentifierError> {
         let (m_prefixed_migration_version, migration_name) = identifier
             .split_once('_')
-            .ok_or_else(|| InvalidMigrationIdentifierError)?;
+            .ok_or(InvalidMigrationIdentifierError)?;
 
 
         let migration_version = m_prefixed_migration_version

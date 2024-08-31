@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+kolomoni_migrations_core = { path = "../kolomoni_migrations_core" }
+kolomoni_migrations_macros = { path = "../kolomoni_migrations_macros" }
+
+
 tokio = { workspace = true }
 sqlx = { workspace = true }
 
@@ -21,3 +25,4 @@ chrono = { workspace = true }
 fs-more = { workspace = true }
 
 clap = { workspace = true }
+dotenvy = { workspace = true }

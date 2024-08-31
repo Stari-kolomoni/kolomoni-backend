@@ -1,17 +1,23 @@
 use clap::Parser;
 use cli::{CliArgs, CliCommand};
 use commands::{down::cli_down, generate::cli_generate, initialize::cli_initialize, up::cli_up};
+use kolomoni_migrations_macros::embed_migrations;
 use miette::{Context, IntoDiagnostic, Result};
-use sqlx::{Connection, PgConnection};
 
 pub(crate) mod cli;
 pub(crate) mod commands;
-pub mod errors;
-pub mod models;
-pub(crate) mod sha256;
+
+
+embed_migrations!("migrations", "..", "../kolomoni_migrations");
+
 
 pub fn main() -> Result<()> {
     let cli_args = CliArgs::parse();
+
+    dotenvy::dotenv()
+        .into_diagnostic()
+        .wrap_err("failed to load any dotenv file")?;
+
 
     match cli_args.command {
         CliCommand::Initialize(initialize_command_args) => cli_initialize(initialize_command_args),
@@ -22,9 +28,8 @@ pub fn main() -> Result<()> {
 }
 
 
-pub async fn connect_to_database(database_url: &str) -> Result<PgConnection, sqlx::Error> {
-    sqlx::PgConnection::connect(database_url).await
-}
+
+// TODO migrate permission and role seeding to new migration system
 
 // TODO Required CLI commands:
 // - [DONE, needs a style pass] initialize: creates the migration directory if needed
@@ -34,4 +39,4 @@ pub async fn connect_to_database(database_url: &str) -> Result<PgConnection, sql
 // - [PENDING, low priority] reset: rolls back all migrations
 // - [PENDING, high priority] status: displays the status of all migrations, both applied or not
 // - [DONE, needs a style pass] up: applies all pending migrations (or up to a specific version)
-// - [PENDING, medium priority] down: rolls back to a specific database version (migration version)
+// - [DONE, needs a style pass] down: rolls back to a specific database version (migration version)

@@ -134,6 +134,7 @@ pub struct UpCommandArguments {
 
     #[arg(
         long = "migrate-to-version",
+        short = 'v',
         help = "Specifies the version of the database to migrate to. The version should match a defined migration\
                 and must be greater than the currently applied version. If unspecified, it defaults to the newest version."
     )]
@@ -164,8 +165,10 @@ pub struct DownCommandArguments {
 
     #[arg(
         long = "rollback-to-version",
-        help = "Specifies the version of the database to rollback to. The version should match a defined migration\
-                and must be smaller than the currently applied version."
+        short = 'v',
+        help = "Specifies the version of the database to rollback to. The version should match a defined migration \
+                and must be smaller than the currently applied version. If you want to perform a rollback all the \
+                way to the beginning, set this to 0."
     )]
     pub rollback_to_version: i64,
 }

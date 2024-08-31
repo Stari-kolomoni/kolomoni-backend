@@ -14,7 +14,7 @@ members = [
     "kolomoni_auth",
     "kolomoni_configuration",
     # "kolomoni_database",
-    "kolomoni_migrations",
+    "kolomoni_migrations", "kolomoni_migrations_core", "kolomoni_migrations_macros",
     # "kolomoni_migrations_old",
     "kolomoni_openapi",
     "kolomoni_search",
@@ -48,6 +48,12 @@ actix-cors = "0.7.0"
 actix-service = "2.0.2"
 
 
+syn = "2.0.76"
+quote = "1.0.37"
+proc-macro-error = "1.0.4"
+paste = "1.0.15"
+
+
 # The patched version contains some additional merging functionality that helps us make better documentation.
 # utoipa = { version = "4.2.0", features = ["actix_extras", "chrono", "preserve_order"] }
 # utoipa-rapidoc = { version = "3.0.0", features = ["actix-web"] }
@@ -66,12 +72,15 @@ mime = "0.3.17"
 uuid = { version = "1.8.0", features = ["v7"] }
 httpdate = "1.0.3"
 futures-util = "0.3.30"
-paste = "1.0.14"
 bytes = "1.6.0"
+dotenvy = "0.15.7"
 
 reqwest = "0.11.27"
 tantivy = "0.22.0"
 slotmap = "1.0.7"
+
+pathdiff = "0.2.1"
+path-slash = "0.2.1"
 
 fs-more = "0.7.1"
 

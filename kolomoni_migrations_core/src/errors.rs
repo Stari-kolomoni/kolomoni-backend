@@ -1,34 +1,21 @@
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, error::Error};
 
 use thiserror::Error;
 
-use crate::{
-    models::{
-        local::configuration::MigrationConfigurationError,
-        InvalidMigrationIdentifierError,
-        MigrationIdentifier,
-    },
-    sha256::Sha256Hash,
-};
+use crate::identifier::MigrationIdentifier;
 
 
 
 #[derive(Debug, Error)]
 pub enum RemoteMigrationError {
-    #[error("unable to access database")]
-    UnableToAccessDatabase {
-        #[source]
-        error: sqlx::Error,
-    },
-
-    #[error("failed to create \"schema_migrations\" table in database")]
-    UnableToCreateMigrationsTable {
+    #[error("failed to execute query in database")]
+    QueryFailed {
         #[source]
         error: sqlx::Error,
     },
 
     #[error(
-        "invalid row {} encountered in migration table: {}",
+        "invalid row {} encountered in migration tracking table: {}",
         .identifier,
         .reason
     )]
@@ -36,72 +23,6 @@ pub enum RemoteMigrationError {
         identifier: MigrationIdentifier,
 
         reason: Cow<'static, str>,
-    },
-}
-
-
-
-#[derive(Debug, Error)]
-pub enum LocalMigrationError {
-    #[error(
-        "invalid structure for migration entry at \"{}\": {}",
-        .migration_directory_path.display(),
-        .reason
-    )]
-    InvalidMigrationStructure {
-        migration_directory_path: PathBuf,
-
-        reason: Cow<'static, str>,
-    },
-
-    #[error(
-        "invalid local migration identifier \"{}\"",
-        .identifier,
-    )]
-    InvalidMigrationIdentifier {
-        identifier: String,
-
-        #[source]
-        error: InvalidMigrationIdentifierError,
-    },
-
-    #[error(
-        "migration version {} is not unique",
-        .version
-    )]
-    MigrationVersionIsNotUnique { version: i64 },
-
-    #[error(
-        "failed to read migrations directory at \"{}\"",
-        .directory_path.display()
-    )]
-    UnableToScanMigrationsDirectory {
-        directory_path: PathBuf,
-
-        #[source]
-        error: fs_more::error::DirectoryScanError,
-    },
-
-    #[error(
-        "failed to read migration at \"{}\"",
-        .path.display()
-    )]
-    UnableToReadMigration {
-        path: PathBuf,
-
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[error(
-        "failed to parse migration configuration for {}",
-        .identifier
-    )]
-    ConfigurationError {
-        identifier: MigrationIdentifier,
-
-        #[source]
-        error: MigrationConfigurationError,
     },
 }
 
@@ -120,14 +41,20 @@ pub enum MigrationApplyError {
         #[source]
         error: sqlx::Error,
     },
+
+    #[error("other error")]
+    OtherError {
+        #[source]
+        error: Box<dyn Error + Send + Sync + 'static>,
+    },
 }
 
 
 
 #[derive(Debug, Error)]
 pub enum MigrationRollbackError {
-    #[error("migration cannot be rolled back")]
-    MigrationCannotBeRolledBack,
+    #[error("no rollback script")]
+    RollbackUndefined,
 
     #[error("failed while executing query")]
     FailedToExecuteQuery {
@@ -143,7 +70,7 @@ pub enum MigrationRollbackError {
 }
 
 
-
+/*
 #[derive(Debug, Error)]
 pub enum MigrationError {
     #[error("database error encountered")]
@@ -203,3 +130,4 @@ pub enum MigrationError {
         reason: Cow<'static, str>,
     },
 }
+ */

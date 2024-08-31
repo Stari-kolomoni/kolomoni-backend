@@ -25,4 +25,4 @@ DROP TABLE kolomoni.role;
 DROP TABLE kolomoni.permission;
 
 
-DROP SCHEMA kolomoni;
+-- DROP SCHEMA kolomoni;

@@ -1,0 +1,33 @@
+###
+# Migration
+#   version 0002
+#   name    seed-permissions-and-roles
+#
+# Created on: 2024-08-27T14:48:44Z
+###
+#
+# Note that it is impossible to modify the version or name of the migration in 
+# this configuration file *by design*. Both the version and name are 
+# *always* parsed from the parent directory name for consistency.
+#
+
+
+##
+# Configuration that impacts the up.sql migration script.
+##
+[up]
+# Certain statements, such as CREATE INDEX CONCURRENTLY, cannot be run inside a transaction.
+# Using those statements in your migration script will require you to run the migration
+# without a transaction.
+run_inside_transaction = true
+
+
+
+##
+# Configuration that impacts the down.sql rollback script.
+##
+[down]
+# Certain statements, such as CREATE INDEX CONCURRENTLY, cannot be run inside a transaction.
+# Using those statements in your migration script will require you to run the migration
+# without a transaction.
+run_inside_transaction = true

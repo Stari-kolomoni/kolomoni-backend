@@ -4,29 +4,26 @@ use std::{
 };
 
 use chrono::Utc;
+use kolomoni_migrations_core::{
+    configuration::MigrationConfiguration,
+    identifier::MigrationIdentifier,
+};
 use miette::{miette, Context, IntoDiagnostic, Result};
 
-use crate::{
-    cli::GenerateCommandArguments,
-    models::{
-        load_local_migrations,
-        local::configuration::MigrationConfiguration,
-        MigrationIdentifier,
-    },
-};
+use crate::cli::GenerateCommandArguments;
 
 
 
 pub fn cli_generate(arguments: GenerateCommandArguments) -> Result<()> {
-    let local_migrations = load_local_migrations(&arguments.migrations_directory_path)
-        .into_diagnostic()
-        .wrap_err("failed to load local migrations")?;
+    let manager = crate::migrations::manager();
 
-    let next_migration_version = if let Some(last_migration) = local_migrations.last() {
-        last_migration.identifier.version + 1
-    } else {
-        1
-    };
+
+    let next_migration_version =
+        if let Some(last_migration) = manager.migrations_without_status().last() {
+            last_migration.identifier().version + 1
+        } else {
+            1
+        };
 
 
     if let Some(migration_version_override) = arguments.migration_version {
@@ -74,6 +71,8 @@ pub fn cli_generate(arguments: GenerateCommandArguments) -> Result<()> {
     println!("  [Done!]");
 
 
+
+    // TODO Needs ability to create templated up.rs / down.rs scripts as well.
 
     // Create empty up.sql.
     print!("Creating empty up.sql script for the new migration...");

@@ -16,12 +16,16 @@ impl Sha256Hash {
     }
 
     /// Calculate SHA-256 (SHA-2, not SHA-3) of the provided byte slice.
-    pub(crate) fn calculate(bytes: &[u8]) -> Self {
+    pub fn calculate(bytes: &[u8]) -> Self {
         let raw_data = <Sha256 as Digest>::digest(bytes);
 
         Self {
             data: raw_data.into(),
         }
+    }
+
+    pub fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self { data: bytes }
     }
 
     pub fn as_slice(&self) -> &[u8] {

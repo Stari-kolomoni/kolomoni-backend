@@ -1,14 +1,9 @@
 use std::io::{self, Write};
 
+use kolomoni_migrations_core::{connect_to_database, MigrationStatus};
 use miette::{miette, Context, IntoDiagnostic, Result};
 
-use crate::{
-    cli::UpCommandArguments,
-    commands::get_database_url_with_env_fallback,
-    connect_to_database,
-    errors::RemoteMigrationError,
-    models::{load_and_validate_migrations_with_status, MigrationStatus},
-};
+use crate::{cli::UpCommandArguments, commands::get_database_url_with_env_fallback};
 
 
 pub fn cli_up(arguments: UpCommandArguments) -> Result<()> {
@@ -25,6 +20,9 @@ pub fn cli_up(arguments: UpCommandArguments) -> Result<()> {
 
 
 pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
+    let manager = crate::migrations::manager();
+
+
     let database_url =
         get_database_url_with_env_fallback(arguments.database_url.as_ref(), "DATABASE_URL")?
             .ok_or_else(|| {
@@ -39,28 +37,29 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
 
     let mut database_connection = connect_to_database(database_url.as_ref())
         .await
-        .map_err(|error| RemoteMigrationError::UnableToAccessDatabase { error })
-        .into_diagnostic()?;
+        .into_diagnostic()
+        .wrap_err("failed to connect to database")?;
 
     println!("  [Connected!]");
 
 
-    print!("Loading local migrations...");
+    print!("Loading migrations...");
 
-    let migrations = load_and_validate_migrations_with_status(
-        &arguments.migrations_directory_path,
-        &mut database_connection,
-    )
-    .await
-    .into_diagnostic()
-    .wrap_err("failed to load and validate migrations")?;
+    let migrations = manager
+        .migrations_with_status(&mut database_connection)
+        .await
+        .into_diagnostic()
+        .wrap_err("failed to load migrations")?;
 
     println!(
         "  [Loaded {} migrations ({} already applied)]",
         migrations.len(),
         migrations
             .iter()
-            .filter(|migration| matches!(migration.status, MigrationStatus::Applied { .. }))
+            .filter(|migration| matches!(
+                migration.status(),
+                MigrationStatus::Applied { .. }
+            ))
             .count()
     );
     println!();
@@ -74,10 +73,26 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
 
 
     let version_to_migrate_to = match arguments.migrate_to_version {
-        Some(version_to_migrate_to) => version_to_migrate_to,
+        Some(version_to_migrate_to) => {
+            // Verify the version exists.
+            let selected_version_exists = migrations
+                .iter()
+                .any(|migration| migration.identifier().version == version_to_migrate_to);
+
+            if !selected_version_exists {
+                println!(
+                    "Unable to migrate to version {}: no such version exists.",
+                    version_to_migrate_to
+                );
+
+                return Ok(());
+            }
+
+            version_to_migrate_to
+        }
         None => {
             // PANIC SAFETY: We checked above that `migrations` is not empty.
-            migrations.last().unwrap().identifer.version
+            migrations.last().unwrap().identifier().version
         }
     };
 
@@ -85,11 +100,11 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
     let mut migrations_to_apply = Vec::new();
 
     for migration in &migrations {
-        if !matches!(migration.status, MigrationStatus::Pending) {
+        if !matches!(migration.status(), MigrationStatus::Pending) {
             continue;
         }
 
-        if migration.identifer.version <= version_to_migrate_to {
+        if migration.identifier().version <= version_to_migrate_to {
             migrations_to_apply.push(migration);
         }
     }
@@ -107,7 +122,7 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
         version_to_migrate_to
     );
     for migration_to_apply in &migrations_to_apply {
-        println!("  {}", migration_to_apply.identifer);
+        println!("  {}", migration_to_apply.identifier());
     }
     println!();
 
@@ -133,11 +148,11 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
     for migration_to_apply in &migrations_to_apply {
         print!(
             "Applying migration {}...",
-            migration_to_apply.identifer
+            migration_to_apply.identifier()
         );
 
         migration_to_apply
-            .apply(&mut database_connection)
+            .execute_up(&mut database_connection)
             .await
             .into_diagnostic()?;
 

@@ -1,47 +1,24 @@
 use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
 };
 
-use chrono::{DateTime, Utc};
+use errors::{MigrationScanError, MigrationScriptError};
 use fs_more::directory::{DirectoryScanDepthLimit, DirectoryScanOptions, DirectoryScanner};
-use local::{configuration::MigrationConfiguration, LocalMigration};
-use remote::RemoteMigration;
-use sqlx::{query, Acquire, Executor, PgConnection};
+use kolomoni_migrations_core::sha256::Sha256Hash;
+use scan::ScannedMigration;
 use tracing::warn;
 
-use crate::{
-    errors::{LocalMigrationError, MigrationApplyError, MigrationError, MigrationRollbackError},
-    sha256::Sha256Hash,
-};
-
-pub mod identifier;
-pub mod local;
-pub mod remote;
-pub use identifier::*;
-
-
-
-/// Descibes a migration's status: either pending or applied (at some moment in time).
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum MigrationStatus {
-    /// The migration is pending, which means its details reside in the migrations directory
-    /// on disk, but it hasn't yet been applied to the database.
-    Pending,
-
-    /// The migration has already been applied to the database
-    Applied {
-        /// When the migration had been applied.
-        at: DateTime<Utc>,
-    },
-}
+pub(crate) mod errors;
+pub(crate) mod scan;
 
 
 
 
 /// Describes a single `*.sql` migration script on disk along with its SHA-256 hash.
 #[derive(Clone, Debug)]
-pub struct MigrationScript {
+pub(crate) struct ScannedSqlMigrationScript {
     /// Contents of the SQL migration script.
     pub sql: String,
 
@@ -49,78 +26,92 @@ pub struct MigrationScript {
     pub sha256_hash: Sha256Hash,
 }
 
+impl ScannedSqlMigrationScript {
+    pub fn new<S>(sql: S) -> Self
+    where
+        S: Into<String>,
+    {
+        let sql: String = sql.into();
+        let sha256_hash = Sha256Hash::calculate(sql.as_bytes());
 
-async fn apply_migration(
-    database_connection: &mut PgConnection,
-    migration: &Migration,
-) -> Result<(), MigrationApplyError> {
-    let applied_at = Utc::now();
-
-    // Executes the entire up.sql script of the migration.
-    database_connection
-        .execute(migration.up.sql.as_str())
-        .await
-        .map_err(|error| MigrationApplyError::FailedToExecuteQuery { error })?;
-
-
-    // Inserta a new row in the schema_migrations table that corresponds
-    // to the migration that was just applied.
-    query(
-        "INSERT INTO kolomoni.schema_migrations \
-                (version, name, up_sql_sha256_hash, down_sql_sha256_hash, applied_at)
-                VALUES ($1, $2, $3, $4, $5)",
-    )
-    .bind(migration.identifer.version)
-    .bind(migration.identifer.name.as_str())
-    .bind(migration.up.sha256_hash.as_slice())
-    .bind(
-        migration
-            .down
-            .as_ref()
-            .map(|down| down.sha256_hash.as_slice()),
-    )
-    .bind(applied_at)
-    .execute(database_connection)
-    .await
-    .map_err(|error| MigrationApplyError::FailedToExecuteQuery { error })?;
-
-
-    Ok(())
+        Self { sql, sha256_hash }
+    }
 }
 
 
-async fn rollback_migration(
-    database_connection: &mut PgConnection,
-    migration: &Migration,
-) -> Result<(), MigrationRollbackError> {
-    let Some(migration_down) = migration.down.as_ref() else {
-        return Err(MigrationRollbackError::MigrationCannotBeRolledBack);
-    };
+/// Describes a single `*.rs` migration script on disk along with its SHA-256 hash.
+#[derive(Clone, Debug)]
+pub(crate) struct ScannedRustMigrationScript {
+    /// Path is relative to the root of the crate.
+    pub rs_file_path: PathBuf,
 
-
-    // Executes the entire down.sql script of the migration.
-    database_connection
-        .execute(migration_down.sql.as_str())
-        .await
-        .map_err(|error| MigrationRollbackError::FailedToExecuteQuery { error })?;
-
-
-    // Deletes the corresponding row in the schema_migrations table that tracked
-    // the migration being applied.
-    query("DELETE FROM kolomoni.schema_migrations WHERE version = $1")
-        .bind(migration.identifer.version)
-        .execute(database_connection)
-        .await
-        .map_err(|error| MigrationRollbackError::FailedToExecuteQuery { error })?;
-
-
-    Ok(())
+    pub sha256_hash: Sha256Hash,
 }
 
 
 
+
+#[derive(Clone, Debug)]
+pub enum ScannedMigrationScript {
+    Sql(ScannedSqlMigrationScript),
+    Rust(ScannedRustMigrationScript),
+}
+
+impl ScannedMigrationScript {
+    pub(crate) fn load_from_path(script_path: &Path) -> Result<Self, MigrationScriptError> {
+        let file_extension = script_path
+            .extension()
+            .ok_or_else(
+                || MigrationScriptError::UnrecognizedFileExtension {
+                    file_path: script_path.to_path_buf(),
+                },
+            )?
+            .to_str()
+            .ok_or_else(|| MigrationScriptError::FilePathNotUtf8 {
+                file_path: script_path.to_path_buf(),
+            })?;
+
+        let file_contents = fs::read_to_string(script_path).map_err(|error| {
+            MigrationScriptError::UnableToReadFile {
+                file_path: script_path.to_path_buf(),
+                error,
+            }
+        })?;
+
+        let file_contents_sha256 = Sha256Hash::calculate(file_contents.as_bytes());
+
+
+        if file_extension == "sql" {
+            Ok(ScannedMigrationScript::Sql(
+                ScannedSqlMigrationScript {
+                    sql: file_contents,
+                    sha256_hash: file_contents_sha256,
+                },
+            ))
+        } else if file_extension == "rs" {
+            let crate_relative_file_path =
+                pathdiff::diff_paths(script_path, env!("CARGO_MANIFEST_DIR")).unwrap();
+
+            Ok(ScannedMigrationScript::Rust(
+                ScannedRustMigrationScript {
+                    rs_file_path: crate_relative_file_path,
+                    sha256_hash: file_contents_sha256,
+                },
+            ))
+        } else {
+            Err(MigrationScriptError::UnrecognizedFileExtension {
+                file_path: script_path.to_path_buf(),
+            })
+        }
+    }
+}
+
+
+
+/* TODO this will be more useful in the core crate
 /// A consolidated and verified migration (see [`get_migrations_with_status`]),
 /// using information from both the migrations on disk and from the database.
+#[deprecated]
 pub struct Migration {
     /// Uniquely identifies (by `version`) a single migration.
     pub(crate) identifer: MigrationIdentifier,
@@ -132,13 +123,14 @@ pub struct Migration {
     pub(crate) status: MigrationStatus,
 
     /// The SQL script that can be (or has been) executed to migrate the database.
-    pub(crate) up: MigrationScript,
+    pub(crate) up: ScannedMigrationScript,
 
     /// If set, this is the SQL script that can be executed to roll back the migration.
-    pub(crate) down: Option<MigrationScript>,
-}
+    pub(crate) down: Option<ScannedMigrationScript>,
+} */
 
 
+/* TODO this will be more useful in the core crate
 impl Migration {
     /// Applies the migration to the database.
     ///
@@ -154,14 +146,18 @@ impl Migration {
                 .await
                 .map_err(|error| MigrationApplyError::FailedToPerformTransaction { error })?;
 
-            apply_migration(&mut *transaction, &self).await?;
+            // TODO switch between sql and rust script
+
+            apply_sql_migration(&mut transaction, &self.identifer).await?;
 
             transaction
                 .commit()
                 .await
                 .map_err(|error| MigrationApplyError::FailedToPerformTransaction { error })?;
         } else {
-            apply_migration(database_connection, &self).await?;
+            // TODO switch between sql and rust script
+
+            apply_migration(database_connection, self).await?;
         }
 
         Ok(())
@@ -184,19 +180,19 @@ impl Migration {
                 .await
                 .map_err(|error| MigrationRollbackError::FailedToPerformTransaction { error })?;
 
-            rollback_migration(&mut *transaction, &self).await?;
+            rollback_migration(&mut transaction, self).await?;
 
             transaction
                 .commit()
                 .await
                 .map_err(|error| MigrationRollbackError::FailedToPerformTransaction { error })?;
         } else {
-            rollback_migration(database_connection, &self).await?;
+            rollback_migration(database_connection, self).await?;
         }
 
         Ok(())
     }
-}
+} */
 
 
 
@@ -207,9 +203,9 @@ impl Migration {
 ///
 /// Since this does not access the database, [`LocalMigration`]s
 /// don't have any information about applied state.
-pub fn load_local_migrations(
+pub fn scan_for_migrations(
     migrations_directory: &Path,
-) -> Result<Vec<LocalMigration>, LocalMigrationError> {
+) -> Result<Vec<ScannedMigration>, MigrationScanError> {
     let mut local_migrations = Vec::new();
 
     let mut local_migration_versions = HashSet::new();
@@ -228,7 +224,7 @@ pub fn load_local_migrations(
 
     for directory_entry_result in migrations_directory_scanner {
         let directory_entry = directory_entry_result.map_err(|error| {
-            LocalMigrationError::UnableToScanMigrationsDirectory {
+            MigrationScanError::UnableToScanMigrationsDirectory {
                 directory_path: migrations_directory.to_path_buf(),
                 error,
             }
@@ -239,11 +235,11 @@ pub fn load_local_migrations(
         }
 
 
-        let local_migration = LocalMigration::load_from_directory(directory_entry.path())?;
+        let local_migration = ScannedMigration::load_from_directory(directory_entry.path())?;
 
 
         if local_migration_versions.contains(&local_migration.identifier.version) {
-            return Err(LocalMigrationError::MigrationVersionIsNotUnique {
+            return Err(MigrationScanError::MigrationVersionIsNotUnique {
                 version: local_migration.identifier.version,
             });
         }
@@ -271,6 +267,8 @@ pub fn load_local_migrations(
 
 
 
+// TODO This needs to be rewritten for the runtime
+/*
 /// Retrieves and consolidates both the local migrations (located in the `migrations_directory` directory)
 /// as well as migrations that are noted down in the database.
 ///
@@ -299,6 +297,7 @@ pub async fn load_and_validate_migrations_with_status(
 
 
     // Step 2: load all migrations from the database.
+    set_up_migration_table_if_needed(database_connection).await?;
     let remote_migrations = RemoteMigration::load_all_from_database(database_connection).await?;
 
 
@@ -316,10 +315,8 @@ pub async fn load_and_validate_migrations_with_status(
 
 
         // Check for hash mismatches.
-        if !local_and_remote_migration_hashes_match(
-            &corresponding_local_migration,
-            &remote_migration,
-        ) {
+        if !local_and_remote_migration_hashes_match(corresponding_local_migration, &remote_migration)
+        {
             return Err(
                 MigrationError::RemoteAndLocalMigrationHasDifferentHash {
                     identifier: remote_migration.identifier.clone(),
@@ -407,3 +404,4 @@ fn local_and_remote_migration_hashes_match(
         }
     }
 }
+ */
