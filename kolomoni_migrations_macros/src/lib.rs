@@ -136,6 +136,9 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
         let configuration = migration.configuration();
 
 
+        let mut rust_module_import = None;
+
+
         let up_concrete_script = match migration.up() {
             ScannedMigrationScript::Sql(sql_up) => {
                 let sql_script_string = sql_up.sql.as_str();
@@ -172,7 +175,7 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
                 // we need to escape one level more.
                 let injected_module_path_relative_to_caller = Path::new("..")
                     .join(&migration_directory_path_relative_to_caller_source_file)
-                    .join("up.rs");
+                    .join("mod.rs");
 
                 let injected_module_path_relative_to_caller_str =
                     injected_module_path_relative_to_caller
@@ -182,11 +185,11 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
                         });
 
                 let injected_module_name_ident = format_ident!(
-                    "_migration_{:04}_up",
+                    "_migration_{:04}",
                     migration.identifier().version as u64
                 );
 
-                code_to_prepend_to_module.push(quote! {
+                rust_module_import = Some(quote! {
                     #[path = #injected_module_path_relative_to_caller_str]
                     mod #injected_module_name_ident;
                 });
@@ -244,7 +247,7 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
                     // we need to escape one level more.
                     let injected_module_path_relative_to_caller = Path::new("..")
                         .join(&migration_directory_path_relative_to_caller_source_file)
-                        .join("down.rs");
+                        .join("mod.rs");
 
                     let injected_module_path_relative_to_caller_str =
                         injected_module_path_relative_to_caller
@@ -254,11 +257,12 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
                             });
 
                     let injected_module_name_ident = format_ident!(
-                        "_migration_{:04}_down",
+                        "_migration_{:04}",
                         migration.identifier().version as u64
                     );
 
-                    code_to_prepend_to_module.push(quote! {
+
+                    rust_module_import = Some(quote! {
                         #[path = #injected_module_path_relative_to_caller_str]
                         mod #injected_module_name_ident;
                     });
@@ -281,6 +285,11 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
         } else {
             quote! { None }
         };
+
+
+        if let Some(rust_module_import) = rust_module_import {
+            code_to_prepend_to_module.push(rust_module_import);
+        }
 
 
         let migration_version = migration.identifier().version;
@@ -348,28 +357,13 @@ pub fn up(_attr: TokenStream, input: TokenStream) -> TokenStream {
     };
 
 
-    // Enforce that the function is `pub(super)`.
-    let Visibility::Restricted(restricted_vis) = &up_function.vis else {
+    // Enforce that the function is `pub`.
+    if !matches!(&up_function.vis, Visibility::Public(_)) {
         abort_call_site!(
-            "the annotated function must be marked as pub(super), not {:?}",
+            "the annotated function must be marked as pub, not {:?}",
             up_function.vis
         );
     };
-
-    let Some(restricted_vis_ident) = restricted_vis.path.get_ident() else {
-        abort_call_site!(
-            "the annotated function must be marked as pub(super), not pub({})",
-            restricted_vis.path.to_token_stream()
-        );
-    };
-
-    if restricted_vis_ident != "super" {
-        abort_call_site!(
-            "the annotated function must be marked as pub(super), not pub({})",
-            restricted_vis_ident
-        );
-    }
-
 
 
     // Enforce that the function is `async`.
@@ -433,7 +427,7 @@ pub fn up(_attr: TokenStream, input: TokenStream) -> TokenStream {
     quote! {
         #wrapped_inner_function
 
-        pub(super) fn up<'c>(
+        pub fn up<'c>(
             database_connection: &'c mut sqlx::PgConnection
         ) ->
             std::pin::Pin<Box<
@@ -478,28 +472,13 @@ pub fn down(_attr: TokenStream, input: TokenStream) -> TokenStream {
     };
 
 
-    // Enforce that the function is `pub(super)`.
-    let Visibility::Restricted(restricted_vis) = &down_function.vis else {
+    // Enforce that the function is `pub`.
+    if !matches!(&down_function.vis, Visibility::Public(_)) {
         abort_call_site!(
-            "the annotated function must be marked as pub(super), not {:?}",
+            "the annotated function must be marked as pub, not {:?}",
             down_function.vis
         );
     };
-
-    let Some(restricted_vis_ident) = restricted_vis.path.get_ident() else {
-        abort_call_site!(
-            "the annotated function must be marked as pub(super), not pub({})",
-            restricted_vis.path.to_token_stream()
-        );
-    };
-
-    if restricted_vis_ident != "super" {
-        abort_call_site!(
-            "the annotated function must be marked as pub(super), not pub({})",
-            restricted_vis_ident
-        );
-    }
-
 
 
     // Enforce that the function is `async`.
@@ -565,7 +544,7 @@ pub fn down(_attr: TokenStream, input: TokenStream) -> TokenStream {
     quote! {
         #wrapped_inner_function
 
-        pub(super) fn down<'c>(
+        pub fn down<'c>(
             database_connection: &'c mut sqlx::PgConnection
         ) ->
             std::pin::Pin<Box<

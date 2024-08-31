@@ -1,16 +1,15 @@
-use sea_orm_migration::prelude::*;
+// TODO Needs roles and role-permission links as well (copy from older migrations).
 
-use crate::m20230624_170512_initialize_permission_related_tables::Permission;
-
-
-/// This is the list of available permissions.
+/// This is the list of available permissions as of this migration.
 ///
-/// **IMPORTANT: This permission list (or on related migrations) should be kept in sync
-/// with `./kolomoni_auth/src/permissions.rs`.**
+/// **IMPORTANT: When still in the unstable phase, this permission list (or ones on related migrations) 
+/// should be kept in sync with `kolomoni_auth/src/permissions.rs`.**
 ///
-/// We don't keep them in sync automatically because that would mean a migration would
-/// not stay the same. We can modify the migration sanely if any only if we're still in
-/// the unstable prototyping phase. Otherwise, opt for a new migration that adds the new permissions.
+/// We don't keep them in sync automatically because that would mean a migration could be
+/// modified without touching its directory, which would be unexpected. 
+/// 
+/// We can modify this sanely if any only if we're still in the unstable prototyping phase. 
+/// Otherwise, opt for a new migration that adds the new permissions.
 #[derive(Clone, Copy, Debug)]
 pub enum StandardPermission {
     UserSelfRead,
@@ -125,62 +124,5 @@ impl StandardPermission {
             StandardPermission::CategoryDelete => 
                 "Allows the user to delete a word category.",
         }
-    }
-}
-
-
-async fn insert_permission<'manager>(
-    manager: &SchemaManager<'manager>,
-    id: i32,
-    name: &str,
-    description: &str,
-) -> Result<(), DbErr> {
-    let insert = Query::insert()
-        .into_table(Permission::Table)
-        .columns([Permission::Id, Permission::Name, Permission::Description])
-        .values_panic([id.into(), name.into(), description.into()])
-        .to_owned();
-
-    manager.exec_stmt(insert).await
-}
-
-async fn delete_permission_by_id<'manager>(
-    manager: &SchemaManager<'manager>,
-    id: i32,
-) -> Result<(), DbErr> {
-    let delete = Query::delete()
-        .from_table(Permission::Table)
-        .cond_where(Expr::col(Permission::Id).eq(id))
-        .to_owned();
-
-    manager.exec_stmt(delete).await
-}
-
-
-#[derive(DeriveMigrationName)]
-pub struct Migration;
-
-#[async_trait::async_trait]
-impl MigrationTrait for Migration {
-    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        for permission in StandardPermission::all_permissions() {
-            insert_permission(
-                manager,
-                permission.id(),
-                permission.name(),
-                permission.description(),
-            )
-            .await?;
-        }
-
-        Ok(())
-    }
-
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        for permission in StandardPermission::all_permissions() {
-            delete_permission_by_id(manager, permission.id()).await?;
-        }
-
-        Ok(())
     }
 }

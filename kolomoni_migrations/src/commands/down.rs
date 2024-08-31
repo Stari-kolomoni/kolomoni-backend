@@ -42,6 +42,12 @@ async fn cli_down_inner(arguments: DownCommandArguments) -> Result<()> {
 
     print!("Loading migrations...");
 
+    manager
+        .initialize_migration_tracking_in_database(&mut database_connection)
+        .await
+        .into_diagnostic()
+        .wrap_err("failed to ensure migration tracking is set up")?;
+
     let migrations = manager
         .migrations_with_status(&mut database_connection)
         .await

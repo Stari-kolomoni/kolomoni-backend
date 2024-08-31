@@ -26,18 +26,6 @@ pub(crate) struct ScannedSqlMigrationScript {
     pub sha256_hash: Sha256Hash,
 }
 
-impl ScannedSqlMigrationScript {
-    pub fn new<S>(sql: S) -> Self
-    where
-        S: Into<String>,
-    {
-        let sql: String = sql.into();
-        let sha256_hash = Sha256Hash::calculate(sql.as_bytes());
-
-        Self { sql, sha256_hash }
-    }
-}
-
 
 /// Describes a single `*.rs` migration script on disk along with its SHA-256 hash.
 #[derive(Clone, Debug)]
