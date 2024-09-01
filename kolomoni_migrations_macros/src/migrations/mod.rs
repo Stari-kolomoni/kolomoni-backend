@@ -30,7 +30,8 @@ pub(crate) struct ScannedSqlMigrationScript {
 /// Describes a single `*.rs` migration script on disk along with its SHA-256 hash.
 #[derive(Clone, Debug)]
 pub(crate) struct ScannedRustMigrationScript {
-    /// Path is relative to the root of the crate.
+    /// Path is relative to the root of the macro crate.
+    #[allow(dead_code)]
     pub rs_file_path: PathBuf,
 
     pub sha256_hash: Sha256Hash,
@@ -77,12 +78,12 @@ impl ScannedMigrationScript {
                 },
             ))
         } else if file_extension == "rs" {
-            let crate_relative_file_path =
+            let macro_crate_relative_file_path =
                 pathdiff::diff_paths(script_path, env!("CARGO_MANIFEST_DIR")).unwrap();
 
             Ok(ScannedMigrationScript::Rust(
                 ScannedRustMigrationScript {
-                    rs_file_path: crate_relative_file_path,
+                    rs_file_path: macro_crate_relative_file_path,
                     sha256_hash: file_contents_sha256,
                 },
             ))
@@ -93,94 +94,6 @@ impl ScannedMigrationScript {
         }
     }
 }
-
-
-
-/* TODO this will be more useful in the core crate
-/// A consolidated and verified migration (see [`get_migrations_with_status`]),
-/// using information from both the migrations on disk and from the database.
-#[deprecated]
-pub struct Migration {
-    /// Uniquely identifies (by `version`) a single migration.
-    pub(crate) identifer: MigrationIdentifier,
-
-    /// Contains migration-specific configuration.
-    pub(crate) configuration: MigrationConfiguration,
-
-    /// The current state of the migration (applied or unapplied).
-    pub(crate) status: MigrationStatus,
-
-    /// The SQL script that can be (or has been) executed to migrate the database.
-    pub(crate) up: ScannedMigrationScript,
-
-    /// If set, this is the SQL script that can be executed to roll back the migration.
-    pub(crate) down: Option<ScannedMigrationScript>,
-} */
-
-
-/* TODO this will be more useful in the core crate
-impl Migration {
-    /// Applies the migration to the database.
-    ///
-    /// This also takes care of updating the `schema_migrations` table
-    /// (i.e. inserting a new migration row to mark it as finished).
-    pub async fn apply(
-        &self,
-        database_connection: &mut PgConnection,
-    ) -> Result<(), MigrationApplyError> {
-        if self.configuration.up.run_inside_transaction {
-            let mut transaction = database_connection
-                .begin()
-                .await
-                .map_err(|error| MigrationApplyError::FailedToPerformTransaction { error })?;
-
-            // TODO switch between sql and rust script
-
-            apply_sql_migration(&mut transaction, &self.identifer).await?;
-
-            transaction
-                .commit()
-                .await
-                .map_err(|error| MigrationApplyError::FailedToPerformTransaction { error })?;
-        } else {
-            // TODO switch between sql and rust script
-
-            apply_migration(database_connection, self).await?;
-        }
-
-        Ok(())
-    }
-
-    /// Rolls back the migration, if possible for the given migration.
-    ///
-    /// If rollback is not available for the given migration, a
-    /// [`MigrationRollbackError::MigrationCannotBeRolledBack`] will be returned.
-    ///
-    /// This also takes care of updating the `schema_migrations` table
-    /// (i.e. deleting the relevant migration row).
-    pub async fn rollback(
-        &self,
-        database_connection: &mut PgConnection,
-    ) -> Result<(), MigrationRollbackError> {
-        if self.configuration.down.run_inside_transaction {
-            let mut transaction = database_connection
-                .begin()
-                .await
-                .map_err(|error| MigrationRollbackError::FailedToPerformTransaction { error })?;
-
-            rollback_migration(&mut transaction, self).await?;
-
-            transaction
-                .commit()
-                .await
-                .map_err(|error| MigrationRollbackError::FailedToPerformTransaction { error })?;
-        } else {
-            rollback_migration(database_connection, self).await?;
-        }
-
-        Ok(())
-    }
-} */
 
 
 
@@ -252,144 +165,3 @@ pub fn scan_for_migrations(
 
     Ok(local_migrations)
 }
-
-
-
-// TODO This needs to be rewritten for the runtime
-/*
-/// Retrieves and consolidates both the local migrations (located in the `migrations_directory` directory)
-/// as well as migrations that are noted down in the database.
-///
-/// It also verifies the SHA-256 hashes of migration scripts to ensure consistency. This means
-/// that changing a migration script after applying it will cause a [`MigrationError::RemoteAndLocalMigrationHasDifferentHash`].
-pub async fn load_and_validate_migrations_with_status(
-    migrations_directory: &Path,
-    database_connection: &mut PgConnection,
-) -> Result<Vec<Migration>, MigrationError> {
-    let mut consolidated_migrations = Vec::new();
-
-
-    // Step 1: load all migrations from the "migrations" directory.
-    let local_migrations = load_local_migrations(migrations_directory)?;
-
-    let mut local_migrations_by_identifier = local_migrations
-        .iter()
-        .map(|local_migration| {
-            (
-                local_migration.identifier.clone(),
-                local_migration,
-            )
-        })
-        .collect::<HashMap<_, _>>();
-
-
-
-    // Step 2: load all migrations from the database.
-    set_up_migration_table_if_needed(database_connection).await?;
-    let remote_migrations = RemoteMigration::load_all_from_database(database_connection).await?;
-
-
-    // Step 3: error if there exist migrations that were applied but are not on disk
-    // Step 4: ensure the hashes still match with the local migration scripts
-    // Step 6: consolidate migrations into final [`Migration`] structs
-    for remote_migration in remote_migrations {
-        let Some(corresponding_local_migration) =
-            local_migrations_by_identifier.remove(&remote_migration.identifier)
-        else {
-            return Err(MigrationError::MigrationNoLongerExistsLocally {
-                identifier: remote_migration.identifier.clone(),
-            });
-        };
-
-
-        // Check for hash mismatches.
-        if !local_and_remote_migration_hashes_match(corresponding_local_migration, &remote_migration)
-        {
-            return Err(
-                MigrationError::RemoteAndLocalMigrationHasDifferentHash {
-                    identifier: remote_migration.identifier.clone(),
-                    remote_up_sql_sha256_hash: remote_migration.up_sql_sha256_hash,
-                    local_up_sql_sha256_hash: corresponding_local_migration.up.sha256_hash.clone(),
-                    remote_down_sql_sha256_hash: remote_migration.down_sql_sha256_hash,
-                    local_down_sql_sha256_hash: corresponding_local_migration
-                        .down
-                        .as_ref()
-                        .map(|down| down.sha256_hash.clone()),
-                },
-            );
-        }
-
-
-
-        consolidated_migrations.push(Migration {
-            identifer: corresponding_local_migration.identifier.clone(),
-            configuration: corresponding_local_migration.configuration.clone(),
-            status: MigrationStatus::Applied {
-                at: remote_migration.applied_at,
-            },
-            up: corresponding_local_migration.up.clone(),
-            down: corresponding_local_migration.down.clone(),
-        });
-    }
-
-
-    for remaining_local_migration in local_migrations_by_identifier.into_values() {
-        consolidated_migrations.push(Migration {
-            identifer: remaining_local_migration.identifier.clone(),
-            configuration: remaining_local_migration.configuration.clone(),
-            status: MigrationStatus::Pending,
-            up: remaining_local_migration.up.clone(),
-            down: remaining_local_migration.down.clone(),
-        })
-    }
-
-
-    consolidated_migrations.sort_unstable_by_key(|migration| migration.identifer.version);
-
-
-    Ok(consolidated_migrations)
-}
-
-
-
-/// Compares the SHA-256 hashes of local (disk) and remote (database)
-/// migrations.
-///
-/// Note that while the down (rollback) script of the migration is optional,
-/// if either the local or remote has one, the other one *must* have one
-/// with the matching hash as well, otherwise `false` is returned.
-fn local_and_remote_migration_hashes_match(
-    local_migration: &LocalMigration,
-    remote_migration: &RemoteMigration,
-) -> bool {
-    if local_migration.up.sha256_hash != remote_migration.up_sql_sha256_hash {
-        return false;
-    }
-
-    match &local_migration.down {
-        Some(local_down_script) => match &remote_migration.down_sql_sha256_hash {
-            Some(remote_down_script_sha256_hash) => {
-                // Both the local and remote migrations have a rollback script,
-                // so we compare their hashes.
-                remote_down_script_sha256_hash == &local_down_script.sha256_hash
-            }
-            None => {
-                // Local migration has rollback script, but remote does not.
-                // This counts as a mismatch.
-                false
-            }
-        },
-        None => {
-            if remote_migration.down_sql_sha256_hash.is_none() {
-                // Local migration does not have a rollback script, but remote does.
-                // This counts as a mismatch.
-                false
-            } else {
-                // Neither the local nor the remote have a rollback script.
-                // This is okay.
-                true
-            }
-        }
-    }
-}
- */

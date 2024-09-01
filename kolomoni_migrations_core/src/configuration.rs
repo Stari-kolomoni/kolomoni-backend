@@ -178,7 +178,7 @@ impl MigrationConfiguration {
         toml::from_str(migration_configuration_toml_str)
     }
 
-    pub fn generate_template(version: i64, name: &str, created_on: DateTime<Utc>) -> String {
+    pub fn generate_template(version: i64, name: &str, created_on: &DateTime<Utc>) -> String {
         let created_on_formatted = created_on.to_rfc3339_opts(SecondsFormat::Secs, true);
 
         format!(

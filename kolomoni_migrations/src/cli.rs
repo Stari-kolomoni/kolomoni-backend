@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 
 use clap::{ArgAction, Args, Parser, Subcommand};
 
@@ -66,6 +66,25 @@ pub struct InitializeCommandArguments {
 }
 
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum GeneratedScriptType {
+    Sql,
+    Rust,
+}
+
+impl FromStr for GeneratedScriptType {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "sql" => Ok(Self::Sql),
+            "rust" => Ok(Self::Rust),
+            _ => Err("expected either \"sql\" or \"rust\""),
+        }
+    }
+}
+
+
 #[derive(Args)]
 pub struct GenerateCommandArguments {
     #[arg(
@@ -100,6 +119,21 @@ pub struct GenerateCommandArguments {
                 manually later if you wish)."
     )]
     pub no_configuration_file: bool,
+
+    #[arg(
+        long = "up-script-type",
+        help = "This option sets the type of migration script to generate, i.e. \"sql\" (generates up.sql) \
+                or \"rust\" (generates up.rs + mod.rs). Defaults to SQL if unspecified."
+    )]
+    pub up_script_type: Option<GeneratedScriptType>,
+
+    #[arg(
+        long = "rollback-script-type",
+        help = "This option sets the type of rollback script to generate, i.e. \"sql\" (generates down.sql) \
+                or \"rust\" (generates down.rs + mod.rs). Defaults to SQL if unspecified. \
+                If --no-rollback is set, this option has no effect."
+    )]
+    pub rollback_script_type: Option<GeneratedScriptType>,
 
     #[arg(
         long = "no-rollback",

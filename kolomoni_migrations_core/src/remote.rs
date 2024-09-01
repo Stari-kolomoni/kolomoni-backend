@@ -31,12 +31,14 @@ impl RemoteMigrationType {
 
 
 pub struct RemoteMigrationUp {
+    #[allow(dead_code)]
     pub(crate) up_script_type: RemoteMigrationType,
 
     pub(crate) up_script_sha256_hash: Sha256Hash,
 }
 
 pub struct RemoteMigrationDown {
+    #[allow(dead_code)]
     pub(crate) down_script_type: RemoteMigrationType,
 
     pub(crate) down_script_sha256_hash: Sha256Hash,
@@ -54,6 +56,7 @@ pub(crate) struct RemoteMigration {
 
     pub(crate) applied_at: DateTime<Utc>,
 
+    #[allow(dead_code)]
     pub(crate) execution_time: Duration,
 }
 
@@ -193,6 +196,7 @@ impl RemoteMigration {
         Ok(remote_migrations)
     }
 
+    #[allow(dead_code)]
     pub async fn load_from_database_by_version(
         database_connection: &mut PgConnection,
         migration_version: i64,
