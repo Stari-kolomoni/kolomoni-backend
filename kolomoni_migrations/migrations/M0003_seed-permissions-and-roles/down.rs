@@ -1,12 +1,14 @@
-use kolomoni_migrations_core::errors::MigrationRollbackError;
-use sqlx::PgConnection;
+use kolomoni_migrations_core::{context::MigrationContext, errors::MigrationRollbackError};
 
 use super::{permissions::StandardPermission, roles::StandardRole};
 
 
 
 #[kolomoni_migrations_macros::down]
-pub async fn down(database_connection: &mut PgConnection) -> Result<(), MigrationRollbackError> {
+pub async fn down(mut context: MigrationContext<'_>) -> Result<(), MigrationRollbackError> {
+    let database_connection = context.database_connection();
+
+
     for permission in StandardPermission::all_permissions() {
         sqlx::query("DELETE FROM kolomoni.permission WHERE id = $1")
             .bind(permission.id())

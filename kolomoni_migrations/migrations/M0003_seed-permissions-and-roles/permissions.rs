@@ -1,5 +1,3 @@
-// TODO Needs roles and role-permission links as well (copy from older migrations).
-
 /// This is the list of available permissions as of this migration.
 ///
 /// **IMPORTANT: When still in the unstable phase, this permission list (or ones on related migrations) 

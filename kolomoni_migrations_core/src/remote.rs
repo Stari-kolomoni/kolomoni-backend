@@ -177,7 +177,7 @@ impl RemoteMigration {
                 version, name, up_script_type, up_script_sha256_hash,
                 down_script_type, down_script_sha256_hash,
                 applied_at, execution_time_milliseconds
-            FROM kolomoni.schema_migrations
+            FROM migrations.schema_migrations
             ORDER BY version ASC
             "#,
         )
@@ -208,7 +208,7 @@ impl RemoteMigration {
                 version, name, up_script_type, up_script_sha256_hash,
                 down_script_type, down_script_sha256_hash,
                 applied_at, execution_time_milliseconds
-            FROM kolomoni.schema_migrations
+            FROM migrations.schema_migrations
             WHERE version = $1
             LIMIT 1
             "#,

@@ -1,14 +1,16 @@
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use errors::{MigrationApplyError, MigrationRollbackError, RemoteMigrationError};
+use context::MigrationContext;
+use errors::{MigrationApplyError, MigrationRollbackError};
 use identifier::MigrationIdentifier;
 use migrations::BoxedMigrationFn;
 use remote::RemoteMigrationType;
 use sha256::Sha256Hash;
-use sqlx::{Connection, Executor, PgConnection};
+use sqlx::{postgres::PgConnectOptions, ConnectOptions, Connection, Executor, PgConnection};
 
 pub mod configuration;
+pub mod context;
 pub mod errors;
 pub mod identifier;
 pub mod migrations;
@@ -30,6 +32,57 @@ pub enum MigrationStatus {
     },
 }
 
+
+
+pub struct DatabaseConnectionManager {
+    normal_user_connection: Option<PgConnection>,
+
+    privileged_user_connection: Option<PgConnection>,
+}
+
+impl DatabaseConnectionManager {
+    #[allow(clippy::new_without_default)]
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            normal_user_connection: None,
+            privileged_user_connection: None,
+        }
+    }
+
+    pub fn get_existing_normal_user_connection(&mut self) -> Option<&mut PgConnection> {
+        self.normal_user_connection.as_mut()
+    }
+
+    pub fn get_existing_privileged_user_connection(&mut self) -> Option<&mut PgConnection> {
+        self.privileged_user_connection.as_mut()
+    }
+
+    pub async fn establish_normal_user_connection(
+        &mut self,
+        connect_options: &PgConnectOptions,
+    ) -> Result<&mut PgConnection, sqlx::Error> {
+        let connection = connect_options.connect().await?;
+
+        self.normal_user_connection = Some(connection);
+
+        Ok(self.normal_user_connection.as_mut().unwrap())
+    }
+
+    pub async fn establish_privileged_user_connection(
+        &mut self,
+        connect_options: &PgConnectOptions,
+    ) -> Result<&mut PgConnection, sqlx::Error> {
+        let connection = connect_options.connect().await?;
+
+        self.privileged_user_connection = Some(connection);
+
+        Ok(self.privileged_user_connection.as_mut().unwrap())
+    }
+}
+
+
+
 pub async fn connect_to_database(database_url: &str) -> Result<PgConnection, sqlx::Error> {
     sqlx::PgConnection::connect(database_url).await
 }
@@ -44,6 +97,46 @@ pub struct DownScriptDetails<'h> {
     sha256_hash: &'h Sha256Hash,
 }
 
+async fn create_migration_tracking_table_if_needed(
+    database_connection: &mut PgConnection,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS migrations.schema_migrations (
+            version bigint NOT NULL,
+            name text NOT NULL,
+            up_script_type text NOT NULL,
+            up_script_sha256_hash bytea NOT NULL,
+            down_script_type text,
+            down_script_sha256_hash bytea,
+            applied_at timestamp with time zone NOT NULL,
+            execution_time_milliseconds BIGINT NOT NULL,
+            CONSTRAINT pk__schema_migrations PRIMARY KEY (version),
+            CONSTRAINT check__schema_migrations__up_script_type CHECK (
+                (up_script_type = 'sql') OR (up_script_type = 'rust')
+            ),
+            CONSTRAINT check__schema_migrations__down_script_type CHECK (
+                (down_script_type = 'sql') OR (down_script_type = 'rust')
+                OR (down_script_type IS NULL)
+            ),
+            CONSTRAINT check__schema_migrations__up_fields CHECK (
+                (up_script_type IS NULL AND up_script_sha256_hash IS NULL)
+                OR (up_script_type IS NOT NULL AND up_script_sha256_hash IS NOT NULL)
+            ),
+            CONSTRAINT check__schema_migrations_down_fields CHECK (
+                (down_script_type IS NULL AND down_script_sha256_hash IS NULL)
+                OR (down_script_type IS NOT NULL AND down_script_sha256_hash IS NOT NULL)
+            ),
+            CONSTRAINT check__schema_migrations__min_execution_time CHECK (execution_time_milliseconds >= -1)
+        )
+        "#
+    )
+    .execute(&mut *database_connection)
+    .await?;
+
+    Ok(())
+}
+
 async fn insert_migration_tracking_row(
     database_connection: &mut PgConnection,
     migration_identifier: &MigrationIdentifier,
@@ -52,8 +145,10 @@ async fn insert_migration_tracking_row(
     applied_at: DateTime<Utc>,
     execution_time: Option<Duration>,
 ) -> Result<(), sqlx::Error> {
+    create_migration_tracking_table_if_needed(&mut *database_connection).await?;
+
     sqlx::query(
-        "INSERT INTO kolomoni.schema_migrations \
+        "INSERT INTO migrations.schema_migrations \
         (version, name, up_script_type, up_script_sha256_hash, \
         down_script_type, down_script_sha256_hash, \
         applied_at, execution_time_milliseconds)
@@ -87,7 +182,7 @@ async fn update_execution_time_in_migration_tracking_row(
     execution_time: Duration,
 ) -> Result<(), MigrationApplyError> {
     sqlx::query(
-        "UPDATE kolomoni.schema_migrations \
+        "UPDATE migrations.schema_migrations \
         SET execution_time_milliseconds = $1 \
         WHERE version = $2",
     )
@@ -104,7 +199,7 @@ async fn remove_migration_tracking_row(
     database_connection: &mut PgConnection,
     migration_version: i64,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM kolomoni.schema_migrations WHERE version = $1")
+    sqlx::query("DELETE FROM migrations.schema_migrations WHERE version = $1")
         .bind(migration_version)
         .execute(database_connection)
         .await?;
@@ -123,7 +218,10 @@ async fn execute_up_sql_and_update_migrations_table(
     let applied_at = Utc::now();
 
     // Executes the entire up.sql script of the migration.
-    // FIXME a concurrent index can't be created for some reason, even when there is no transaction
+    // FIXME A concurrent index can't be created for some reason, even when there is no transaction.
+    //       This is currently avoided by just not creating databases and concurrent indexes, but we should 
+    //       probably look into why this is happening. Maybe it could be because `up_sql` is a multiline script?
+    //       What would happen if we split at ";" (or something like that)?
     database_connection
         .execute(up_sql)
         .await
@@ -215,7 +313,7 @@ async fn execute_up_script_and_update_migrations_table<'c>(
 ) -> Result<(), MigrationApplyError> {
     let applied_at = Utc::now();
 
-    up_fn(database_connection).await?;
+    up_fn(MigrationContext::new(database_connection)).await?;
 
     // Insert a a new row in the schema_migrations table that corresponds
     // to the migration that was just applied.
@@ -355,7 +453,7 @@ async fn execute_down_script_and_update_migrations_table<'c>(
     migration_identifier: &MigrationIdentifier,
     down_fn: &BoxedMigrationFn<'c, MigrationRollbackError>,
 ) -> Result<(), MigrationRollbackError> {
-    down_fn(database_connection).await?;
+    down_fn(MigrationContext::new(database_connection)).await?;
 
     // Deletes the corresponding row in the schema_migrations table that tracked
     // the migration being applied.
@@ -397,29 +495,6 @@ pub(crate) async fn rollback_rust_migration<'c>(
         )
         .await?;
     }
-
-    Ok(())
-}
-
-
-pub async fn set_up_migration_table_if_needed(
-    connection: &mut PgConnection,
-) -> Result<(), RemoteMigrationError> {
-    sqlx::query!(
-        r#"
-        CREATE TABLE IF NOT EXISTS kolomoni.schema_migrations (
-            version bigint NOT NULL,
-            name text NOT NULL,
-            up_sql_sha256_hash bytea NOT NULL,
-            down_sql_sha256_hash bytea,
-            applied_at timestamp with time zone NOT NULL,
-            CONSTRAINT pk__schema_migrations PRIMARY KEY (version)
-        )
-        "#
-    )
-    .execute(&mut *connection)
-    .await
-    .map_err(|error| RemoteMigrationError::QueryFailed { error })?;
 
     Ok(())
 }

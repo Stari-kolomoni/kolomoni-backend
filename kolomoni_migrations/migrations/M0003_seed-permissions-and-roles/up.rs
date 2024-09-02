@@ -1,12 +1,14 @@
-use kolomoni_migrations_core::errors::MigrationApplyError;
-use sqlx::PgConnection;
+use kolomoni_migrations_core::{context::MigrationContext, errors::MigrationApplyError};
 
 use super::{permissions::StandardPermission, roles::StandardRole};
 
 
 
 #[kolomoni_migrations_macros::up]
-pub async fn up(database_connection: &mut PgConnection) -> Result<(), MigrationApplyError> {
+pub async fn up(mut context: MigrationContext<'_>) -> Result<(), MigrationApplyError> {
+    let database_connection = context.database_connection();
+
+
     for permission in StandardPermission::all_permissions() {
         sqlx::query(
             "INSERT INTO kolomoni.permission (id, name, description) \

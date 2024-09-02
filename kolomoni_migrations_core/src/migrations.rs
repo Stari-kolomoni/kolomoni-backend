@@ -1,13 +1,21 @@
 use std::{collections::HashMap, error::Error, fs, future::Future, path::Path, pin::Pin};
 
-use sqlx::{Connection, PgConnection};
-use thiserror::Error;
+use sqlx::{postgres::PgConnectOptions, ConnectOptions, PgConnection};
 
 use crate::{
     apply_rust_migration,
     apply_sql_migration,
     configuration::MigrationConfiguration,
-    errors::{MigrationApplyError, MigrationRollbackError, RemoteMigrationError},
+    context::MigrationContext,
+    create_migration_tracking_table_if_needed,
+    errors::{
+        InitializeMigrationDirectoryError,
+        InitializeMigrationTrackingError,
+        MigrationApplyError,
+        MigrationRollbackError,
+        RemoteMigrationError,
+        StatusError,
+    },
     identifier::MigrationIdentifier,
     remote::{RemoteMigration, RemoteMigrationType},
     rollback_rust_migration,
@@ -16,96 +24,6 @@ use crate::{
     DownScriptDetails,
     MigrationStatus,
 };
-
-
-
-
-pub async fn connect_to_postgresql_database_by_url(
-    database_url: &str,
-) -> Result<PgConnection, sqlx::Error> {
-    sqlx::PgConnection::connect(database_url).await
-}
-
-
-#[derive(Debug, Error)]
-pub enum InitializeMigrationDirectoryError {
-    #[error("provided migrations directory path exists, but is not a directory")]
-    NotADirectory,
-
-    #[error("unable to create missing migrations directory")]
-    UnableToCreate {
-        #[source]
-        error: std::io::Error,
-    },
-}
-
-#[derive(Debug, Error)]
-pub enum InitializeMigrationTrackingError {
-    #[error("unable to connect to database")]
-    UnableToConnect {
-        #[source]
-        error: sqlx::Error,
-    },
-
-    #[error("failed to create migration tracking table in database")]
-    UnableToCreateTable {
-        #[source]
-        error: sqlx::Error,
-    },
-}
-
-#[derive(Debug, Error)]
-pub enum StatusError {
-    #[error("failed to load migration from database")]
-    RemoteMigrationError(
-        #[from]
-        #[source]
-        RemoteMigrationError,
-    ),
-
-    #[error(
-        "migration exists in the database, but its local \
-        (embedded) counterpart cannot be found: {}",
-        .identifier
-    )]
-    MigrationDoesNotExistLocally { identifier: MigrationIdentifier },
-
-    #[error(
-        "embedded and remote migration don't match due to different hashes (version {}): \
-        {} vs {} (up), {:?} vs {:?} (down)",
-        .identifier,
-        .remote_up_script_sha256_hash,
-        .embedded_up_script_sha256_hash,
-        .remote_down_script_sha256_hash,
-        .embedded_down_script_sha256_hash
-    )]
-    HashMismatch {
-        identifier: MigrationIdentifier,
-
-        remote_up_script_sha256_hash: Sha256Hash,
-
-        embedded_up_script_sha256_hash: Sha256Hash,
-
-        remote_down_script_sha256_hash: Option<Sha256Hash>,
-
-        embedded_down_script_sha256_hash: Option<Sha256Hash>,
-    },
-
-    #[error(
-        "embedded and remote migration don't match due to different names \
-        being used for the same version: {} and {} are used for version {}",
-        .embedded_migration_name,
-        .remote_migration_name,
-        .version
-    )]
-    NameMismatch {
-        version: i64,
-
-        remote_migration_name: String,
-
-        embedded_migration_name: String,
-    },
-}
 
 
 
@@ -168,7 +86,6 @@ impl MigrationManager {
     ///
     /// If the `migrations_directory` already exists, this has no effect.
     pub fn initialize_migrations_directory<P>(
-        &self,
         migrations_directory: P,
     ) -> Result<(), InitializeMigrationDirectoryError>
     where
@@ -193,51 +110,76 @@ impl MigrationManager {
     /// Initializes the migration tracking table in the database.
     ///
     /// If the table has already been initialized, this has no effect.
-    pub async fn initialize_migration_tracking_in_database(
-        &self,
+    pub async fn initialize_migration_tracking_in_database_if_needed(
         database_connection: &mut PgConnection,
     ) -> Result<(), InitializeMigrationTrackingError> {
-        sqlx::query!(
-            r#"
-            CREATE TABLE IF NOT EXISTS kolomoni.schema_migrations (
-                version bigint NOT NULL,
-                name text NOT NULL,
-                up_script_type text NOT NULL,
-                up_script_sha256_hash bytea NOT NULL,
-                down_script_type text,
-                down_script_sha256_hash bytea,
-                applied_at timestamp with time zone NOT NULL,
-                execution_time_milliseconds BIGINT NOT NULL,
-                CONSTRAINT pk__schema_migrations PRIMARY KEY (version),
-                CONSTRAINT check__schema_migrations__up_script_type CHECK (
-                    (up_script_type = 'sql') OR (up_script_type = 'rust')
-                ),
-                CONSTRAINT check__schema_migrations__down_script_type CHECK (
-                    (down_script_type = 'sql') OR (down_script_type = 'rust')
-                    OR (down_script_type IS NULL)
-                ),
-                CONSTRAINT check__schema_migrations__up_fields CHECK (
-                    (up_script_type IS NULL AND up_script_sha256_hash IS NULL)
-                    OR (up_script_type IS NOT NULL AND up_script_sha256_hash IS NOT NULL)
-                ),
-                CONSTRAINT check__schema_migrations_down_fields CHECK (
-                    (down_script_type IS NULL AND down_script_sha256_hash IS NULL)
-                    OR (down_script_type IS NOT NULL AND down_script_sha256_hash IS NOT NULL)
-                ),
-                CONSTRAINT check__schema_migrations__min_execution_time CHECK (execution_time_milliseconds >= -1)
-            )
-            "#
-        )
-        .execute(&mut *database_connection)
-        .await
-        .map_err(|error| InitializeMigrationTrackingError::UnableToCreateTable { error })?;
+        create_migration_tracking_table_if_needed(database_connection)
+            .await
+            .map_err(|error| InitializeMigrationTrackingError::UnableToCreateTable { error })
+    }
 
-        Ok(())
+    pub async fn migration_tracking_table_exists(
+        database_connection: &mut PgConnection,
+    ) -> Result<bool, sqlx::Error> {
+        let schema_migrations_table_exists: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE  table_schema = 'migrations'
+                AND    table_name   = 'schema_migrations'
+            )"#,
+        )
+        .fetch_one(database_connection)
+        .await?;
+
+        Ok(schema_migrations_table_exists)
     }
 
 
     pub fn migrations_without_status(&self) -> &[EmbeddedMigration<'static>] {
         self.embedded_migrations.as_slice()
+    }
+
+    /// Returns all embedded migrations marked as pending.
+    fn get_consolidated_migrations_marked_as_pending(&self) -> Vec<ConsolidatedMigration<'_>> {
+        self.embedded_migrations
+            .iter()
+            .map(|migration| ConsolidatedMigration {
+                migration,
+                status: MigrationStatus::Pending,
+            })
+            .collect()
+    }
+
+    /// Unlike [`Self::migrations_with_status`], this method expects a [`PgConnectOptions`] instead of the live connection.
+    /// This is because when a connection cannot be established, or when the migration tracking table is not
+    /// present in the database, the returned migrations will all be marked as pending.
+    pub async fn migrations_with_status_with_fallback<'m>(
+        &'m self,
+        connection_options: Option<&PgConnectOptions>,
+    ) -> Result<Vec<ConsolidatedMigration<'m>>, StatusError> {
+        let Some(connection_options) = connection_options else {
+            // When a connection fails, we will return all migrations as pending.
+            return Ok(self.get_consolidated_migrations_marked_as_pending());
+        };
+
+        let Ok(mut connection) = connection_options.connect().await else {
+            // When a connection fails, we will return all migrations as pending.
+            return Ok(self.get_consolidated_migrations_marked_as_pending());
+        };
+
+        if !Self::migration_tracking_table_exists(&mut connection)
+            .await
+            .map_err(|error| {
+                StatusError::RemoteMigrationError(RemoteMigrationError::QueryFailed { error })
+            })?
+        {
+            // When the migration table is not present, we will return all migrations as pending.
+            return Ok(self.get_consolidated_migrations_marked_as_pending());
+        }
+
+
+        self.migrations_with_status(&mut connection).await
     }
 
 
@@ -328,25 +270,8 @@ impl MigrationManager {
 
         Ok(consolidated_migrations)
     }
-
-    /*
-    pub async fn up(
-        &self,
-        database_connection: &mut PgConnection,
-    ) -> Result<(), MigrationApplyError> {
-        todo!();
-    }
-
-    pub async fn down(
-        &self,
-        database_connection: &mut PgConnection,
-    ) -> Result<(), MigrationRollbackError> {
-        todo!();
-    } */
-
-
-    // TODO functions like status, up, down, ...
 }
+
 
 
 pub struct ConsolidatedMigration<'c> {
@@ -362,6 +287,10 @@ impl<'c> ConsolidatedMigration<'c> {
 
     pub fn status(&self) -> &MigrationStatus {
         &self.status
+    }
+
+    pub fn configuration(&self) -> &MigrationConfiguration {
+        &self.migration.configuration
     }
 
     pub fn has_rollback_script(&self) -> bool {
@@ -434,13 +363,10 @@ impl<'c> EmbeddedMigration<'c> {
         database_connection: &mut PgConnection,
         run_in_transaction: bool,
     ) -> Result<(), MigrationApplyError> {
-        let down_details = match self.down.as_ref() {
-            Some(down) => Some(DownScriptDetails {
-                sha256_hash: down.sha256_hash(),
-                r#type: down.remote_migration_type(),
-            }),
-            None => todo!(),
-        };
+        let down_details = self.down.as_ref().map(|down| DownScriptDetails {
+            sha256_hash: down.sha256_hash(),
+            r#type: down.remote_migration_type(),
+        });
 
         match &self.up {
             EmbeddedMigrationScript::Sql(sql_up) => {
@@ -526,7 +452,7 @@ where
 
     pub fn new_rust<F>(migration_function: F, file_sha256_hash: Sha256Hash) -> Self
     where
-        F: for<'a> Fn(&'a mut PgConnection) -> Pin<Box<dyn Future<Output = Result<(), E>> + 'a>>
+        F: for<'a> Fn(MigrationContext<'a>) -> Pin<Box<dyn Future<Output = Result<(), E>> + 'a>>
             + 'c,
     {
         let boxed_fn = Box::new(migration_function);
@@ -567,7 +493,7 @@ pub struct ConcreteSqlMigrationScript {
 }
 
 pub type BoxedMigrationFn<'c, E> = Box<
-    dyn for<'a> Fn(&'a mut PgConnection) -> Pin<Box<dyn Future<Output = Result<(), E>> + 'a>> + 'c,
+    dyn for<'a> Fn(MigrationContext<'a>) -> Pin<Box<dyn Future<Output = Result<(), E>> + 'a>> + 'c,
 >;
 
 pub struct ConcreteRustMigrationScript<'c, E: Error> {

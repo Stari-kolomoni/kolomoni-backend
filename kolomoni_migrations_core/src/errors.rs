@@ -2,7 +2,7 @@ use std::{borrow::Cow, error::Error};
 
 use thiserror::Error;
 
-use crate::identifier::MigrationIdentifier;
+use crate::{identifier::MigrationIdentifier, sha256::Sha256Hash};
 
 
 
@@ -70,64 +70,78 @@ pub enum MigrationRollbackError {
 }
 
 
-/*
+
+
 #[derive(Debug, Error)]
-pub enum MigrationError {
-    #[error("database error encountered")]
-    RemoteError {
-        #[from]
+pub enum InitializeMigrationDirectoryError {
+    #[error("provided migrations directory path exists, but is not a directory")]
+    NotADirectory,
+
+    #[error("unable to create missing migrations directory")]
+    UnableToCreate {
         #[source]
-        error: RemoteMigrationError,
-    },
-
-    #[error("local migration error encountered")]
-    LocalError {
-        #[from]
-        #[source]
-        error: LocalMigrationError,
-    },
-
-    #[error(
-        "migration versions must be unique, but found at least two with version {}",
-        .version
-    )]
-    MigrationVersionIsNotUnique { version: i64 },
-
-    #[error(
-        "remote and local migration {} don't match due to different hashes: {} vs {} (up), {:?} vs {:?} (down)",
-        .identifier,
-        .remote_up_sql_sha256_hash,
-        .local_up_sql_sha256_hash,
-        .remote_down_sql_sha256_hash,
-        .local_down_sql_sha256_hash
-    )]
-    RemoteAndLocalMigrationHasDifferentHash {
-        identifier: MigrationIdentifier,
-
-        remote_up_sql_sha256_hash: Sha256Hash,
-
-        local_up_sql_sha256_hash: Sha256Hash,
-
-        remote_down_sql_sha256_hash: Option<Sha256Hash>,
-
-        local_down_sql_sha256_hash: Option<Sha256Hash>,
-    },
-
-    #[error(
-        "migration exists in the database, but its local counterpart is no longer available: {}",
-        .identifier
-    )]
-    MigrationNoLongerExistsLocally { identifier: MigrationIdentifier },
-
-    #[error(
-        "remote migration {} is invalid: {}",
-        .identifier,
-        .reason
-    )]
-    RemoteMigrationIsInvalid {
-        identifier: MigrationIdentifier,
-
-        reason: Cow<'static, str>,
+        error: std::io::Error,
     },
 }
- */
+
+#[derive(Debug, Error)]
+pub enum InitializeMigrationTrackingError {
+    #[error("failed to create migration tracking table in database")]
+    UnableToCreateTable {
+        #[source]
+        error: sqlx::Error,
+    },
+}
+
+#[derive(Debug, Error)]
+pub enum StatusError {
+    #[error("failed to load migration from database")]
+    RemoteMigrationError(
+        #[from]
+        #[source]
+        RemoteMigrationError,
+    ),
+
+    #[error(
+        "migration exists in the database, but its local \
+        (embedded) counterpart cannot be found: {}",
+        .identifier
+    )]
+    MigrationDoesNotExistLocally { identifier: MigrationIdentifier },
+
+    #[error(
+        "embedded and remote migration don't match due to different hashes (version {}): \
+        {} vs {} (up), {:?} vs {:?} (down)",
+        .identifier,
+        .remote_up_script_sha256_hash,
+        .embedded_up_script_sha256_hash,
+        .remote_down_script_sha256_hash,
+        .embedded_down_script_sha256_hash
+    )]
+    HashMismatch {
+        identifier: MigrationIdentifier,
+
+        remote_up_script_sha256_hash: Sha256Hash,
+
+        embedded_up_script_sha256_hash: Sha256Hash,
+
+        remote_down_script_sha256_hash: Option<Sha256Hash>,
+
+        embedded_down_script_sha256_hash: Option<Sha256Hash>,
+    },
+
+    #[error(
+        "embedded and remote migration don't match due to different names \
+        being used for the same version: {} and {} are used for version {}",
+        .embedded_migration_name,
+        .remote_migration_name,
+        .version
+    )]
+    NameMismatch {
+        version: i64,
+
+        remote_migration_name: String,
+
+        embedded_migration_name: String,
+    },
+}

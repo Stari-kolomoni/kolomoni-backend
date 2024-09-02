@@ -1,15 +1,20 @@
 ###
 # Migration
 #   version 0002
-#   name    seed-permissions-and-roles
+#   name    initialize-database
 #
-# Created on: 2024-08-27T14:48:44Z
+# Created on: 2024-08-24
 ###
 #
 # Note that it is impossible to modify the version or name of the migration in 
 # this configuration file *by design*. Both the version and name are 
 # *always* parsed from the parent directory name for consistency.
 #
+
+
+# Whether to run the migration (up and down) as a privileged user instead of the normal user.
+# Depending on setup, this might be required for things like creating databases and granting permissions.
+run_as_privileged_user = false
 
 
 ##

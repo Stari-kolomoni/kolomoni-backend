@@ -10,6 +10,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 
+/// See usage: `serde(default = "return_false")`.
+/// Awkward, but there's currently no way to give direct values with serde.
+fn get_false() -> bool {
+    false
+}
+
+
 
 /// An error that can ocurr when loading migration configuration files.
 #[derive(Error, Debug)]
@@ -111,7 +118,6 @@ impl ToTokens for MigrationDownConfiguration {
 }
 
 
-
 /// Migration configuration, generally loaded from `migration.toml`
 /// inside a single migration's directory.
 ///
@@ -123,6 +129,9 @@ pub struct MigrationConfiguration {
     pub up: MigrationUpConfiguration,
 
     pub down: MigrationDownConfiguration,
+
+    #[serde(default = "get_false")]
+    pub run_as_privileged_user: bool,
 }
 
 
@@ -195,6 +204,10 @@ impl MigrationConfiguration {
 # *always* parsed from the parent directory name for consistency.
 #
 
+# Whether to run the migration (up and down) as a privileged user instead of the normal user.
+# Depending on setup, this might be required for things like creating databases and granting permissions.
+run_as_privileged_user = false
+
 
 ##
 # Configuration that impacts the up.sql migration script.
@@ -226,10 +239,13 @@ impl ToTokens for MigrationConfiguration {
         let up_field_tokens = self.up.to_token_stream();
         let down_field_tokens = self.down.to_token_stream();
 
+        let run_as_privileged_user_field_tokens = self.run_as_privileged_user.to_token_stream();
+
         tokens.append_all(quote! {
             kolomoni_migrations_core::configuration::MigrationConfiguration {
                 up: #up_field_tokens,
-                down: #down_field_tokens
+                down: #down_field_tokens,
+                run_as_privileged_user: #run_as_privileged_user_field_tokens
             }
         });
     }
@@ -244,7 +260,7 @@ mod test {
     #[test]
     fn template_generator_creates_valid_toml() {
         let template_string =
-            MigrationConfiguration::generate_template(1, "hello-world", DateTime::<Utc>::MIN_UTC);
+            MigrationConfiguration::generate_template(1, "hello-world", &DateTime::<Utc>::MIN_UTC);
 
         let parsed_migration_config =
             MigrationConfiguration::load_from_str(&template_string).unwrap();

@@ -1,8 +1,5 @@
-use std::env::{self, VarError};
-
-use kolomoni_migrations_core::connect_to_database;
-use miette::{miette, Context, IntoDiagnostic, Result};
-use sqlx::Connection;
+use kolomoni_migrations_core::migrations::MigrationManager;
+use miette::{Context, IntoDiagnostic, Result};
 
 use crate::cli::InitializeCommandArguments;
 
@@ -20,6 +17,7 @@ pub fn cli_initialize(arguments: InitializeCommandArguments) -> Result<()> {
 }
 
 async fn cli_initialize_inner(arguments: InitializeCommandArguments) -> Result<()> {
+    /*
     let manager = crate::migrations::manager();
 
 
@@ -43,6 +41,7 @@ async fn cli_initialize_inner(arguments: InitializeCommandArguments) -> Result<(
         },
     };
 
+
     print!("Connecting to the PostgreSQL database...");
 
     let mut database_connection = connect_to_database(database_url.as_str())
@@ -64,7 +63,6 @@ async fn cli_initialize_inner(arguments: InitializeCommandArguments) -> Result<(
     println!("  [Done!]");
 
 
-
     print!("Disconnecting from the database...");
 
     database_connection
@@ -75,12 +73,12 @@ async fn cli_initialize_inner(arguments: InitializeCommandArguments) -> Result<(
 
     println!("  [Done!]");
 
+    */
 
 
     print!("Checking for migrations directory, creating one if needed...");
 
-    manager
-        .initialize_migrations_directory(&arguments.migrations_directory_path)
+    MigrationManager::initialize_migrations_directory(arguments.migrations_directory_path)
         .into_diagnostic()
         .wrap_err("failed to initialize migrations directory on disk")?;
 

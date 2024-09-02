@@ -1,9 +1,9 @@
 use std::io::{self, Write};
 
-use kolomoni_migrations_core::{connect_to_database, MigrationStatus};
+use kolomoni_migrations_core::{DatabaseConnectionManager, MigrationStatus};
 use miette::{miette, Context, IntoDiagnostic, Result};
 
-use crate::{cli::DownCommandArguments, commands::get_database_url_with_env_fallback};
+use crate::cli::DownCommandArguments;
 
 pub fn cli_down(arguments: DownCommandArguments) -> Result<()> {
     let async_runtime = tokio::runtime::Runtime::new()
@@ -20,36 +20,26 @@ async fn cli_down_inner(arguments: DownCommandArguments) -> Result<()> {
     let manager = crate::migrations::manager();
 
 
-    let database_url =
-        get_database_url_with_env_fallback(arguments.database_url.as_ref(), "DATABASE_URL")?
-            .ok_or_else(|| {
-                miette!(
-                    "either the --database-url argument or the DATABASE_URL \
-                    environment variable must be specified"
-                )
-            })?;
-
-
-    print!("Connecting to the PostgreSQL database...");
-
-    let mut database_connection = connect_to_database(database_url.as_ref())
-        .await
+    let normal_user_db_connection_options = arguments
+        .database
+        .database_connection_options_for_normal_user()
         .into_diagnostic()
-        .wrap_err("failed to connect to database")?;
+        .wrap_err("failed to obtain normal database connection info")?;
 
-    println!("  [Connected!]");
+    let privileged_user_db_connection_options = arguments
+        .database
+        .database_connection_options_for_privileged_user()
+        .into_diagnostic()
+        .wrap_err("failed to obtain privileged database connection info")?;
+
+
+    let mut connection_manager = DatabaseConnectionManager::new();
 
 
     print!("Loading migrations...");
 
-    manager
-        .initialize_migration_tracking_in_database(&mut database_connection)
-        .await
-        .into_diagnostic()
-        .wrap_err("failed to ensure migration tracking is set up")?;
-
     let migrations = manager
-        .migrations_with_status(&mut database_connection)
+        .migrations_with_status_with_fallback(normal_user_db_connection_options.as_ref())
         .await
         .into_diagnostic()
         .wrap_err("failed to load migrations")?;
@@ -101,9 +91,34 @@ async fn cli_down_inner(arguments: DownCommandArguments) -> Result<()> {
             continue;
         }
 
-        if migration.identifier().version > version_to_rollback_to {
-            migrations_to_rollback.push(migration);
+        if migration.identifier().version <= version_to_rollback_to {
+            continue;
         }
+
+
+        if migration.configuration().run_as_privileged_user {
+            if privileged_user_db_connection_options.is_none() {
+                println!(
+                    "Unable to rollback: \
+                    migration {} requires privileged access, but --privileged-user-and-password \
+                    or the equivalent environment variable has not been set.",
+                    migration.identifier()
+                );
+
+                return Ok(());
+            }
+        } else if normal_user_db_connection_options.is_none() {
+            println!(
+                "Unable to rollback: \
+                migration {} requires normal (non-privileged) access, but --normal-user-and-password \
+                or the equivalent environment variable has not been set.",
+                migration.identifier()
+            );
+
+            return Ok(());
+        }
+
+        migrations_to_rollback.push(migration);
     }
 
     if migrations_to_rollback.is_empty() {
@@ -144,13 +159,59 @@ async fn cli_down_inner(arguments: DownCommandArguments) -> Result<()> {
     println!();
 
     for migration_to_roll_back in &migrations_to_rollback {
+        let database_connection = match migration_to_roll_back
+            .configuration()
+            .run_as_privileged_user
+        {
+            true => {
+                match connection_manager.get_existing_privileged_user_connection() {
+                    Some(connection) => connection,
+                    None => {
+                        print!("Establishing database connection (as privileged user)...");
+
+                        let connection = connection_manager.establish_privileged_user_connection(
+                            privileged_user_db_connection_options.as_ref()
+                            // PANIC SAFETY: A migration planner loop above must check whether the user has specified the connection options.
+                            .expect("expected the function to check whether the user has specified privileged user beforehand")
+                        ).await
+                            .into_diagnostic()
+                            .wrap_err("failed to establish database connection for privileged user")?;
+
+                        println!("  [Done!]");
+
+                        connection
+                    }
+                }
+            }
+            false => {
+                match connection_manager.get_existing_normal_user_connection() {
+                    Some(connection) => connection,
+                    None => {
+                        print!("Establishing database connection (as normal user)...");
+
+                        let connection = connection_manager.establish_normal_user_connection(
+                            normal_user_db_connection_options.as_ref()
+                            // PANIC SAFETY: A migration planner loop above must check whether the user has specified the connection options.
+                            .expect("expected the function to check whether the user has specified the normal user beforehand")
+                        ).await
+                            .into_diagnostic()
+                            .wrap_err("failed to establish database connection for normal user")?;
+
+                        println!("  [Done!]");
+
+                        connection
+                    }
+                }
+            }
+        };
+
         print!(
             "Rolling back migration {}...",
             migration_to_roll_back.identifier()
         );
 
         migration_to_roll_back
-            .execute_down(&mut database_connection)
+            .execute_down(database_connection)
             .await
             .into_diagnostic()?;
 

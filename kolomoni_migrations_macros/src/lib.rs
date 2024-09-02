@@ -427,16 +427,14 @@ pub fn up(_attr: TokenStream, input: TokenStream) -> TokenStream {
     quote! {
         #wrapped_inner_function
 
-        pub fn up<'c>(
-            database_connection: &'c mut sqlx::PgConnection
-        ) ->
+        pub fn up<'c>(context: MigrationContext<'c>) ->
             std::pin::Pin<Box<
                 dyn std::future::Future<
                     Output = Result<(), kolomoni_migrations_core::errors::MigrationApplyError>
                 > + 'c
             >>
         {
-            Box::pin(#wrapped_inner_function_ident(database_connection))
+            Box::pin(#wrapped_inner_function_ident(context))
         }
     }
     .into()
@@ -544,16 +542,14 @@ pub fn down(_attr: TokenStream, input: TokenStream) -> TokenStream {
     quote! {
         #wrapped_inner_function
 
-        pub fn down<'c>(
-            database_connection: &'c mut sqlx::PgConnection
-        ) ->
+        pub fn down<'c>(context: MigrationContext<'c>) ->
             std::pin::Pin<Box<
                 dyn std::future::Future<
                     Output = Result<(), kolomoni_migrations_core::errors::MigrationRollbackError>
                 > + 'c
             >>
         {
-            Box::pin(#wrapped_inner_function_ident(database_connection))
+            Box::pin(#wrapped_inner_function_ident(context))
         }
     }
     .into()

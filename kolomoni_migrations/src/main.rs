@@ -29,7 +29,6 @@ pub fn main() -> Result<()> {
 
 
 
-// TODO migrate permission and role seeding to new migration system
 
 // TODO Required CLI commands:
 // - [DONE, needs a style pass] initialize: creates the migration directory if needed

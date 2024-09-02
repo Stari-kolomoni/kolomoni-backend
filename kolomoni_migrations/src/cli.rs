@@ -1,6 +1,13 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    borrow::Cow,
+    env::{self, VarError},
+    path::PathBuf,
+    str::FromStr,
+};
 
 use clap::{ArgAction, Args, Parser, Subcommand};
+use sqlx::postgres::PgConnectOptions;
+use thiserror::Error;
 
 #[derive(Parser)]
 #[command(
@@ -85,6 +92,122 @@ impl FromStr for GeneratedScriptType {
 }
 
 
+#[derive(Debug, Error)]
+#[error("environment variable {} is not valid Unicode", .variable_name)]
+pub struct EnvValueNotUnicode {
+    variable_name: String,
+}
+
+pub(crate) fn get_string_with_env_fallback<'a, S>(
+    optional_str: Option<&'a S>,
+    fallback_environment_variable_name: &str,
+) -> Result<Option<Cow<'a, str>>, EnvValueNotUnicode>
+where
+    S: AsRef<str>,
+{
+    if let Some(specified_value) = optional_str {
+        return Ok(Some(Cow::from(specified_value.as_ref())));
+    }
+
+    match env::var(fallback_environment_variable_name) {
+        Ok(database_url_from_env) => Ok(Some(Cow::from(database_url_from_env))),
+        Err(error) => match error {
+            VarError::NotPresent => Ok(None),
+            VarError::NotUnicode(_) => Err(EnvValueNotUnicode {
+                variable_name: fallback_environment_variable_name.to_string(),
+            }),
+        },
+    }
+}
+
+
+#[derive(Debug, Error)]
+pub enum DatabaseConnectionArgsError {
+    #[error("invalid database URL format")]
+    InvalidDatabaseUrlFormat {
+        #[source]
+        error: sqlx::Error,
+    },
+}
+
+
+#[derive(Args)]
+pub struct DatabaseConnectionArgs {
+    #[arg(
+        long = "database-url-for-normal-user",
+        help = "PostgreSQL connection URL for the normal user \
+                (see run_as_privileged_user option for individual migrations). \
+                If unspecified, we'll attempt to use the KOLOMONI_MIGRATIONS_DATABASE_URL_NORMAL_USER environment variable. \
+                If you attempt to perform a migration that would use this user \
+                — i.e. for migrations with `run_as_privileged_user = false` — an error will be shown. \
+                If no migration needs to use the normal user, it is valid to not specify it."
+    )]
+    pub database_url_for_normal_user: Option<String>,
+
+    #[arg(
+        long = "database-url-for-privileged-user",
+        help = "PostgreSQL connection URL for the privileged user \
+                (see run_as_privileged_user option for individual migrations). \
+                If unspecified, we'll attempt to use the KOLOMONI_MIGRATIONS_DATABASE_URL_PRIVILEGED_USER environment variable. \
+                If you attempt to perform a migration that would use this user \
+                — i.e. for migrations with `run_as_privileged_user = true` — an error will be shown. \
+                If no migration needs to use the normal user, it is valid to not specify it."
+    )]
+    pub database_url_for_privileged_user: Option<String>,
+}
+
+impl DatabaseConnectionArgs {
+    /// # Panic
+    /// Panics when the `KOLOMONI_MIGRATIONS_DATABASE_URL_NORMAL_USER`
+    /// environment variable is not valid Unicode.
+    pub fn database_connection_options_for_normal_user(
+        &self,
+    ) -> Result<Option<PgConnectOptions>, DatabaseConnectionArgsError> {
+        let potential_normal_user_db_url = get_string_with_env_fallback(
+            self.database_url_for_normal_user.as_ref(),
+            "KOLOMONI_MIGRATIONS_DATABASE_URL_NORMAL_USER",
+        )
+        // PANIC INFO: Documented on the function.
+        .expect("environment variable is not valid unicode");
+
+        let Some(normal_user_db_url) = potential_normal_user_db_url else {
+            return Ok(None);
+        };
+
+
+        let normal_user_db_connect_options = PgConnectOptions::from_str(&normal_user_db_url)
+            .map_err(|error| DatabaseConnectionArgsError::InvalidDatabaseUrlFormat { error })?;
+
+        Ok(Some(normal_user_db_connect_options))
+    }
+
+    /// # Panic
+    /// Panics when the `KOLOMONI_MIGRATIONS_DATABASE_URL_PRIVILEGED_USER`
+    /// environment variable is not valid Unicode.
+    pub fn database_connection_options_for_privileged_user(
+        &self,
+    ) -> Result<Option<PgConnectOptions>, DatabaseConnectionArgsError> {
+        let potential_privileged_user_db_url = get_string_with_env_fallback(
+            self.database_url_for_normal_user.as_ref(),
+            "KOLOMONI_MIGRATIONS_DATABASE_URL_PRIVILEGED_USER",
+        )
+        // PANIC INFO: Documented on the function.
+        .expect("environment variable is not valid unicode");
+
+        let Some(privileged_user_db_url) = potential_privileged_user_db_url else {
+            return Ok(None);
+        };
+
+
+        let privileged_user_db_connect_options = PgConnectOptions::from_str(&privileged_user_db_url)
+            .map_err(|error| DatabaseConnectionArgsError::InvalidDatabaseUrlFormat { error })?;
+
+        Ok(Some(privileged_user_db_connect_options))
+    }
+}
+
+
+
 #[derive(Args)]
 pub struct GenerateCommandArguments {
     #[arg(
@@ -157,14 +280,8 @@ pub struct UpCommandArguments {
     )]
     pub migrations_directory_path: PathBuf,
 
-    #[arg(
-        long = "database-url",
-        short = 'd',
-        help = "URL of the PostgreSQL database to use. If unspecified, we'll attempt to use \
-                the DATABASE_URL environment variable. If neither this option nor DATABASE_URL are available, \
-                an error will be returned"
-    )]
-    pub database_url: Option<String>,
+    #[command(flatten)]
+    pub database: DatabaseConnectionArgs,
 
     #[arg(
         long = "migrate-to-version",
@@ -188,14 +305,8 @@ pub struct DownCommandArguments {
     )]
     pub migrations_directory_path: PathBuf,
 
-    #[arg(
-        long = "database-url",
-        short = 'd',
-        help = "URL of the PostgreSQL database to use. If unspecified, we'll attempt to use \
-                the DATABASE_URL environment variable. If neither this option nor DATABASE_URL are available, \
-                an error will be returned"
-    )]
-    pub database_url: Option<String>,
+    #[command(flatten)]
+    pub database: DatabaseConnectionArgs,
 
     #[arg(
         long = "rollback-to-version",
