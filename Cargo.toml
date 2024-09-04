@@ -13,7 +13,8 @@ publish = false
 members = [
     "kolomoni_auth",
     "kolomoni_configuration",
-    # "kolomoni_database",
+    "kolomoni_database",
+    # "kolomoni_database_old",
     "kolomoni_migrations",
     "kolomoni_migrations_core",
     "kolomoni_migrations_macros",
@@ -73,7 +74,6 @@ http = "0.2.12"
 mime = "0.3.17"
 uuid = { version = "1.8.0", features = ["v7"] }
 httpdate = "1.0.3"
-futures-util = "0.3.30"
 bytes = "1.6.0"
 dotenvy = "0.15.7"
 
@@ -85,6 +85,10 @@ pathdiff = "0.2.1"
 path-slash = "0.2.1"
 
 fs-more = "0.7.1"
+
+futures-core = "0.3.30"
+futures-util = "0.3.30"
+pin-project-lite = "0.2.14"
 
 
 [workspace.dependencies.sqlx]

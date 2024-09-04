@@ -12,59 +12,6 @@ CARGO_MAKE_USE_WORKSPACE_PROFILE = false
 
 
 
-
-[tasks."migrations:create"]
-clear = true
-workspace = false
-command = "sea-orm-cli"
-args = [
-    "migrate",
-    "generate",
-    "--universal-time",
-    "--migration-dir",
-    "./kolomoni_migrations",
-    "${@}"
-]
-
-
-[tasks."migrations"]
-clear = true
-workspace = false
-command = "sea-orm-cli"
-args = [
-    "migrate",
-    "${@}",
-    "--migration-dir",
-    "./kolomoni_migrations"
-]
-
-[tasks."migrations:up"]
-clear = true
-workspace = false
-command = "sea-orm-cli"
-args = [
-    "migrate",
-    "up",
-    "--migration-dir",
-    "./kolomoni_migrations"
-]
-
-
-
-[tasks."entities:generate"]
-clear = true
-workspace = false
-command = "sea-orm-cli"
-args = [
-    "generate",
-    "entity",
-    "--output-dir",
-    "./kolomoni_database/src/entities",
-    "--expanded-format"
-]
-
-
-
 [tasks."database:initialize"]
 clear = true
 workspace = false
@@ -116,6 +63,7 @@ args = [
     "--open"
 ]
 
+
 [tasks."backend:run"]
 clear = true
 workspace = true
@@ -123,7 +71,7 @@ command = "cargo"
 args = ["run", "--release"]
 cwd = "."
 
-[tasks."openapi-backend:run"]
+[tasks."backend:openapi:run"]
 clear = true
 workspace = true
 command = "cargo"
@@ -147,6 +95,7 @@ args = [
 [tasks.documentation]
 clear = true
 workspace = true
+alias = "doc"
 dependencies = [
     "build-and-open-full-documentation",
     "build-and-watch-workspace-documentation-with-private-items"

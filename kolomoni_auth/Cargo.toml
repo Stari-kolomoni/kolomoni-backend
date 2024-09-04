@@ -8,13 +8,21 @@ publish = false
 
 [dependencies]
 tokio = { workspace = true }
+
+tracing = { workspace = true }
+
 actix-web = { workspace = true }
+actix-utils = { workspace = true }
+
 # sea-orm = { workspace = true }
 miette = { workspace = true }
-actix-utils = { workspace = true }
-tracing = { workspace = true }
+
 thiserror = { workspace = true }
+
 chrono = { workspace = true }
+
 jsonwebtoken = { workspace = true }
+argon2 = { workspace = true }
+
 serde = { workspace = true }
 serde_with = { workspace = true }

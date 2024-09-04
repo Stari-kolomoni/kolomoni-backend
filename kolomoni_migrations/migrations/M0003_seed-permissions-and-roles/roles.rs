@@ -1,5 +1,6 @@
 use super::permissions::StandardPermission;
 
+
 /// This is the list of available roles.
 ///
 /// **IMPORTANT: When still in the unstable phase, this role list (or ones on related migrations)
@@ -21,27 +22,35 @@ impl StandardRole {
         vec![Self::User, Self::Administrator]
     }
 
-    pub fn id(&self) -> i32 {
+    pub fn internal_id(&self) -> i32 {
         match self {
             StandardRole::User => 1,
             StandardRole::Administrator => 2,
         }
     }
 
-    pub fn name(&self) -> &'static str {
+    pub fn external_key(&self) -> &'static str {
         match self {
             StandardRole::User => "user",
             StandardRole::Administrator => "administrator",
         }
     }
 
-    #[rustfmt::skip]
-    pub fn description(&self) -> &'static str {
+    pub fn english_description(&self) -> &'static str {
         match self {
-            StandardRole::User =>
-                "Normal user with most read permissions.",
-            StandardRole::Administrator =>
-                "Administrator with almost all permission, including deletions.",
+            StandardRole::User => "Normal user with read permissions.",
+            StandardRole::Administrator => {
+                "Powerful user with almost all permissions, including deletions."
+            }
+        }
+    }
+
+    pub fn slovene_description(&self) -> &'static str {
+        match self {
+            StandardRole::User => "Navaden_a uporabnica_k, ki si lahko ogleduje vsebino.",
+            StandardRole::Administrator => {
+                "Uporabnica_k s skoraj vsemi dovoljenji, vključno z možnostjo brisanja."
+            }
         }
     }
 
@@ -52,14 +61,14 @@ impl StandardRole {
                 StandardPermission::UserSelfWrite,
                 StandardPermission::UserAnyRead,
                 StandardPermission::WordRead,
-                StandardPermission::SuggestionCreate,
+                // StandardPermission::SuggestionCreate,
             ],
             StandardRole::Administrator => vec![
                 StandardPermission::UserAnyWrite,
                 StandardPermission::WordCreate,
                 StandardPermission::WordUpdate,
                 StandardPermission::WordDelete,
-                StandardPermission::SuggestionDelete,
+                // StandardPermission::SuggestionDelete,
                 StandardPermission::TranslationCreate,
                 StandardPermission::TranslationDelete,
                 StandardPermission::CategoryCreate,

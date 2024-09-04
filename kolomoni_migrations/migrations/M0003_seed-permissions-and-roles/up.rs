@@ -11,12 +11,13 @@ pub async fn up(mut context: MigrationContext<'_>) -> Result<(), MigrationApplyE
 
     for permission in StandardPermission::all_permissions() {
         sqlx::query(
-            "INSERT INTO kolomoni.permission (id, name, description) \
-            VALUES ($1, $2, $3)",
+            "INSERT INTO kolomoni.permission (id, key, description_en, description_sl) \
+            VALUES ($1, $2, $3, $4)",
         )
-        .bind(permission.id())
-        .bind(permission.name())
-        .bind(permission.description())
+        .bind(permission.internal_id())
+        .bind(permission.external_key())
+        .bind(permission.english_description())
+        .bind(permission.slovene_description())
         .execute(&mut *database_connection)
         .await
         .map_err(|error| MigrationApplyError::FailedToExecuteQuery { error })?;
@@ -24,12 +25,13 @@ pub async fn up(mut context: MigrationContext<'_>) -> Result<(), MigrationApplyE
 
     for role in StandardRole::all_roles() {
         sqlx::query(
-            "INSERT INTO kolomoni.role (id, name, description) \
-            VALUES ($1, $2, $3)",
+            "INSERT INTO kolomoni.role (id, key, description_en, description_sl) \
+            VALUES ($1, $2, $3, $4)",
         )
-        .bind(role.id())
-        .bind(role.name())
-        .bind(role.description())
+        .bind(role.internal_id())
+        .bind(role.external_key())
+        .bind(role.english_description())
+        .bind(role.slovene_description())
         .execute(&mut *database_connection)
         .await
         .map_err(|error| MigrationApplyError::FailedToExecuteQuery { error })?;
@@ -39,8 +41,8 @@ pub async fn up(mut context: MigrationContext<'_>) -> Result<(), MigrationApplyE
                 "INSERT INTO kolomoni.role_permission (role_id, permission_id) \
                 VALUES ($1, $2)",
             )
-            .bind(role.id())
-            .bind(assigned_permission.id())
+            .bind(role.internal_id())
+            .bind(assigned_permission.internal_id())
             .execute(&mut *database_connection)
             .await
             .map_err(|error| MigrationApplyError::FailedToExecuteQuery { error })?;

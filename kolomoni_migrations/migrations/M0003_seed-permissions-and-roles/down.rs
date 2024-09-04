@@ -11,7 +11,7 @@ pub async fn down(mut context: MigrationContext<'_>) -> Result<(), MigrationRoll
 
     for permission in StandardPermission::all_permissions() {
         sqlx::query("DELETE FROM kolomoni.permission WHERE id = $1")
-            .bind(permission.id())
+            .bind(permission.internal_id())
             .execute(&mut *database_connection)
             .await
             .map_err(|error| MigrationRollbackError::FailedToExecuteQuery { error })?;
@@ -19,7 +19,7 @@ pub async fn down(mut context: MigrationContext<'_>) -> Result<(), MigrationRoll
 
     for role in StandardRole::all_roles() {
         sqlx::query("DELETE FROM kolomoni.role WHERE id = $1")
-            .bind(role.id())
+            .bind(role.internal_id())
             .execute(&mut *database_connection)
             .await
             .map_err(|error| MigrationRollbackError::FailedToExecuteQuery { error })?;

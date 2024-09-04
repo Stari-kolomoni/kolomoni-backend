@@ -11,29 +11,19 @@
 -- In our case, the underscore separator should be a double underscore ("__") instead.
 
 
-----
--- Create schema: kolomoni
-----
--- CREATE SCHEMA kolomoni AUTHORIZATION CURRENT_USER;
-
-
-
 
 ----
 -- Create table: permission
 ----
 CREATE TABLE kolomoni.permission (
 	id integer NOT NULL,
-	name_en text NOT NULL,
-	name_sl text NOT NULL,
+	key text NOT NULL,
 	description_en text NOT NULL,
 	description_sl text NOT NULL,
 	CONSTRAINT pk__permission
 	    PRIMARY KEY (id),
-	CONSTRAINT unique__permission__name_en
-	    UNIQUE (name_en),
-	CONSTRAINT unique__permission__name_sl
-	    UNIQUE (name_sl)
+	CONSTRAINT unique__permission__key
+	    UNIQUE (key)
 );
 
 -- We set the fillfactor to 100 because permissions will be very rarely modified.
@@ -45,13 +35,8 @@ CREATE INDEX index__permission__id
     WITH (FILLFACTOR = 100);
 
 -- We set the fillfactor to 100 because permissions will be very rarely modified.
-CREATE INDEX index__permission__name_en
-    ON kolomoni.permission (name_en)
-    WITH (FILLFACTOR = 100);
-
--- We set the fillfactor to 100 because permissions will be very rarely modified.
-CREATE INDEX index__permission__name_sl
-    ON kolomoni.permission (name_sl)
+CREATE INDEX index__permission__key
+    ON kolomoni.permission (key)
     WITH (FILLFACTOR = 100);
 
 
@@ -62,16 +47,13 @@ CREATE INDEX index__permission__name_sl
 ----
 CREATE TABLE kolomoni.role (
     id integer NOT NULL,
-    name_en text NOT NULL,
-    name_sl text NOT NULL,
+    key text NOT NULL,
     description_en text NOT NULL,
     description_sl text NOT NULL,
     CONSTRAINT pk__role
         PRIMARY KEY (id),
-    CONSTRAINT unique__role__name_en
-        UNIQUE (name_en),
-    CONSTRAINT unique__role__name_sl
-        UNIQUE (name_sl)
+    CONSTRAINT unique__role__key
+        UNIQUE (key)
 );
 
 -- We set the fillfactor to 100 because roles will be very rarely modified.
@@ -80,14 +62,10 @@ CREATE INDEX index__role__id
     WITH (FILLFACTOR = 100);
 
 -- We set the fillfactor to 100 because roles will be very rarely modified.
-CREATE INDEX index__role__name_en
-    ON kolomoni.role (name_en)
+CREATE INDEX index__role__key
+    ON kolomoni.role (key)
     WITH (FILLFACTOR = 100);
 
--- We set the fillfactor to 100 because roles will be very rarely modified.
-CREATE INDEX index__role__name_sl
-    ON kolomoni.role (name_sl)
-    WITH (FILLFACTOR = 100);
 
 
 

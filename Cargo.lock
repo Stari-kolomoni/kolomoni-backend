@@ -1432,6 +1432,7 @@ version = "0.1.0"
 dependencies = [
  "actix-utils",
  "actix-web",
+ "argon2",
  "chrono",
  "jsonwebtoken",
  "miette",
@@ -1459,9 +1460,11 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "chrono",
+ "futures-core",
+ "futures-util",
  "kolomoni_auth",
- "kolomoni_configuration",
- "miette",
+ "pin-project-lite",
+ "sqlx",
  "thiserror",
  "uuid",
 ]

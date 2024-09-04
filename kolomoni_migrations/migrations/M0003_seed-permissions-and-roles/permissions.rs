@@ -18,8 +18,8 @@ pub enum StandardPermission {
     WordRead,
     WordUpdate,
     WordDelete,
-    SuggestionCreate,
-    SuggestionDelete,
+    // SuggestionCreate,
+    // SuggestionDelete,
     TranslationCreate,
     TranslationDelete,
     CategoryCreate,
@@ -38,8 +38,8 @@ impl StandardPermission {
             Self::WordRead,
             Self::WordUpdate,
             Self::WordDelete,
-            Self::SuggestionCreate,
-            Self::SuggestionDelete,
+            // Self::SuggestionCreate,
+            // Self::SuggestionDelete,
             Self::TranslationCreate,
             Self::TranslationDelete,
             Self::CategoryCreate,
@@ -48,7 +48,7 @@ impl StandardPermission {
         ]
     }
 
-    pub fn id(&self) -> i32 {
+    pub fn internal_id(&self) -> i32 {
         match self {
             StandardPermission::UserSelfRead => 1,
             StandardPermission::UserSelfWrite => 2,
@@ -58,8 +58,8 @@ impl StandardPermission {
             StandardPermission::WordRead => 6,
             StandardPermission::WordUpdate => 7,
             StandardPermission::WordDelete => 8,
-            StandardPermission::SuggestionCreate => 9,
-            StandardPermission::SuggestionDelete => 10,
+            // StandardPermission::SuggestionCreate => 9,
+            // StandardPermission::SuggestionDelete => 10,
             StandardPermission::TranslationCreate => 11,
             StandardPermission::TranslationDelete => 12,
             StandardPermission::CategoryCreate => 13,
@@ -68,7 +68,7 @@ impl StandardPermission {
         }
     }
 
-    pub fn name(&self) -> &'static str {
+    pub fn external_key(&self) -> &'static str {
         match self {
             StandardPermission::UserSelfRead => "user.self:read",
             StandardPermission::UserSelfWrite => "user.self:write",
@@ -78,8 +78,8 @@ impl StandardPermission {
             StandardPermission::WordRead => "word:read",
             StandardPermission::WordUpdate => "word:update",
             StandardPermission::WordDelete => "word:delete",
-            StandardPermission::SuggestionCreate => "word.suggestion:create",
-            StandardPermission::SuggestionDelete => "word.suggestion:delete",
+            // StandardPermission::SuggestionCreate => "word.suggestion:create",
+            // StandardPermission::SuggestionDelete => "word.suggestion:delete",
             StandardPermission::TranslationCreate => "word.translation:create",
             StandardPermission::TranslationDelete => "word.translation:delete",
             StandardPermission::CategoryCreate => "category:create",
@@ -89,38 +89,58 @@ impl StandardPermission {
     }
 
     #[rustfmt::skip]
-    pub fn description(&self) -> &'static str {
+    pub fn english_description(&self) -> &'static str {
         match self {
             StandardPermission::UserSelfRead =>
-                "Allows the user to log in and view their account information.",
+                "Allows users to log in and view their account information.",
             StandardPermission::UserSelfWrite =>
-                "Allows the user to update their account information.",
+                "Allows users to update their account information.",
             StandardPermission::UserAnyRead =>
-                "Allows the user to view public account information of any other user.",
+                "Allows users to view public account information of any other user.",
             StandardPermission::UserAnyWrite =>
-                "Allows the user to update account information of any other user.",
+                "Allows users to update account information of any other user.",
             StandardPermission::WordCreate =>
-                "Allows the user to create words in the dictionary.",
+                "Allows users to create words in the dictionary.",
             StandardPermission::WordRead =>
-                "Allows the user to read words in the dictionary.",
+                "Allows users to read words in the dictionary.",
             StandardPermission::WordUpdate =>
-                "Allows the user to update existing words in the dictionary (but not delete them).",
+                "Allows users to update existing words in the dictionary (but not delete them).",
             StandardPermission::WordDelete =>
-                "Allows the user to delete words from the dictionary.",
-            StandardPermission::SuggestionCreate => 
-                "Allows the user to create a translation suggestion.",
-            StandardPermission::SuggestionDelete => 
-                "Allows the user to remove a translation suggestion.",
+                "Allows users to delete words from the dictionary.",
+            // StandardPermission::SuggestionCreate => 
+            //     "Allows the user to create a translation suggestion.",
+            // StandardPermission::SuggestionDelete => 
+            //     "Allows the user to remove a translation suggestion.",
             StandardPermission::TranslationCreate =>
-                "Allows the user to translate a word.",
+                "Allows users to translate a word.",
             StandardPermission::TranslationDelete => 
-                "Allows the user to remove a word translation.",
+                "Allows users to remove a word translation.",
             StandardPermission::CategoryCreate => 
-                "Allows the user to create a word category.",
+                "Allows users to create a word category.",
             StandardPermission::CategoryUpdate => 
-                "Allows the user to update an existing word category.",
+                "Allows users to update an existing word category.",
             StandardPermission::CategoryDelete => 
-                "Allows the user to delete a word category.",
+                "Allows users to delete a word category.",
+        }
+    }
+
+    pub fn slovene_description(&self) -> &'static str {
+        match self {
+            StandardPermission::UserSelfRead => "Omogoča prijavo in ogled podrobnosti uporabniškega računa.",
+            StandardPermission::UserSelfWrite => "Omogoča spreminjanje podrobnosti uporabniškega računa.",
+            StandardPermission::UserAnyRead => "Omogoča ogled javnih podatkov ostalih uporabniških računov.",
+            StandardPermission::UserAnyWrite => "Omogoča spreminjanje podrobnosti ostalih uporabniških računov.",
+            StandardPermission::WordCreate => "Omogoča ustvarjanje novih besed in njenih pomenov v slovarju.",
+            StandardPermission::WordRead => "Omogoča branje obstoječih besed in povezanih pomenov v slovarju.",
+            StandardPermission::WordUpdate => "Omogoča spreminjanje podrobnosti obstoječih besed in povezanih pomenov v slovarju.",
+            StandardPermission::WordDelete => "Omogoča brisanje besed in besednih pomenov iz slovarja.",
+            // StandardPermission::SuggestionCreate => todo!(),
+            // StandardPermission::SuggestionDelete => todo!(),
+            StandardPermission::TranslationCreate => "Omogoča ustvarjanje prevodov.",
+            StandardPermission::TranslationDelete => "Omogoča brisanje prevodov.",
+            StandardPermission::CategoryCreate => "Omogoča ustvarjanje besednih kategorij.",
+            StandardPermission::CategoryUpdate => "Omogoča spreminjanje podrobnosti obstoječih besednih kategorij.",
+            StandardPermission::CategoryDelete => "Omogoča brisanje obstoječih besedilnih kategorij."
         }
     }
 }

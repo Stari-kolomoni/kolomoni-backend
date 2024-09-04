@@ -56,7 +56,7 @@ pub struct InitializeCommandArguments {
     #[arg(
         long = "migrations-directory",
         short = 'm',
-        help = "Path to the to-be-created \"migrations\" directory that will contain all database migrations \
+        help = "Path to the to-be-created migrations directory that will contain all database migrations \
                 for Stari Kolomoni. This should generally be set to \"./kolomoni_migrations/migrations\" \
                 (relative to the repository root)."
     )]
@@ -271,15 +271,6 @@ pub struct GenerateCommandArguments {
 
 #[derive(Args)]
 pub struct UpCommandArguments {
-    #[arg(
-        long = "migrations-directory",
-        short = 'm',
-        help = "Path to the to-be-created \"migrations\" directory that will contain all database migrations \
-                for Stari Kolomoni. This should generally be set to \"./kolomoni_migrations/migrations\" \
-                (relative to the repository root)."
-    )]
-    pub migrations_directory_path: PathBuf,
-
     #[command(flatten)]
     pub database: DatabaseConnectionArgs,
 
@@ -296,15 +287,6 @@ pub struct UpCommandArguments {
 
 #[derive(Args)]
 pub struct DownCommandArguments {
-    #[arg(
-        long = "migrations-directory",
-        short = 'm',
-        help = "Path to the to-be-created \"migrations\" directory that will contain all database migrations \
-                for Stari Kolomoni. This should generally be set to \"./kolomoni_migrations/migrations\" \
-                (relative to the repository root)."
-    )]
-    pub migrations_directory_path: PathBuf,
-
     #[command(flatten)]
     pub database: DatabaseConnectionArgs,
 
