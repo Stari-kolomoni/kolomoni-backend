@@ -1,6 +1,10 @@
 use std::io::{self, Write};
 
-use kolomoni_migrations_core::{DatabaseConnectionManager, MigrationStatus};
+use kolomoni_migrations_core::{
+    migrations::MigrationsWithStatusOptions,
+    DatabaseConnectionManager,
+    MigrationStatus,
+};
 use miette::{miette, Context, IntoDiagnostic, Result};
 
 use crate::cli::UpCommandArguments;
@@ -54,7 +58,13 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
     print!("Loading migrations...");
 
     let migrations = manager
-        .migrations_with_status_with_fallback(normal_user_db_connection_options.as_ref())
+        .migrations_with_status_with_fallback(
+            normal_user_db_connection_options.as_ref(),
+            MigrationsWithStatusOptions {
+                require_up_hashes_match: true,
+                require_down_hashes_match: true,
+            },
+        )
         .await
         .into_diagnostic()
         .wrap_err("failed to load migrations")?;

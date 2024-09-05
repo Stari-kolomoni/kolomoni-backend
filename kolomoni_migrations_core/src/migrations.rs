@@ -26,6 +26,28 @@ use crate::{
 };
 
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SegmentedHashMatch {
+    Neither,
+    OnlyUp,
+    OnlyDown,
+    Both,
+}
+
+impl SegmentedHashMatch {
+    pub fn up_matches(self) -> bool {
+        matches!(self, Self::OnlyUp | Self::Both)
+    }
+
+    pub fn down_matches(self) -> bool {
+        matches!(self, Self::OnlyDown | Self::Both)
+    }
+
+    pub fn fully_matches(self) -> bool {
+        matches!(self, Self::Both)
+    }
+}
+
 
 /// Compares the SHA-256 hashes of local (disk) and remote (database)
 /// migrations.
@@ -36,12 +58,11 @@ use crate::{
 fn embedded_and_remote_migration_hashes_match(
     embedded_migration: &EmbeddedMigration<'_>,
     remote_migration: &RemoteMigration,
-) -> bool {
-    if embedded_migration.up.sha256_hash() != &remote_migration.up_script.up_script_sha256_hash {
-        return false;
-    }
+) -> SegmentedHashMatch {
+    let up_matches =
+        embedded_migration.up.sha256_hash() == &remote_migration.up_script.up_script_sha256_hash;
 
-    match &embedded_migration.down {
+    let down_matches = match &embedded_migration.down {
         Some(embedded_down_script) => match remote_migration.down_script.as_ref() {
             Some(remote_down_script) => {
                 // Both the local and remote migrations have a rollback script,
@@ -65,8 +86,33 @@ fn embedded_and_remote_migration_hashes_match(
                 true
             }
         }
+    };
+
+    match (up_matches, down_matches) {
+        (true, true) => SegmentedHashMatch::Both,
+        (true, false) => SegmentedHashMatch::OnlyUp,
+        (false, true) => SegmentedHashMatch::OnlyDown,
+        (false, false) => SegmentedHashMatch::Neither,
     }
 }
+
+
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MigrationsWithStatusOptions {
+    pub require_up_hashes_match: bool,
+    pub require_down_hashes_match: bool,
+}
+
+impl Default for MigrationsWithStatusOptions {
+    fn default() -> Self {
+        Self {
+            require_up_hashes_match: true,
+            require_down_hashes_match: true,
+        }
+    }
+}
+
 
 
 
@@ -157,6 +203,7 @@ impl MigrationManager {
     pub async fn migrations_with_status_with_fallback<'m>(
         &'m self,
         connection_options: Option<&PgConnectOptions>,
+        options: MigrationsWithStatusOptions,
     ) -> Result<Vec<ConsolidatedMigration<'m>>, StatusError> {
         let Some(connection_options) = connection_options else {
             // When a connection fails, we will return all migrations as pending.
@@ -179,13 +226,14 @@ impl MigrationManager {
         }
 
 
-        self.migrations_with_status(&mut connection).await
+        self.migrations_with_status(&mut connection, options).await
     }
 
 
     pub async fn migrations_with_status<'m>(
         &'m self,
         database_connection: &mut PgConnection,
+        options: MigrationsWithStatusOptions,
     ) -> Result<Vec<ConsolidatedMigration<'m>>, StatusError> {
         let mut embedded_migrations_by_version: HashMap<i64, &EmbeddedMigration<'static>> = self
             .embedded_migrations
@@ -223,10 +271,15 @@ impl MigrationManager {
                 });
             }
 
-            if !embedded_and_remote_migration_hashes_match(
+
+            let hash_match_info = embedded_and_remote_migration_hashes_match(
                 corresponding_embedded_migration,
                 &remote_migration,
-            ) {
+            );
+
+            if (options.require_up_hashes_match && !hash_match_info.up_matches())
+                || (options.require_down_hashes_match && !hash_match_info.down_matches())
+            {
                 return Err(StatusError::HashMismatch {
                     identifier: remote_migration.identifier.clone(),
                     remote_up_script_sha256_hash: remote_migration
