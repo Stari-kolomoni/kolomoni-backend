@@ -2,7 +2,11 @@ use std::borrow::Cow;
 
 use thiserror::Error;
 
+#[macro_use]
+pub(crate) mod macros;
+
 pub mod entities;
+
 
 
 #[derive(Debug, Error)]

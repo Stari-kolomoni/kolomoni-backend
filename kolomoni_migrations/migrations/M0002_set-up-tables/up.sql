@@ -190,16 +190,16 @@ CREATE INDEX index__word__language_code
 CREATE TABLE kolomoni.category (
     id uuid NOT NULL,
     parent_category_id uuid,
-    slovene_name text NOT NULL,
-    english_name text NOT NULL,
+    name_sl text NOT NULL,
+    name_en text NOT NULL,
     created_at timestamp with time zone NOT NULL,
     last_modified_at timestamp with time zone NOT NULL,
     CONSTRAINT pk__category
         PRIMARY KEY (id),
-    CONSTRAINT unique__category__slovene_name
-        UNIQUE (slovene_name),
-    CONSTRAINT unique__category__english_name
-        UNIQUE (english_name),
+    CONSTRAINT unique__category__name_sl
+        UNIQUE (name_sl),
+    CONSTRAINT unique__category__name_en
+        UNIQUE (name_en),
     CONSTRAINT fk__category__parent_category_id__category
         FOREIGN KEY (parent_category_id)
         REFERENCES kolomoni.category (id)
@@ -405,43 +405,58 @@ CREATE INDEX index__word_meaning_translation__english_word_meaning_id
 
 
 
+----
+-- Create table: user_public_data_snapshot
+----
+-- CREATE TABLE kolomoni.user_public_data_snapshot (
+--     id uuid NOT NULL,
+--     user_id uuid NOT NULL,
+--     -- username and display_name record data at snapshot-time.
+--     -- This data is useful if the underlying user is removed in the future.
+--     username text NOT NULL,
+--     display_name text NOT NULL,
+--     saved_at timestamp with time zone NOT NULL,
+--     CONSTRAINT pk__user_public_data_snapshot
+--         PRIMARY KEY (id)
+-- );
+-- 
+-- CREATE INDEX index__user_public_data_snapshot
+--     ON kolomoni.user_public_data_snapshot (id);
+
 
 ----
--- Create table: word_meaning_edit
+-- Create table: edit
 ----
-CREATE TABLE kolomoni.word_meaning_edit (
+CREATE TABLE kolomoni.edit (
+    -- Edit ID (UUIDv7).
     id uuid NOT NULL,
-    word_meaning_id uuid NOT NULL,
     -- TODO Make a proper schema for the edit payload (versioned JSON, defined in Rust).
-    payload json NOT NULL,
+    data json NOT NULL,
     performed_at timestamp with time zone NOT NULL,
     -- Directly references the responsible user inside the database. This will become null if the user is deleted.
-    performed_by uuid,
+    author_id uuid,
     -- Records the username at the time of the edit, so it can be displayed as a fallback if the true user is deleted.
-    -- TODO This may be revisited, because there's probably a way to optimise space usage here instead of storing full usernames in each edit.
-    performed_by_username_snapshot text,
-    CONSTRAINT pk__word_meaning_edit
+    -- See `user_public_data_snapshot`.
+    -- author_snapshot_id uuid NOT NULL,
+    CONSTRAINT pk__edit
         PRIMARY KEY (id),
-    CONSTRAINT fk__word_meaning_edit__word_meaning_id__word_meaning
-        FOREIGN KEY (word_meaning_id)
-        REFERENCES kolomoni.word_meaning (id)
-        ON UPDATE CASCADE
-        ON DELETE CASCADE,
-    CONSTRAINT fk__word_meaning_edit__performed_by__user
-        FOREIGN KEY (performed_by)
+    -- CONSTRAINT fk__edit__author_snapshot_id__user_public_data_snapshot
+    --     FOREIGN KEY (author_snapshot_id)
+    --     REFERENCES kolomoni.user_public_data_snapshot (id)
+    --     ON UPDATE CASCADE
+    --     ON DELETE NO ACTION,
+    CONSTRAINT fk__edit__author__user
+        FOREIGN KEY (author_id)
         REFERENCES kolomoni.user (id)
         ON UPDATE CASCADE
         ON DELETE SET NULL
 );
 
-CREATE INDEX index__word_meaning_edit
-    ON kolomoni.word_meaning_edit (id);
+CREATE INDEX index__edit
+    ON kolomoni.edit (id);
 
-CREATE INDEX index__word_meaning_edit__word_meaning_id
-    ON kolomoni.word_meaning_edit (word_meaning_id);
+CREATE INDEX index__edit__performed_at
+    ON kolomoni.edit (performed_at);
 
-CREATE INDEX index__word_meaning_edit__performed_at
-    ON kolomoni.word_meaning_edit (performed_at);
-
-CREATE INDEX index__word_meaning_edit__performed_by
-    ON kolomoni.word_meaning_edit (performed_by);
+CREATE INDEX index__edit__author_id
+    ON kolomoni.edit (author_id);

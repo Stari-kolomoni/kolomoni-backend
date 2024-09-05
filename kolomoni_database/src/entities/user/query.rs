@@ -1,8 +1,7 @@
-use std::{borrow::Cow, pin::Pin};
+use std::borrow::Cow;
 
-use futures_core::{stream::BoxStream, Stream};
+use futures_core::stream::BoxStream;
 use kolomoni_auth::{ArgonHasher, ArgonHasherError};
-use pin_project_lite::pin_project;
 use sqlx::PgConnection;
 use thiserror::Error;
 
@@ -39,42 +38,18 @@ impl From<QueryError> for UserCredentialValidationError {
 
 
 
-type RawUserListStream<'c> = BoxStream<'c, Result<super::IntermediateModel, sqlx::Error>>;
+type RawUserStream<'c> = BoxStream<'c, Result<super::IntermediateModel, sqlx::Error>>;
 
-
-pin_project! {
-    pub struct UserListStream<'c> {
-        #[pin]
-        inner: RawUserListStream<'c>,
-    }
-}
-
-impl<'c> UserListStream<'c> {
-    #[inline]
-    fn from_raw_stream(stream: RawUserListStream<'c>) -> Self {
-        Self { inner: stream }
-    }
-}
-
-impl<'c> Stream for UserListStream<'c> {
-    type Item = QueryResult<super::Model>;
-
-    fn poll_next(
-        self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        let this = self.project();
-
-        match this.inner.poll_next(cx) {
-            std::task::Poll::Ready(ready) => std::task::Poll::Ready(ready.map(|result| {
+create_async_stream_wrapper!(
+    pub struct UserStream<'c>;
+    transforms stream RawUserStream<'c> => stream of QueryResult<super::Model>:
+        |value|
+            value.map(|result| {
                 result
                     .map(super::IntermediateModel::into_model)
                     .map_err(|error| QueryError::SqlxError { error })
-            })),
-            std::task::Poll::Pending => std::task::Poll::Pending,
-        }
-    }
-}
+            })
+);
 
 
 
@@ -196,7 +171,7 @@ impl Query {
         }
     }
 
-    pub fn get_all_users(connection: &mut PgConnection) -> UserListStream<'_> {
+    pub fn get_all_users(connection: &mut PgConnection) -> UserStream<'_> {
         let user_stream = sqlx::query_as!(
             super::IntermediateModel,
             "SELECT \
@@ -206,6 +181,6 @@ impl Query {
         )
         .fetch(connection);
 
-        UserListStream::from_raw_stream(user_stream)
+        UserStream::new(user_stream)
     }
 }

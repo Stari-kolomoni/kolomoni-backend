@@ -210,6 +210,7 @@ pub struct PermissionSet {
 
 impl PermissionSet {
     /// Initialize an empty permission set.
+    #[inline]
     pub fn new_empty() -> Self {
         Self {
             permissions: HashSet::with_capacity(0),
@@ -217,7 +218,8 @@ impl PermissionSet {
     }
 
     /// Initialize a permission set from a [`HashSet`] of [`Permission`]s.
-    pub fn from_permission_set(permission_set: HashSet<Permission>) -> Self {
+    #[inline]
+    pub fn from_permission_hash_set(permission_set: HashSet<Permission>) -> Self {
         Self {
             permissions: permission_set,
         }

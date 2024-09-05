@@ -110,8 +110,16 @@ pub struct RoleSet {
 }
 
 impl RoleSet {
+    #[inline]
+    pub fn new_empty() -> Self {
+        Self {
+            roles: HashSet::with_capacity(0),
+        }
+    }
+
     /// Initialize a role set from a [`HashSet`] of [`Role`]s.
-    pub fn from_role_set(role_set: HashSet<Role>) -> Self {
+    #[inline]
+    pub fn from_role_hash_set(role_set: HashSet<Role>) -> Self {
         Self { roles: role_set }
     }
 

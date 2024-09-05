@@ -1,3 +1,19 @@
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct RoleId(i32);
+
+impl RoleId {
+    #[inline]
+    pub fn new(id: i32) -> Self {
+        Self(id)
+    }
+
+    #[inline]
+    pub fn into_inner(self) -> i32 {
+        self.0
+    }
+}
+
+
 pub struct FullModel {
     pub id: i32,
 
