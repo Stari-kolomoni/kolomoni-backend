@@ -408,6 +408,7 @@ CREATE INDEX index__word_meaning_translation__english_word_meaning_id
 ----
 -- Create table: user_public_data_snapshot
 ----
+-- TODO This is cool, but out of scope for the time being.
 -- CREATE TABLE kolomoni.user_public_data_snapshot (
 --     id uuid NOT NULL,
 --     user_id uuid NOT NULL,
@@ -432,21 +433,15 @@ CREATE TABLE kolomoni.edit (
     id uuid NOT NULL,
     -- TODO Make a proper schema for the edit payload (versioned JSON, defined in Rust).
     data json NOT NULL,
+    -- Allows us to have a future-proof versioned edit payload.
+    data_schema_version integer NOT NULL,
     performed_at timestamp with time zone NOT NULL,
     -- Directly references the responsible user inside the database. This will become null if the user is deleted.
-    author_id uuid,
-    -- Records the username at the time of the edit, so it can be displayed as a fallback if the true user is deleted.
-    -- See `user_public_data_snapshot`.
-    -- author_snapshot_id uuid NOT NULL,
+    performed_by uuid,
     CONSTRAINT pk__edit
         PRIMARY KEY (id),
-    -- CONSTRAINT fk__edit__author_snapshot_id__user_public_data_snapshot
-    --     FOREIGN KEY (author_snapshot_id)
-    --     REFERENCES kolomoni.user_public_data_snapshot (id)
-    --     ON UPDATE CASCADE
-    --     ON DELETE NO ACTION,
-    CONSTRAINT fk__edit__author__user
-        FOREIGN KEY (author_id)
+    CONSTRAINT fk__edit__performed_by__user
+        FOREIGN KEY (performed_by)
         REFERENCES kolomoni.user (id)
         ON UPDATE CASCADE
         ON DELETE SET NULL
@@ -458,5 +453,5 @@ CREATE INDEX index__edit
 CREATE INDEX index__edit__performed_at
     ON kolomoni.edit (performed_at);
 
-CREATE INDEX index__edit__author_id
-    ON kolomoni.edit (author_id);
+CREATE INDEX index__edit__performed_by
+    ON kolomoni.edit (performed_by);

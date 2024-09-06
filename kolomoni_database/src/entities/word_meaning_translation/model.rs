@@ -1,14 +1,8 @@
 use chrono::{DateTime, Utc};
+use kolomoni_core::id::{EnglishWordMeaningId, SloveneWordMeaningId, UserId};
 use uuid::Uuid;
 
-use crate::{
-    entities::{
-        user::UserId,
-        word_english_meaning::EnglishWordMeaningId,
-        word_slovene_meaning::SloveneWordMeaningId,
-    },
-    IntoModel,
-};
+use crate::IntoModel;
 
 
 

@@ -1,6 +1,6 @@
 -- 2024-08-20: Drops all the tables created in up.sql as well as the "kolomoni" schema.
 
-DROP TABLE kolomoni.word_meaning_edit;
+DROP TABLE kolomoni.edit;
 
 DROP TABLE kolomoni.word_meaning_translation;
 
@@ -23,6 +23,3 @@ DROP TABLE kolomoni.user;
 DROP TABLE kolomoni.role_permission;
 DROP TABLE kolomoni.role;
 DROP TABLE kolomoni.permission;
-
-
--- DROP SCHEMA kolomoni;

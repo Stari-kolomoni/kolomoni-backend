@@ -1,22 +1,7 @@
+use kolomoni_core::id::{WordId, WordMeaningId};
 use uuid::Uuid;
 
-use crate::{entities::word::WordId, IntoModel};
-
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct WordMeaningId(Uuid);
-
-impl WordMeaningId {
-    #[inline]
-    pub fn new(uuid: Uuid) -> Self {
-        Self(uuid)
-    }
-
-    #[inline]
-    pub fn into_inner(self) -> Uuid {
-        self.0
-    }
-}
+use crate::IntoModel;
 
 
 

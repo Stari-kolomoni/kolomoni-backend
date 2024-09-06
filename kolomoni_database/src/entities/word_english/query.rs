@@ -1,7 +1,7 @@
 use futures_core::stream::BoxStream;
+use kolomoni_core::id::EnglishWordId;
 use sqlx::PgConnection;
 
-use super::EnglishWordId;
 use crate::{IntoModel, QueryError, QueryResult};
 
 

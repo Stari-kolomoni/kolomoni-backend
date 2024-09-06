@@ -1,4 +1,5 @@
 pub mod category;
+pub mod edit;
 pub mod permission;
 pub mod role;
 pub mod user;

@@ -1455,6 +1455,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kolomoni_core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "uuid",
+]
+
+[[package]]
 name = "kolomoni_database"
 version = "0.1.0"
 dependencies = [
@@ -1463,7 +1474,10 @@ dependencies = [
  "futures-core",
  "futures-util",
  "kolomoni_auth",
+ "kolomoni_core",
  "pin-project-lite",
+ "serde",
+ "serde_json",
  "sqlx",
  "thiserror",
  "uuid",

@@ -1,23 +1,8 @@
 use chrono::{DateTime, Utc};
+use kolomoni_core::id::CategoryId;
 use uuid::Uuid;
 
 use crate::IntoModel;
-
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct CategoryId(Uuid);
-
-impl CategoryId {
-    #[inline]
-    pub fn new(uuid: Uuid) -> Self {
-        Self(uuid)
-    }
-
-    #[inline]
-    pub fn into_inner(self) -> Uuid {
-        self.0
-    }
-}
 
 
 pub struct Model {

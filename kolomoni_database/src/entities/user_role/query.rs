@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 
 use kolomoni_auth::{Permission, PermissionSet, Role, RoleSet};
+use kolomoni_core::id::UserId;
 use sqlx::PgConnection;
 
-use crate::{entities::user::UserId, QueryError, QueryResult};
+use crate::{QueryError, QueryResult};
 
 pub struct Query;
 

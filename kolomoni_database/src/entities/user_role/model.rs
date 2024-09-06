@@ -1,6 +1,6 @@
+use kolomoni_core::id::{RoleId, UserId};
 use uuid::Uuid;
 
-use crate::entities::{role::RoleId, user::UserId};
 
 pub struct Model {
     pub user_id: UserId,

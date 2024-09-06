@@ -2,10 +2,10 @@ use std::borrow::Cow;
 
 use futures_core::stream::BoxStream;
 use kolomoni_auth::{ArgonHasher, ArgonHasherError};
+use kolomoni_core::id::UserId;
 use sqlx::PgConnection;
 use thiserror::Error;
 
-use super::UserId;
 use crate::{IntoModel, QueryError, QueryResult};
 
 

@@ -1,21 +1,7 @@
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct RoleId(i32);
-
-impl RoleId {
-    #[inline]
-    pub fn new(id: i32) -> Self {
-        Self(id)
-    }
-
-    #[inline]
-    pub fn into_inner(self) -> i32 {
-        self.0
-    }
-}
-
+use kolomoni_core::id::RoleId;
 
 pub struct FullModel {
-    pub id: i32,
+    pub id: RoleId,
 
     pub key: String,
 
@@ -25,7 +11,7 @@ pub struct FullModel {
 }
 
 pub struct ReducedModel {
-    pub id: i32,
+    pub id: RoleId,
 
     pub key: String,
 }

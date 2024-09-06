@@ -1,28 +1,8 @@
 use chrono::{DateTime, Utc};
+use kolomoni_core::id::SloveneWordMeaningId;
 use uuid::Uuid;
 
-use crate::{entities::word_meaning::WordMeaningId, IntoModel};
-
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SloveneWordMeaningId(Uuid);
-
-impl SloveneWordMeaningId {
-    #[inline]
-    pub fn new(uuid: Uuid) -> Self {
-        Self(uuid)
-    }
-
-    #[inline]
-    pub fn into_word_meaning_id(self) -> WordMeaningId {
-        WordMeaningId::new(self.0)
-    }
-
-    #[inline]
-    pub fn into_uuid(self) -> Uuid {
-        self.0
-    }
-}
+use crate::IntoModel;
 
 
 

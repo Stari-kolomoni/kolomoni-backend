@@ -1,27 +1,10 @@
 use std::borrow::Cow;
 
 use chrono::{DateTime, Utc};
+use kolomoni_core::id::WordId;
 use uuid::Uuid;
 
 use crate::TryIntoModel;
-
-
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct WordId(pub(crate) Uuid);
-
-impl WordId {
-    #[inline]
-    pub fn new(uuid: Uuid) -> Self {
-        Self(uuid)
-    }
-
-    #[inline]
-    pub fn into_inner(self) -> Uuid {
-        self.0
-    }
-}
-
 
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]

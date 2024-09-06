@@ -1,6 +1,8 @@
+use kolomoni_core::id::PermissionId;
+
 pub struct FullModel {
     /// Internal ID of the permission, don't expose externally.
-    pub id: i32,
+    pub id: PermissionId,
 
     pub key: String,
 
@@ -11,7 +13,7 @@ pub struct FullModel {
 
 pub struct ReducedModel {
     /// Internal ID of the permission, don't expose externally.
-    pub id: i32,
+    pub id: PermissionId,
 
     pub key: String,
 }
