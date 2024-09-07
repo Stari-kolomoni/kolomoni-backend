@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use kolomoni_migrations_core::sha256::Sha256Hash;
 use migrations::{scan_for_migrations, ScannedMigrationScript};
 use proc_macro::TokenStream;
-use proc_macro_error::{abort_call_site, proc_macro_error};
+use proc_macro_error2::{abort_call_site, proc_macro_error};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse::Parse,

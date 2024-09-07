@@ -15,7 +15,6 @@ members = [
     "kolomoni_configuration",
     "kolomoni_core",
     "kolomoni_database",
-    # "kolomoni_database_old",
     "kolomoni_migrations",
     "kolomoni_migrations_core",
     "kolomoni_migrations_macros",
@@ -27,35 +26,35 @@ members = [
 
 
 [workspace.dependencies]
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { version = "^4.5.17", features = ["derive"] }
 
-tokio = { version = "1.37.0", features = ["full"] }
+tokio = { version = "^1.40.0", features = ["full"] }
 
-serde = { version = "1.0.198", features = ["derive"] }
-serde_with = { version = "3.7.0", features = ["chrono_0_4"] }
-serde_json = "1.0.116"
-toml = "0.8.12"
+serde = { version = "^1.0.210", features = ["derive"] }
+serde_with = { version = "^3.9.0", features = ["chrono_0_4"] }
+serde_json = "^1.0.128"
+toml = "^0.8.19"
 
-miette = "7.2.0"
-thiserror = "1.0.59"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-tracing-appender = "0.2.3"
-tracing-actix-web = "0.7.10"
-dunce = "1.0.4"
+miette = "^7.2.0"
+thiserror = "^1.0.63"
+tracing = "^0.1.40"
+tracing-subscriber = { version = "^0.3.18", features = ["env-filter"] }
+tracing-appender = "^0.2.3"
+tracing-actix-web = "^0.7.12"
+dunce = "^1.0.5"
 
-actix-web = "4.5.1"
-actix-http = "3.6.0"
-actix-utils = "3.0.1"
-actix-cors = "0.7.0"
-actix-service = "2.0.2"
+actix-web = "^4.9.0"
+actix-http = "^3.9.0"
+actix-utils = "^3.0.1"
+actix-cors = "^0.7.0"
+actix-service = "^2.0.2"
 
 
-syn = "2.0.76"
-quote = "1.0.37"
-proc-macro-error = "1.0.4"
-proc-macro2 = "1.0.86"
-paste = "1.0.15"
+syn = "^2.0.77"
+quote = "^1.0.37"
+proc-macro-error2 = "^2.0.1"
+proc-macro2 = "^1.0.86"
+paste = "^1.0.15"
 
 
 # The patched version contains some additional merging functionality that helps us make better documentation.
@@ -64,36 +63,39 @@ paste = "1.0.15"
 utoipa = { git = "https://github.com/simongoricar/utoipa.git", rev = "fce3e3a1f1c6dede38eab8965ddf074a47196752", features = ["actix_extras", "chrono", "preserve_order"] }
 utoipa-rapidoc = { git = "https://github.com/simongoricar/utoipa.git", rev = "fce3e3a1f1c6dede38eab8965ddf074a47196752", features = ["actix-web"] }
 
-itertools = "0.12.1"
+itertools = "^0.13.0"
 
-argon2 = "0.5.3"
-sha2 = "0.10.8"
+argon2 = "^0.5.3"
+sha2 = "^0.10.8"
 
-jsonwebtoken = "9.3.0"
-chrono = "0.4.38"
-http = "0.2.12"
-mime = "0.3.17"
-uuid = { version = "1.8.0", features = ["v7", "serde"] }
-httpdate = "1.0.3"
-bytes = "1.6.0"
-dotenvy = "0.15.7"
+jsonwebtoken = "^9.3.0"
+chrono = "^0.4.38"
 
-reqwest = "0.11.27"
-tantivy = "0.22.0"
-slotmap = "1.0.7"
+# TODO We'll have to bump this at some point, I think the blocker was with actix-web using this version of `http`.
+http = "^0.2.12"
 
-pathdiff = "0.2.1"
-path-slash = "0.2.1"
+mime = "^0.3.17"
+uuid = { version = "^1.8.0", features = ["v7", "serde"] }
+httpdate = "^1.0.3"
+bytes = "^1.7.1"
+dotenvy = "^0.15.7"
 
-fs-more = "0.7.1"
+reqwest = "^0.12.7"
+tantivy = "^0.22.0"
+slotmap = "^1.0.7"
 
-futures-core = "0.3.30"
-futures-util = "0.3.30"
-pin-project-lite = "0.2.14"
+pathdiff = "^0.2.1"
+path-slash = "^0.2.1"
+
+fs-more = "^0.7.1"
+
+futures-core = "^0.3.30"
+futures-util = "^0.3.30"
+pin-project-lite = "^0.2.14"
 
 
 [workspace.dependencies.sqlx]
-version = "0.8.0"	
+version = "^0.8.2"	
 features = [
     "runtime-tokio",
     "tls-native-tls",
