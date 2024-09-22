@@ -171,11 +171,8 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
                     sha256_to_u8_array_token_stream(&rust_up.sha256_hash);
 
 
-                // Because we are actually in a submodule `migrations` that we ourselves emit,
-                // we need to escape one level more.
-                let injected_module_path_relative_to_caller = Path::new("..")
-                    .join(&migration_directory_path_relative_to_caller_source_file)
-                    .join("mod.rs");
+                let injected_module_path_relative_to_caller =
+                    migration_directory_path_relative_to_caller_source_file.join("mod.rs");
 
                 let injected_module_path_relative_to_caller_str =
                     injected_module_path_relative_to_caller
@@ -243,11 +240,8 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
                         sha256_to_u8_array_token_stream(&rust_down.sha256_hash);
 
 
-                    // Because we are actually in a submodule `migrations` that we ourselves emit,
-                    // we need to escape one level more.
-                    let injected_module_path_relative_to_caller = Path::new("..")
-                        .join(&migration_directory_path_relative_to_caller_source_file)
-                        .join("mod.rs");
+                    let injected_module_path_relative_to_caller =
+                        migration_directory_path_relative_to_caller_source_file.join("mod.rs");
 
                     let injected_module_path_relative_to_caller_str =
                         injected_module_path_relative_to_caller
@@ -307,22 +301,20 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 
 
     quote! {
-        pub mod migrations {
-            #(#code_to_prepend_to_module)*
+        #(#code_to_prepend_to_module)*
 
-            use kolomoni_migrations_core::migrations::MigrationManager;
-            use kolomoni_migrations_core::migrations::EmbeddedMigration;
-            use kolomoni_migrations_core::migrations::EmbeddedMigrationScript;
-            use kolomoni_migrations_core::identifier::MigrationIdentifier;
-            use kolomoni_migrations_core::sha256::Sha256Hash;
+        use kolomoni_migrations_core::migrations::MigrationManager;
+        use kolomoni_migrations_core::migrations::EmbeddedMigration;
+        use kolomoni_migrations_core::migrations::EmbeddedMigrationScript;
+        use kolomoni_migrations_core::identifier::MigrationIdentifier;
+        use kolomoni_migrations_core::sha256::Sha256Hash;
 
-            pub fn manager() -> MigrationManager {
-                MigrationManager::new_embedded(
-                    vec![
-                        #(#embedded_migration_constructions),*
-                    ]
-                )
-            }
+        pub fn manager() -> MigrationManager {
+            MigrationManager::new_embedded(
+                vec![
+                    #(#embedded_migration_constructions),*
+                ]
+            )
         }
     }
     .into()

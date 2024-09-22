@@ -9,9 +9,11 @@ use self::v1::v1_api_router;
 pub mod errors;
 pub mod macros;
 pub mod openapi;
+pub mod traits;
 pub mod v1;
 
 
+// TODO document
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum OptionalIfModifiedSince {
     Unspecified,
@@ -30,7 +32,10 @@ impl OptionalIfModifiedSince {
     }
 
     #[inline]
-    pub fn has_not_changed_since(&self, real_last_modification_time: &DateTime<Utc>) -> bool {
+    pub fn enabled_and_has_not_changed_since(
+        &self,
+        real_last_modification_time: &DateTime<Utc>,
+    ) -> bool {
         match self {
             OptionalIfModifiedSince::Unspecified => false,
             OptionalIfModifiedSince::Specified(user_provided_conditional_time) => {

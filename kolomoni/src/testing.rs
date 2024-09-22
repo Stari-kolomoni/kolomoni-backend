@@ -37,7 +37,7 @@ pub async fn reset_server(state: ApplicationState) -> EndpointResult {
 
     drop_database_and_reapply_migrations(&state.database)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -66,7 +66,7 @@ pub async fn give_full_permissions_to_user(
         &[Role::User, Role::Administrator],
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -91,7 +91,7 @@ pub async fn reset_user_roles_to_starting_user_roles(
 
     let previous_role_set = query::UserRoleQuery::user_roles(&state.database, target_user_id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
 
     mutation::UserRoleMutation::remove_roles_from_user(
         &state.database,
@@ -102,7 +102,7 @@ pub async fn reset_user_roles_to_starting_user_roles(
             .collect::<Vec<_>>(),
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
 
     mutation::UserRoleMutation::add_roles_to_user(
         &state.database,
@@ -110,7 +110,7 @@ pub async fn reset_user_roles_to_starting_user_roles(
         &[DEFAULT_USER_ROLE],
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
 
 
     Ok(HttpResponse::Ok().finish())

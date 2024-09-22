@@ -1,21 +1,21 @@
 use actix_http::StatusCode;
 use actix_web::{delete, post, web, HttpResponse, Scope};
 use kolomoni_auth::Permission;
-use kolomoni_database::{
-    mutation::{NewTranslation, TranslationMutation, TranslationToDelete},
-    query::{EnglishWordQuery, SloveneWordQuery, TranslationQuery},
-};
+use kolomoni_core::id::{EnglishWordMeaningId, SloveneWordMeaningId};
+use kolomoni_database::entities;
 use serde::{Deserialize, Serialize};
+use sqlx::Acquire;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
         openapi,
-        v1::dictionary::parse_string_into_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    error_response_with_reason,
+    json_error_response_with_reason,
+    obtain_database_connection,
     require_authentication,
     require_permission,
     state::ApplicationState,
@@ -23,9 +23,9 @@ use crate::{
 
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct TranslationRequest {
-    pub english_word_id: String,
-    pub slovene_word_id: String,
+pub struct TranslationCreationRequest {
+    pub english_word_meaning_id: Uuid,
+    pub slovene_word_meaning_id: Uuid,
 }
 
 
@@ -73,11 +73,14 @@ pub struct TranslationRequest {
 pub async fn create_translation(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    request_body: web::Json<TranslationRequest>,
+    request_body: web::Json<TranslationCreationRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
     let authenticated_user = require_authentication!(authentication);
     require_permission!(
-        state,
+        &mut transaction,
         authenticated_user,
         Permission::TranslationCreate
     );
@@ -85,68 +88,71 @@ pub async fn create_translation(
 
     let request_body = request_body.into_inner();
 
-    let english_word_uuid = parse_string_into_uuid(&request_body.english_word_id)?;
-    let slovene_word_uuid = parse_string_into_uuid(&request_body.slovene_word_id)?;
+    let english_word_meaning_id = EnglishWordMeaningId::new(request_body.english_word_meaning_id);
+    let slovene_word_meaning_id = SloveneWordMeaningId::new(request_body.slovene_word_meaning_id);
+
 
 
     let english_word_exists =
-        EnglishWordQuery::word_exists_by_uuid(&state.database, english_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
+        entities::EnglishWordMeaningQuery::exists_by_id(&mut transaction, english_word_meaning_id)
+            .await?;
+
     if !english_word_exists {
         return Err(APIError::client_error(
-            "The provided english word does not exist.",
+            "The provided english word meaning does not exist.",
         ));
     }
 
+
     let slovene_word_exists =
-        SloveneWordQuery::word_exists_by_uuid(&state.database, slovene_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
+        entities::SloveneWordMeaningQuery::exists_by_id(&mut transaction, slovene_word_meaning_id)
+            .await?;
+
     if !slovene_word_exists {
         return Err(APIError::client_error(
             "The provided slovene word does not exist.",
         ));
     }
 
-    let translation_already_exists = TranslationQuery::exists(
-        &state.database,
-        english_word_uuid,
-        slovene_word_uuid,
+
+
+    let translation_already_exists = entities::WordMeaningTranslationQuery::exists(
+        &mut transaction,
+        english_word_meaning_id,
+        slovene_word_meaning_id,
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
     if translation_already_exists {
-        return Ok(error_response_with_reason!(
+        return Ok(json_error_response_with_reason!(
             StatusCode::CONFLICT,
             "The translation already exists."
         ));
     }
 
-    TranslationMutation::create(
-        &state.database,
-        NewTranslation {
-            english_word_id: english_word_uuid,
-            slovene_word_id: slovene_word_uuid,
-        },
+
+    let _ = entities::WordMeaningTranslationMutation::create(
+        &mut transaction,
+        english_word_meaning_id,
+        slovene_word_meaning_id,
+        Some(authenticated_user.user_id()),
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
 
 
+    /* TODO pending cache layer rewrite
     // Signals to the search engine that both words have been updated.
     state
         .search
         .signal_english_word_created_or_updated(english_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
     state
         .search
         .signal_slovene_word_created_or_updated(slovene_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(HttpResponse::Ok().finish())
@@ -157,8 +163,8 @@ pub async fn create_translation(
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct TranslationDeletionRequest {
-    pub english_word_id: String,
-    pub slovene_word_id: String,
+    pub english_word_meaning_id: Uuid,
+    pub slovene_word_meaning_id: Uuid,
 }
 
 
@@ -207,9 +213,12 @@ pub async fn delete_translation(
     authentication: UserAuthenticationExtractor,
     request_body: web::Json<TranslationDeletionRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
     let authenticated_user = require_authentication!(authentication);
     require_permission!(
-        state,
+        &mut transaction,
         authenticated_user,
         Permission::TranslationDelete
     );
@@ -217,66 +226,74 @@ pub async fn delete_translation(
 
     let request_body = request_body.into_inner();
 
-    let english_word_uuid = parse_string_into_uuid(&request_body.english_word_id)?;
-    let slovene_word_uuid = parse_string_into_uuid(&request_body.slovene_word_id)?;
+    let english_word_meaning_id = EnglishWordMeaningId::new(request_body.english_word_meaning_id);
+    let slovene_word_meaning_id = SloveneWordMeaningId::new(request_body.slovene_word_meaning_id);
 
 
-    let english_word_exists =
-        EnglishWordQuery::word_exists_by_uuid(&state.database, english_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
-    if !english_word_exists {
+    let english_word_meaning_exists =
+        entities::EnglishWordMeaningQuery::exists_by_id(&mut transaction, english_word_meaning_id)
+            .await?;
+
+    if !english_word_meaning_exists {
         return Err(APIError::client_error(
-            "The provided english word does not exist.",
+            "The given english word meaning does not exist.",
         ));
     }
 
-    let slovene_word_exists =
-        SloveneWordQuery::word_exists_by_uuid(&state.database, slovene_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
-    if !slovene_word_exists {
+
+    let slovene_word_meaning_exists =
+        entities::SloveneWordMeaningQuery::exists_by_id(&mut transaction, slovene_word_meaning_id)
+            .await?;
+
+    if !slovene_word_meaning_exists {
         return Err(APIError::client_error(
-            "The provided slovene word does not exist.",
+            "The given slovene word meaning does not exist.",
         ));
     }
 
-    let suggestion_exists = TranslationQuery::exists(
-        &state.database,
-        english_word_uuid,
-        slovene_word_uuid,
+
+    let translation_relationship_exists = entities::WordMeaningTranslationQuery::exists(
+        &mut transaction,
+        english_word_meaning_id,
+        slovene_word_meaning_id,
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
-    if !suggestion_exists {
+    if !translation_relationship_exists {
         return Err(APIError::not_found());
     }
 
 
-    TranslationMutation::delete(
-        &state.database,
-        TranslationToDelete {
-            english_word_id: english_word_uuid,
-            slovene_word_id: slovene_word_uuid,
-        },
-    )
-    .await
-    .map_err(APIError::InternalError)?;
+    let deleted_translation_relationship_successfully =
+        entities::WordMeaningTranslationMutation::delete(
+            &mut transaction,
+            english_word_meaning_id,
+            slovene_word_meaning_id,
+        )
+        .await?;
+
+
+    if !deleted_translation_relationship_successfully {
+        return Err(APIError::internal_error_with_reason(
+            "database inconsistency: failed to delete a translation relationship \
+            even though it previously existed inside the same transaction",
+        ));
+    }
 
 
 
+    /* TODO pending cache layer rewrite
     // Signals to the search engine that both words have been updated.
     state
         .search
         .signal_english_word_created_or_updated(english_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
     state
         .search
         .signal_slovene_word_created_or_updated(slovene_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(HttpResponse::Ok().finish())

@@ -28,7 +28,7 @@ use kolomoni::api::v1::dictionary::{
         SloveneWordsResponse,
     },
     suggestions::{TranslationSuggestionDeletionRequest, TranslationSuggestionRequest},
-    translations::{TranslationDeletionRequest, TranslationRequest},
+    translations::{TranslationCreationRequest, TranslationDeletionRequest},
 };
 use kolomoni_test_util::prelude::*;
 
@@ -731,9 +731,9 @@ async fn word_creation_with_suggestions_and_translations_works() {
         // Creating a translation should require authentication.
         server
             .request(Method::POST, "/api/v1/dictionary/translation")
-            .with_json_body(TranslationRequest {
-                english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.id.to_string(),
+            .with_json_body(TranslationCreationRequest {
+                english_word_meaning_id: word_ability.id.to_string(),
+                slovene_word_meaning_id: word_sposobnost.id.to_string(),
             })
             .send()
             .await
@@ -742,9 +742,9 @@ async fn word_creation_with_suggestions_and_translations_works() {
         // The endpoint should require proper permissions.
         server
             .request(Method::POST, "/api/v1/dictionary/translation")
-            .with_json_body(TranslationRequest {
-                english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.id.to_string(),
+            .with_json_body(TranslationCreationRequest {
+                english_word_meaning_id: word_ability.id.to_string(),
+                slovene_word_meaning_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&normal_user_access_token)
             .send()
@@ -754,9 +754,9 @@ async fn word_creation_with_suggestions_and_translations_works() {
         // The request should fail if any UUIDs are invalid.
         server
             .request(Method::POST, "/api/v1/dictionary/translation")
-            .with_json_body(TranslationRequest {
-                english_word_id: "asdo214sdaf".to_string(),
-                slovene_word_id: word_sposobnost.id.to_string(),
+            .with_json_body(TranslationCreationRequest {
+                english_word_meaning_id: "asdo214sdaf".to_string(),
+                slovene_word_meaning_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -766,9 +766,9 @@ async fn word_creation_with_suggestions_and_translations_works() {
         // The request should fail if any UUIDs don't exist.
         server
             .request(Method::POST, "/api/v1/dictionary/translation")
-            .with_json_body(TranslationRequest {
-                english_word_id: "018dcd50-8e5f-7e1e-8437-60898a3dc18c".to_string(),
-                slovene_word_id: word_sposobnost.id.to_string(),
+            .with_json_body(TranslationCreationRequest {
+                english_word_meaning_id: "018dcd50-8e5f-7e1e-8437-60898a3dc18c".to_string(),
+                slovene_word_meaning_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -781,9 +781,9 @@ async fn word_creation_with_suggestions_and_translations_works() {
 
         let translation_response = server
             .request(Method::POST, "/api/v1/dictionary/translation")
-            .with_json_body(TranslationRequest {
-                english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.id.to_string(),
+            .with_json_body(TranslationCreationRequest {
+                english_word_meaning_id: word_ability.id.to_string(),
+                slovene_word_meaning_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()
@@ -830,9 +830,9 @@ async fn word_creation_with_suggestions_and_translations_works() {
         // Trying to create the same translation again should fail with 409 Conflict.
         server
             .request(Method::POST, "/api/v1/dictionary/translation")
-            .with_json_body(TranslationRequest {
-                english_word_id: word_ability.id.to_string(),
-                slovene_word_id: word_sposobnost.id.to_string(),
+            .with_json_body(TranslationCreationRequest {
+                english_word_meaning_id: word_ability.id.to_string(),
+                slovene_word_meaning_id: word_sposobnost.id.to_string(),
             })
             .with_access_token(&admin_user_access_token)
             .send()

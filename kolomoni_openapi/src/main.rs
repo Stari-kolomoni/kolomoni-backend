@@ -132,7 +132,7 @@ use utoipa_rapidoc::RapiDoc;
             dictionary::slovene_word::SloveneWordUpdateRequest,
 
             // dictionary/english_word.rs
-            dictionary::english_word::EnglishWord,
+            dictionary::english_word::EnglishWordWithMeanings,
             dictionary::english_word::EnglishWordsResponse,
             dictionary::english_word::EnglishWordFilters,
             dictionary::english_word::EnglishWordsListRequest,
@@ -146,7 +146,7 @@ use utoipa_rapidoc::RapiDoc;
             dictionary::suggestions::TranslationSuggestionDeletionRequest,
     
             // dictionary/translations.rs
-            dictionary::translations::TranslationRequest,
+            dictionary::translations::TranslationCreationRequest,
             dictionary::translations::TranslationDeletionRequest,
 
             // dictionary/search.rs

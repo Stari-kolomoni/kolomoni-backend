@@ -3,7 +3,7 @@ use kolomoni_search::SearchResult;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{english_word::EnglishWord, slovene_word::SloveneWord};
+use super::{english_word::EnglishWordWithMeanings, slovene_word::SloveneWord};
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
@@ -32,7 +32,7 @@ pub struct SearchRequest {
 #[derive(Serialize, Clone, PartialEq, Eq, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 pub struct SearchResults {
-    english_results: Vec<EnglishWord>,
+    english_results: Vec<EnglishWordWithMeanings>,
     slovene_results: Vec<SloveneWord>,
 }
 
@@ -102,16 +102,16 @@ pub async fn perform_search(
         .search
         .search(&search_query)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
 
 
-    let mut english_results: Vec<EnglishWord> = Vec::new();
+    let mut english_results: Vec<EnglishWordWithMeanings> = Vec::new();
     let mut slovene_results: Vec<SloveneWord> = Vec::new();
 
     for search_result in search_results.words {
         match search_result {
             SearchResult::English(english_result) => {
-                english_results.push(EnglishWord::from_expanded_word_info(
+                english_results.push(EnglishWordWithMeanings::from_expanded_word_info(
                     english_result,
                 ));
             }

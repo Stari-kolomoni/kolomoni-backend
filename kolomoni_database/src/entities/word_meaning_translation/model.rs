@@ -2,11 +2,11 @@ use chrono::{DateTime, Utc};
 use kolomoni_core::id::{EnglishWordMeaningId, SloveneWordMeaningId, UserId};
 use uuid::Uuid;
 
-use crate::IntoModel;
+use crate::IntoExternalModel;
 
 
 
-pub struct Model {
+pub struct WordMeaningTranslationModel {
     pub slovene_word_meaning_id: SloveneWordMeaningId,
 
     pub english_word_meaning_id: EnglishWordMeaningId,
@@ -18,27 +18,27 @@ pub struct Model {
 
 
 
-pub(super) struct IntermediateModel {
-    pub(super) slovene_word_meaning_id: Uuid,
+pub struct InternalWordMeaningTranslationModel {
+    pub(crate) slovene_word_meaning_id: Uuid,
 
-    pub(super) english_word_meaning_id: Uuid,
+    pub(crate) english_word_meaning_id: Uuid,
 
-    pub(super) translated_at: DateTime<Utc>,
+    pub(crate) translated_at: DateTime<Utc>,
 
-    pub(super) translated_by: Option<Uuid>,
+    pub(crate) translated_by: Option<Uuid>,
 }
 
-impl IntoModel for IntermediateModel {
-    type Model = Model;
+impl IntoExternalModel for InternalWordMeaningTranslationModel {
+    type ExternalModel = WordMeaningTranslationModel;
 
-    fn into_model(self) -> Self::Model {
+    fn into_external_model(self) -> Self::ExternalModel {
         let slovene_word_meaning_id = SloveneWordMeaningId::new(self.slovene_word_meaning_id);
         let english_word_meaning_id = EnglishWordMeaningId::new(self.english_word_meaning_id);
 
         let translated_by = self.translated_by.map(UserId::new);
 
 
-        Self::Model {
+        Self::ExternalModel {
             slovene_word_meaning_id,
             english_word_meaning_id,
             translated_at: self.translated_at,

@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use kolomoni_core::id::WordId;
 use uuid::Uuid;
 
-use crate::TryIntoModel;
+use crate::TryIntoExternalModel;
 
 
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -32,7 +32,7 @@ impl WordLanguage {
 
 
 
-pub struct Model {
+pub struct WordModel {
     pub id: WordId,
 
     pub language: WordLanguage,
@@ -43,30 +43,30 @@ pub struct Model {
 }
 
 
-pub(super) struct IntermediateModel {
-    pub(super) id: Uuid,
+pub struct InternalWordModel {
+    pub(crate) id: Uuid,
 
-    pub(super) language: String,
+    pub(crate) language_code: String,
 
-    pub(super) created_at: DateTime<Utc>,
+    pub(crate) created_at: DateTime<Utc>,
 
-    pub(super) last_modified_at: DateTime<Utc>,
+    pub(crate) last_modified_at: DateTime<Utc>,
 }
 
-impl TryIntoModel for IntermediateModel {
-    type Model = Model;
+impl TryIntoExternalModel for InternalWordModel {
+    type ExternalModel = WordModel;
     type Error = Cow<'static, str>;
 
-    fn try_into_model(self) -> Result<Self::Model, Self::Error> {
+    fn try_into_external_model(self) -> Result<Self::ExternalModel, Self::Error> {
         let language =
-            WordLanguage::from_ietf_bcp_47_language_tag(&self.language).ok_or_else(|| {
+            WordLanguage::from_ietf_bcp_47_language_tag(&self.language_code).ok_or_else(|| {
                 Cow::from(format!(
                     "unexpected language tag \"{}\", expected \"en\" or \"sl\"",
-                    self.language
+                    self.language_code
                 ))
             })?;
 
-        Ok(Self::Model {
+        Ok(Self::ExternalModel {
             id: WordId::new(self.id),
             language,
             created_at: self.created_at,

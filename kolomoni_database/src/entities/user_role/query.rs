@@ -6,9 +6,11 @@ use sqlx::PgConnection;
 
 use crate::{QueryError, QueryResult};
 
-pub struct Query;
 
-impl Query {
+
+pub struct UserRoleQuery;
+
+impl UserRoleQuery {
     pub async fn roles_for_user(
         connection: &mut PgConnection,
         user_id: UserId,
@@ -22,7 +24,7 @@ impl Query {
             "SELECT DISTINCT role_id \
                 FROM kolomoni.user_role \
                 WHERE user_id = $1",
-            user_id.into_inner(),
+            user_id.into_uuid(),
         )
         .fetch_all(connection)
         .await?;
@@ -66,7 +68,7 @@ impl Query {
                 INNER JOIN kolomoni.user_role \
                     ON role_permission.role_id = user_role.role_id \
                 WHERE user_role.user_id = $1",
-            user_id.into_inner()
+            user_id.into_uuid()
         )
         .fetch_all(connection)
         .await?;
@@ -116,7 +118,7 @@ impl Query {
                 WHERE \
                     user_role.user_id = $1 AND role_permission.permission_id = $2 \
             )",
-            user_id.into_inner(),
+            user_id.into_uuid(),
             permission.id()
         )
         .fetch_one(connection)

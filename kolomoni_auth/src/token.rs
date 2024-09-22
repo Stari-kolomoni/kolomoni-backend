@@ -1,9 +1,10 @@
+use std::borrow::Cow;
 use std::ops::Add;
 
 use chrono::{DateTime, Duration, SubsecRound, Utc};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use miette::{Context, IntoDiagnostic, Result};
+use kolomoni_core::id::UserId;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::TimestampSeconds;
@@ -24,10 +25,10 @@ const JWT_SUBJECT: &str = "API token";
 #[derive(Error, Debug)]
 pub enum JWTValidationError {
     #[error("token has expired")]
-    Expired(JWTClaims),
+    Expired { expired_token: JWTClaims },
 
-    #[error("token is invalid: `{0}`")]
-    InvalidToken(String),
+    #[error("token is invalid: {}", .reason)]
+    InvalidToken { reason: Cow<'static, str> },
 }
 
 
@@ -75,16 +76,15 @@ pub struct JWTClaims {
     #[serde_as(as = "TimestampSeconds<i64>")]
     pub exp: DateTime<Utc>,
 
-    /// JWT private claim: Internal user ID
-    ///
-    /// Internal ID the user was given upon registration.
-    pub user_id: i32,
+    /// JWT private claim: UUIDv7 of the user the token belongs to.
+    pub user_id: UserId,
 
     /// JWT private claim: Token type (access or refresh token)
     ///
-    /// Access tokens can be used to call restricted endpoints and
-    /// refresh tokens can be used to generate new access tokens when they
-    /// expire (refresh tokens have a longer expiration time).
+    /// *Access tokens* can be used to call restricted endpoints.
+    ///
+    /// *Refresh tokens* can be used to generate new access tokens when they
+    /// expire (refresh tokens have a longer expiration time compared to access tokens).
     pub token_type: JWTTokenType,
 }
 
@@ -94,7 +94,7 @@ impl JWTClaims {
     /// Note that the `issued_at` timestamp will have its sub-second content truncated
     /// (see [`trunc_subsecs`][chrono::round::SubsecRound::trunc_subsecs]).
     pub fn create(
-        user_id: i32,
+        user_id: UserId,
         issued_at: DateTime<Utc>,
         valid_for: Duration,
         token_type: JWTTokenType,
@@ -111,6 +111,18 @@ impl JWTClaims {
             token_type,
         }
     }
+}
+
+
+
+#[derive(Debug, Error)]
+pub enum JWTCreationError {
+    #[error("JWT error")]
+    JWTError {
+        #[from]
+        #[source]
+        error: jsonwebtoken::errors::Error,
+    },
 }
 
 
@@ -155,35 +167,40 @@ impl JsonWebTokenManager {
     }
 
     /// Create (encode) a new token. Returns a string with the encoded content.
-    pub fn create_token(&self, claims: JWTClaims) -> Result<String> {
+    pub fn create_token(&self, claims: JWTClaims) -> Result<String, JWTCreationError> {
         jsonwebtoken::encode(&self.header, &claims, &self.encoding_key)
-            .into_diagnostic()
-            .wrap_err("Failed to create JWT token.")
+            .map_err(|error| JWTCreationError::JWTError { error })
     }
 
     /// Decode a JSON Web Token from a string.
     pub fn decode_token(&self, token: &str) -> Result<JWTClaims, JWTValidationError> {
-        let token_data =
-            jsonwebtoken::decode::<JWTClaims>(token, &self.decoding_key, &self.validation)
-                .map_err(|err| match err.kind() {
-                    ErrorKind::InvalidIssuer => "Invalid token: invalid issuer.".to_string(),
-                    ErrorKind::InvalidSubject => "Invalid token: invalid subject.".to_string(),
-                    _ => format!("Errored while decoding token: {err}."),
-                })
-                .map_err(JWTValidationError::InvalidToken)?;
+        let token_data = jsonwebtoken::decode::<JWTClaims>(
+            token,
+            &self.decoding_key,
+            &self.validation,
+        )
+        .map_err(|error| JWTValidationError::InvalidToken {
+            reason: match error.kind() {
+                ErrorKind::InvalidIssuer => Cow::from("failed to parse JWT token: invalid issuer"),
+                ErrorKind::InvalidSubject => Cow::from("failed to parse JWT token: invalid subject"),
+                _ => Cow::from(format!("failed to parse JWT token: {}", error)),
+            },
+        })?;
 
         let current_time = Utc::now();
 
         // Validate issued at (if `iat` is in the future, this token is broken)
         if token_data.claims.iat > current_time {
-            return Err(JWTValidationError::InvalidToken(
-                "Invalid token: `iat` field is in the future!".to_string(),
-            ));
+            return Err(JWTValidationError::InvalidToken {
+                reason: Cow::from("invalid JWT token: issued-at field is in the future"),
+            });
         }
 
         // Validate expiry time (if `exp` is in the past, it has expired)
         if token_data.claims.exp <= current_time {
-            return Err(JWTValidationError::Expired(token_data.claims));
+            return Err(JWTValidationError::Expired {
+                expired_token: token_data.claims,
+            });
         }
 
         Ok(token_data.claims)
@@ -194,6 +211,7 @@ impl JsonWebTokenManager {
 #[cfg(test)]
 mod test {
     use chrono::SubsecRound;
+    use uuid::Uuid;
 
     use super::*;
 
@@ -204,7 +222,14 @@ mod test {
         let issued_at = Utc::now().trunc_subsecs(0);
         let valid_for = chrono::Duration::from_std(std::time::Duration::from_secs(60)).unwrap();
 
-        let claims = JWTClaims::create(1, issued_at, valid_for, JWTTokenType::Access);
+        let user_id = UserId::new(Uuid::now_v7());
+
+        let claims = JWTClaims::create(
+            user_id,
+            issued_at,
+            valid_for,
+            JWTTokenType::Access,
+        );
 
         let encoded_token = manager.create_token(claims).unwrap();
 
@@ -215,7 +240,7 @@ mod test {
         assert_eq!(decoded_claims.sub, JWT_SUBJECT);
         assert_eq!(decoded_claims.iat, issued_at);
         assert_eq!(decoded_claims.exp, issued_at + valid_for);
-        assert_eq!(decoded_claims.user_id, 1);
+        assert_eq!(decoded_claims.user_id, user_id);
         assert_eq!(decoded_claims.token_type, JWTTokenType::Access);
     }
 }

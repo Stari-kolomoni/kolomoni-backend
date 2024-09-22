@@ -10,3 +10,12 @@ chrono = { workspace = true }
 serde = { workspace = true }
 serde_with = { workspace = true }
 serde_json = { workspace = true }
+
+utoipa = { workspace = true }
+
+
+[features]
+# Implements Deserialize on API response models and Serialize on 
+# API request models, allowing us to write e.g. test code that 
+# handles both constructing API requests and parsing API responses.
+more_serde_impls = []

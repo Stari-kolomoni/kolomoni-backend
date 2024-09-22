@@ -1,17 +1,19 @@
 //! Application-wide state (shared between endpoint functions).
 
 use actix_web::web::Data;
-use kolomoni_auth::JsonWebTokenManager;
+use kolomoni_auth::{ArgonHasher, JsonWebTokenManager};
 use kolomoni_configuration::Configuration;
 use kolomoni_database::mutation::ArgonHasher;
 use kolomoni_search::{ChangeEvent, KolomoniSearchEngine, SearchResults};
 use miette::{Context, IntoDiagnostic, Result};
 use sea_orm::{prelude::Uuid, DatabaseConnection};
+use sqlx::PgPool;
 use tokio::sync::mpsc;
 
 use crate::connect_and_set_up_database;
 
 
+// TODO needs to be reworked to be more general, then connect search into it, or maybe even setup this whole thing to be decoupled by using db triggers or something
 /// A dictionary search engine.
 ///
 /// Handles searching, seeding and incrementally updating the internal index and cache.
@@ -136,8 +138,8 @@ pub struct ApplicationStateInner {
     /// Password hasher helper struct.
     pub hasher: ArgonHasher,
 
-    /// PostgreSQL database connection.
-    pub database: DatabaseConnection,
+    /// PostgreSQL database connection pool.
+    pub database: PgPool,
 
     /// Authentication token manager (JSON Web Token).
     pub jwt_manager: JsonWebTokenManager,

@@ -1,32 +1,33 @@
 use actix_http::StatusCode;
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
 use chrono::{DateTime, Utc};
+use futures_util::StreamExt;
 use kolomoni_auth::Permission;
-use kolomoni_database::{
-    entities,
-    mutation::{NewSloveneWord, SloveneWordMutation, UpdatedSloveneWord, WordMutation},
-    query::{
-        self,
-        ExpandedSloveneWordInfo,
-        RelatedSloveneWordInfo,
-        SloveneWordQuery,
-        SloveneWordsQueryOptions,
-    },
+use kolomoni_core::id::{CategoryId, SloveneWordId, SloveneWordMeaningId};
+use kolomoni_database::entities::{
+    self,
+    NewSloveneWord,
+    SloveneWordFieldsToUpdate,
+    SloveneWordsQueryOptions,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::Acquire;
+use tracing::info;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
-use super::Category;
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
         openapi,
-        v1::dictionary::parse_string_into_uuid,
+        traits::IntoApiModel,
+        v1::dictionary::english::meaning::ShallowEnglishWordMeaning,
     },
     authentication::UserAuthenticationExtractor,
-    error_response_with_reason,
     impl_json_response_builder,
+    json_error_response_with_reason,
+    obtain_database_connection,
     require_authentication,
     require_permission,
     require_permission_with_optional_authentication,
@@ -46,19 +47,12 @@ use crate::{
         "last_modified_at": "2023-06-27T20:34:27.217273Z"
     })
 )]
-pub struct SloveneWord {
+pub struct SloveneWordWithMeanings {
     /// Internal UUID of the word.
-    pub id: String,
+    pub id: SloveneWordId,
 
     /// An abstract or base form of the word.
     pub lemma: String,
-
-    /// If there are multiple similar words, the disambiguation
-    /// helps distinguish the word from other words at a glance.
-    pub disambiguation: Option<String>,
-
-    /// A short description of the word. Supports Markdown.
-    pub description: Option<String>,
 
     /// When the word was created.
     pub created_at: DateTime<Utc>,
@@ -69,9 +63,70 @@ pub struct SloveneWord {
     ///      of the linked suggestion and translation relationships.
     pub last_modified_at: DateTime<Utc>,
 
-    pub categories: Vec<Category>,
+    pub meanings: Vec<SloveneWordMeaningWithCategoriesAndTranslations>,
 }
 
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+pub struct SloveneWordMeaningWithCategoriesAndTranslations {
+    pub meaning_id: SloveneWordMeaningId,
+
+    pub disambiguation: Option<String>,
+
+    pub abbreviation: Option<String>,
+
+    pub description: Option<String>,
+
+    pub created_at: DateTime<Utc>,
+
+    pub last_modified_at: DateTime<Utc>,
+
+    pub categories: Vec<CategoryId>,
+
+    pub translates_into: Vec<ShallowEnglishWordMeaning>,
+}
+
+
+impl IntoApiModel for entities::SloveneWordMeaningModelWithCategoriesAndTranslations {
+    type ApiModel = SloveneWordMeaningWithCategoriesAndTranslations;
+
+    fn into_api_model(self) -> Self::ApiModel {
+        Self::ApiModel {
+            meaning_id: self.id,
+            disambiguation: self.disambiguation,
+            abbreviation: self.abbreviation,
+            description: self.description,
+            created_at: self.created_at,
+            last_modified_at: self.last_modified_at,
+            categories: self.categories,
+            translates_into: self
+                .translates_into
+                .into_iter()
+                .map(|translation| translation.into_api_model())
+                .collect(),
+        }
+    }
+}
+
+
+impl IntoApiModel for entities::TranslatesIntoEnglishWordMeaningModel {
+    type ApiModel = ShallowEnglishWordMeaning;
+
+    fn into_api_model(self) -> Self::ApiModel {
+        Self::ApiModel {
+            meaning_id: self.word_meaning_id,
+            disambiguation: self.disambiguation,
+            abbreviation: self.abbreviation,
+            description: self.description,
+            created_at: self.created_at,
+            last_modified_at: self.last_modified_at,
+            categories: self.categories,
+        }
+    }
+}
+
+
+/*
 impl SloveneWord {
     pub fn new_without_expanded_info(slovene_model: entities::word_slovene::Model) -> Self {
         Self {
@@ -127,14 +182,14 @@ impl SloveneWord {
             categories,
         }
     }
-}
+} */
 
 
 
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 pub struct SloveneWordsResponse {
-    pub slovene_words: Vec<SloveneWord>,
+    pub slovene_words: Vec<SloveneWordWithMeanings>,
 }
 
 impl_json_response_builder!(SloveneWordsResponse);
@@ -152,6 +207,25 @@ pub struct SloveneWordFilters {
 #[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
 pub struct SloveneWordsListRequest {
     pub filters: Option<SloveneWordFilters>,
+}
+
+
+impl IntoApiModel for entities::SloveneWordWithMeaningsModel {
+    type ApiModel = SloveneWordWithMeanings;
+
+    fn into_api_model(self) -> Self::ApiModel {
+        Self::ApiModel {
+            id: self.word_id,
+            lemma: self.lemma,
+            created_at: self.created_at,
+            last_modified_at: self.last_modified_at,
+            meanings: self
+                .meanings
+                .into_iter()
+                .map(|meaning| meaning.into_api_model())
+                .collect(),
+        }
+    }
 }
 
 
@@ -186,39 +260,46 @@ pub async fn get_all_slovene_words(
     authentication: UserAuthenticationExtractor,
     request_body: Option<web::Json<SloveneWordsListRequest>>,
 ) -> EndpointResult {
-    require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
+    let mut database_connection = obtain_database_connection!(state);
+
+    require_permission_with_optional_authentication!(
+        &mut database_connection,
+        authentication,
+        Permission::WordRead
+    );
+    // TODO continue from here
 
 
-    let word_query_options = match request_body {
-        Some(body) => {
-            let body = body.into_inner();
+    let word_query_options = request_body
+        .map(|options| {
+            options
+                .into_inner()
+                .filters
+                .map(|filter_options| SloveneWordsQueryOptions {
+                    only_words_modified_after: filter_options.last_modified_after,
+                })
+        })
+        .flatten()
+        .unwrap_or_default();
 
-            match body.filters {
-                Some(filters) => SloveneWordsQueryOptions {
-                    only_words_modified_after: filters.last_modified_after,
-                },
-                None => SloveneWordsQueryOptions::default(),
-            }
-        }
-        None => SloveneWordsQueryOptions::default(),
-    };
 
     // Load words from the database.
-    let words = query::SloveneWordQuery::all_words_expanded(&state.database, word_query_options)
-        .await
-        .map_err(APIError::InternalError)?;
+    let mut words_with_meanings_stream =
+        entities::SloveneWordQuery::get_all_slovene_words_with_meanings(
+            &mut database_connection,
+            word_query_options,
+        )
+        .await;
 
 
-    let words_as_api_structures = words
-        .into_iter()
-        .map(SloveneWord::from_expanded_word_info)
-        .collect();
+    let mut slovene_words = Vec::new();
 
-
-    Ok(SloveneWordsResponse {
-        slovene_words: words_as_api_structures,
+    while let Some(word_result) = words_with_meanings_stream.next().await {
+        slovene_words.push(word_result?.into_api_model());
     }
-    .into_response())
+
+
+    Ok(SloveneWordsResponse { slovene_words }.into_response())
 }
 
 
@@ -226,15 +307,11 @@ pub async fn get_all_slovene_words(
 #[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
 #[schema(
     example = json!({
-        "lemma": "pustolovec",
-        "disambiguation": "lik",
-        "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino."
+        "lemma": "pustolovec"
     })
 )]
 pub struct SloveneWordCreationRequest {
     pub lemma: String,
-    pub disambiguation: Option<String>,
-    pub description: Option<String>,
 }
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
@@ -252,10 +329,25 @@ pub struct SloveneWordCreationRequest {
     })
 )]
 pub struct SloveneWordCreationResponse {
-    pub word: SloveneWord,
+    pub word: SloveneWordWithMeanings,
 }
 
 impl_json_response_builder!(SloveneWordCreationResponse);
+
+
+impl IntoApiModel for entities::SloveneWordModel {
+    type ApiModel = SloveneWordWithMeanings;
+
+    fn into_api_model(self) -> Self::ApiModel {
+        Self::ApiModel {
+            id: self.word_id,
+            lemma: self.lemma,
+            created_at: self.created_at,
+            last_modified_at: self.last_modified_at,
+            meanings: vec![],
+        }
+    }
+}
 
 
 
@@ -298,48 +390,58 @@ pub async fn create_slovene_word(
     authentication: UserAuthenticationExtractor,
     creation_request: web::Json<SloveneWordCreationRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
     let authenticated_user = require_authentication!(authentication);
-    require_permission!(state, authenticated_user, Permission::WordCreate);
+    require_permission!(
+        &mut transaction,
+        authenticated_user,
+        Permission::WordCreate
+    );
+
 
 
     let creation_request = creation_request.into_inner();
 
-    let lemma_already_exists =
-        SloveneWordQuery::word_exists_by_lemma(&state.database, creation_request.lemma.clone())
-            .await
-            .map_err(APIError::InternalError)?;
 
-    if lemma_already_exists {
-        return Ok(error_response_with_reason!(
+    let word_lemma_already_exists =
+        entities::SloveneWordQuery::exists_by_exact_lemma(&mut transaction, &creation_request.lemma)
+            .await?;
+
+    if word_lemma_already_exists {
+        return Ok(json_error_response_with_reason!(
             StatusCode::CONFLICT,
             "A slovene word with the given lemma already exists."
         ));
     }
 
 
-    let newly_created_word = SloveneWordMutation::create(
-        &state.database,
+    let newly_created_word = entities::SloveneWordMutation::create(
+        &mut transaction,
         NewSloveneWord {
             lemma: creation_request.lemma,
-            disambiguation: creation_request.disambiguation,
-            description: creation_request.description,
         },
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
+    info!(
+        created_by_user = %authenticated_user.user_id(),
+        "Created new slovene word: {}", newly_created_word.lemma,
+    );
 
+    /* TODO pending rewrite of cache layer
     // Signals to the the search indexer that the word has been created.
     state
         .search
         .signal_slovene_word_created_or_updated(newly_created_word.word_id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(SloveneWordCreationResponse {
         // Newly created words do not belong to any categories.
-        word: SloveneWord::new_without_expanded_info(newly_created_word),
+        word: newly_created_word.into_api_model(),
     }
     .into_response())
 }
@@ -350,7 +452,7 @@ pub async fn create_slovene_word(
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 pub struct SloveneWordInfoResponse {
-    pub word: SloveneWord,
+    pub word: SloveneWordWithMeanings,
 }
 
 impl_json_response_builder!(SloveneWordInfoResponse);
@@ -399,25 +501,34 @@ impl_json_response_builder!(SloveneWordInfoResponse);
 pub async fn get_specific_slovene_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(String,)>,
+    parameters: web::Path<(Uuid,)>,
 ) -> EndpointResult {
-    require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
+    // TODO continue from here
+    let mut database_connection = obtain_database_connection!(state);
+
+    require_permission_with_optional_authentication!(
+        &mut database_connection,
+        authentication,
+        Permission::WordRead
+    );
 
 
-    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
+    let target_word_uuid = SloveneWordId::new(parameters.into_inner().0);
 
 
-    let target_word = SloveneWordQuery::expanded_word_by_uuid(&state.database, target_word_uuid)
-        .await
-        .map_err(APIError::InternalError)?;
+    let potential_slovene_word = entities::SloveneWordQuery::get_by_id_with_meanings(
+        &mut database_connection,
+        target_word_uuid,
+    )
+    .await?;
 
-    let Some(target_word) = target_word else {
+    let Some(slovene_word_with_meanings) = potential_slovene_word else {
         return Err(APIError::not_found());
     };
 
 
     Ok(SloveneWordInfoResponse {
-        word: SloveneWord::from_expanded_word_info(target_word),
+        word: slovene_word_with_meanings.into_api_model(),
     }
     .into_response())
 }
@@ -465,23 +576,31 @@ pub async fn get_specific_slovene_word_by_lemma(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
+    let mut database_connection = obtain_database_connection!(state);
+
+    require_permission_with_optional_authentication!(
+        &mut database_connection,
+        authentication,
+        Permission::WordRead
+    );
 
 
-    let target_word_lemma = parameters.into_inner().0;
+    let target_word_lemma = &parameters.into_inner().0;
 
 
-    let target_word = SloveneWordQuery::expanded_word_by_lemma(&state.database, target_word_lemma)
-        .await
-        .map_err(APIError::InternalError)?;
+    let potential_slovene_word = entities::SloveneWordQuery::get_by_exact_lemma_with_meanings(
+        &mut database_connection,
+        &target_word_lemma,
+    )
+    .await?;
 
-    let Some(target_word) = target_word else {
+    let Some(slovene_word_with_meanings) = potential_slovene_word else {
         return Err(APIError::not_found());
     };
 
 
     Ok(SloveneWordInfoResponse {
-        word: SloveneWord::from_expanded_word_info(target_word),
+        word: slovene_word_with_meanings.into_api_model(),
     }
     .into_response())
 }
@@ -492,8 +611,6 @@ pub async fn get_specific_slovene_word_by_lemma(
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
 pub struct SloveneWordUpdateRequest {
     pub lemma: Option<String>,
-    pub disambiguation: Option<String>,
-    pub description: Option<String>,
 }
 
 impl_json_response_builder!(SloveneWordUpdateRequest);
@@ -548,58 +665,78 @@ impl_json_response_builder!(SloveneWordUpdateRequest);
 pub async fn update_specific_slovene_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(String,)>,
+    parameters: web::Path<(Uuid,)>,
     request_data: web::Json<SloveneWordUpdateRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
     let authenticated_user = require_authentication!(authentication);
-    require_permission!(state, authenticated_user, Permission::WordUpdate);
+    require_permission!(
+        &mut transaction,
+        authenticated_user,
+        Permission::WordUpdate
+    );
 
 
-    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
-
+    let target_word_id = SloveneWordId::new(parameters.into_inner().0);
     let request_data = request_data.into_inner();
 
 
+
     let target_word_exists =
-        SloveneWordQuery::word_exists_by_uuid(&state.database, target_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
+        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_word_id).await?;
 
     if !target_word_exists {
         return Err(APIError::not_found());
     }
 
 
-    let updated_word = SloveneWordMutation::update(
-        &state.database,
-        target_word_uuid,
-        UpdatedSloveneWord {
-            lemma: request_data.lemma,
-            disambiguation: request_data.disambiguation,
-            description: request_data.description,
+    let updated_successfully = entities::SloveneWordMutation::update(
+        &mut transaction,
+        target_word_id,
+        SloveneWordFieldsToUpdate {
+            new_lemma: request_data.lemma,
         },
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
+
+    if !updated_successfully {
+        transaction.rollback().await?;
+
+        return Err(APIError::internal_error_with_reason(
+            "database inconsistency: failed to update slovene word, even though it \
+            previously existed inside the same transaction",
+        ));
+    }
 
 
-    let related_word_info =
-        SloveneWordQuery::related_word_information_only(&state.database, updated_word.word_id)
-            .await
-            .map_err(APIError::InternalError)?;
+    let updated_word =
+        entities::SloveneWordQuery::get_by_id_with_meanings(&mut transaction, target_word_id)
+            .await?
+            .ok_or_else(|| {
+                APIError::internal_error_with_reason(
+                    "database inconsistency: word did not exist after updating it \
+                    inside the same transaction",
+                )
+            })?;
 
 
+    // TODO at the end, go over all endpoints and make sure that they all commit transactions if they use them
+    transaction.commit().await?;
 
+
+    /* TODO pending cache layer rewrite
     // Signals to the the search indexer that the word has been updated.
     state
         .search
         .signal_slovene_word_created_or_updated(updated_word.word_id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(SloveneWordInfoResponse {
-        word: SloveneWord::from_word_and_related_info(updated_word, related_word_info),
+        word: updated_word.into_api_model(),
     }
     .into_response())
 }
@@ -649,48 +786,54 @@ pub async fn update_specific_slovene_word(
 pub async fn delete_specific_slovene_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(String,)>,
+    parameters: web::Path<(Uuid,)>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
     let authenticated_user = require_authentication!(authentication);
-    require_permission!(state, authenticated_user, Permission::WordDelete);
+    require_permission!(
+        &mut transaction,
+        authenticated_user,
+        Permission::WordDelete
+    );
 
 
-    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
+    let target_word_id = SloveneWordId::new(parameters.into_inner().0);
 
 
     let target_word_exists =
-        SloveneWordQuery::word_exists_by_uuid(&state.database, target_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
+        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_word_id).await?;
 
     if !target_word_exists {
         return Err(APIError::not_found());
     }
 
 
-    WordMutation::delete(&state.database, target_word_uuid)
-        .await
-        .map_err(APIError::InternalError)?;
+    let has_been_deleted =
+        entities::SloveneWordMutation::delete(&mut transaction, target_word_id).await?;
+
+    if !has_been_deleted {
+        return Err(APIError::not_found());
+    }
 
 
+    /* TODO pending cache layer rewrite
     // Signals to the the search indexer that the word has been removed.
     state
         .search
-        .signal_slovene_word_removed(target_word_uuid)
+        .signal_slovene_word_removed(target_word_id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(HttpResponse::Ok().finish())
 }
 
 
-// TODO Links.
-
-
 #[rustfmt::skip]
-pub fn slovene_dictionary_router() -> Scope {
-    web::scope("/slovene")
+pub fn slovene_word_router() -> Scope {
+    web::scope("")
         .service(get_all_slovene_words)
         .service(create_slovene_word)
         .service(get_specific_slovene_word)

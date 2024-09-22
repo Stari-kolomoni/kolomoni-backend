@@ -18,7 +18,7 @@ pub(crate) mod remote;
 pub mod sha256;
 
 
-/// Descibes a migration's status: either pending or applied (at some moment in time).
+/// Describes a migration's status: either pending or applied (at some moment in time).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MigrationStatus {
     /// The migration is pending, which means its details reside in the migrations directory
@@ -219,7 +219,7 @@ async fn execute_up_sql_and_update_migrations_table(
 
     // Executes the entire up.sql script of the migration.
     // FIXME A concurrent index can't be created for some reason, even when there is no transaction.
-    //       This is currently avoided by just not creating databases and concurrent indexes, but we should 
+    //       This is currently avoided by just not creating databases and concurrent indexes, but we should
     //       probably look into why this is happening. Maybe it could be because `up_sql` is a multiline script?
     //       What would happen if we split at ";" (or something like that)?
     database_connection

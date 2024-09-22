@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use miette::{miette, Result};
 use serde::{Deserialize, Serialize};
 
+// TODO Make sure this and roles are synced with the database migrations.
 
 /// Permissions that we have (inspired by the scope system in OAuth).
 ///
@@ -61,6 +62,9 @@ pub enum Permission {
     #[serde(rename = "category:create")]
     CategoryCreate,
 
+    #[serde(rename = "category:read")]
+    CategoryRead,
+
     #[serde(rename = "category:update")]
     CategoryUpdate,
 
@@ -72,21 +76,22 @@ pub enum Permission {
 impl Permission {
     pub fn from_id(internal_permission_id: i32) -> Option<Self> {
         match internal_permission_id {
-            1 => Some(Permission::UserSelfRead),
-            2 => Some(Permission::UserSelfWrite),
-            3 => Some(Permission::UserAnyRead),
-            4 => Some(Permission::UserAnyWrite),
-            5 => Some(Permission::WordCreate),
-            6 => Some(Permission::WordRead),
-            7 => Some(Permission::WordUpdate),
-            8 => Some(Permission::WordDelete),
-            9 => Some(Permission::SuggestionCreate),
-            10 => Some(Permission::SuggestionDelete),
-            11 => Some(Permission::TranslationCreate),
-            12 => Some(Permission::TranslationDelete),
-            13 => Some(Permission::CategoryCreate),
-            14 => Some(Permission::CategoryUpdate),
-            15 => Some(Permission::CategoryDelete),
+            1 => Some(Self::UserSelfRead),
+            2 => Some(Self::UserSelfWrite),
+            3 => Some(Self::UserAnyRead),
+            4 => Some(Self::UserAnyWrite),
+            5 => Some(Self::WordCreate),
+            6 => Some(Self::WordRead),
+            7 => Some(Self::WordUpdate),
+            8 => Some(Self::WordDelete),
+            9 => Some(Self::SuggestionCreate),
+            10 => Some(Self::SuggestionDelete),
+            11 => Some(Self::TranslationCreate),
+            12 => Some(Self::TranslationDelete),
+            13 => Some(Self::CategoryCreate),
+            14 => Some(Self::CategoryRead),
+            15 => Some(Self::CategoryUpdate),
+            16 => Some(Self::CategoryDelete),
             _ => None,
         }
     }
@@ -95,21 +100,22 @@ impl Permission {
     /// This ID is used primarily in the database and should not be visible externally.
     pub fn id(&self) -> i32 {
         match self {
-            Permission::UserSelfRead => 1,
-            Permission::UserSelfWrite => 2,
-            Permission::UserAnyRead => 3,
-            Permission::UserAnyWrite => 4,
-            Permission::WordCreate => 5,
-            Permission::WordRead => 6,
-            Permission::WordUpdate => 7,
-            Permission::WordDelete => 8,
-            Permission::SuggestionCreate => 9,
-            Permission::SuggestionDelete => 10,
-            Permission::TranslationCreate => 11,
-            Permission::TranslationDelete => 12,
-            Permission::CategoryCreate => 13,
-            Permission::CategoryUpdate => 14,
-            Permission::CategoryDelete => 15,
+            Self::UserSelfRead => 1,
+            Self::UserSelfWrite => 2,
+            Self::UserAnyRead => 3,
+            Self::UserAnyWrite => 4,
+            Self::WordCreate => 5,
+            Self::WordRead => 6,
+            Self::WordUpdate => 7,
+            Self::WordDelete => 8,
+            Self::SuggestionCreate => 9,
+            Self::SuggestionDelete => 10,
+            Self::TranslationCreate => 11,
+            Self::TranslationDelete => 12,
+            Self::CategoryCreate => 13,
+            Self::CategoryRead => 14,
+            Self::CategoryUpdate => 15,
+            Self::CategoryDelete => 16,
         }
     }
 
@@ -129,6 +135,7 @@ impl Permission {
             "word.translation:create" => Some(Self::TranslationCreate),
             "word.translation:delete" => Some(Self::TranslationDelete),
             "category:create" => Some(Self::CategoryCreate),
+            "category:read" => Some(Self::CategoryRead),
             "category:update" => Some(Self::CategoryUpdate),
             "category:delete" => Some(Self::CategoryDelete),
             _ => None,
@@ -138,67 +145,59 @@ impl Permission {
     /// Get the name of the given [`Permission`].
     pub fn name(&self) -> &'static str {
         match self {
-            Permission::UserSelfRead => "user.self:read",
-            Permission::UserSelfWrite => "user.self:write",
-            Permission::UserAnyRead => "user.any:read",
-            Permission::UserAnyWrite => "user.any:write",
-            Permission::WordCreate => "word:create",
-            Permission::WordRead => "word:read",
-            Permission::WordUpdate => "word:update",
-            Permission::WordDelete => "word:delete",
-            Permission::SuggestionCreate => "word.suggestion:create",
-            Permission::SuggestionDelete => "word.suggestion:delete",
-            Permission::TranslationCreate => "word.translation:create",
-            Permission::TranslationDelete => "word.translation:delete",
-            Permission::CategoryCreate => "category:create",
-            Permission::CategoryUpdate => "category:update",
-            Permission::CategoryDelete => "category:delete",
+            Self::UserSelfRead => "user.self:read",
+            Self::UserSelfWrite => "user.self:write",
+            Self::UserAnyRead => "user.any:read",
+            Self::UserAnyWrite => "user.any:write",
+            Self::WordCreate => "word:create",
+            Self::WordRead => "word:read",
+            Self::WordUpdate => "word:update",
+            Self::WordDelete => "word:delete",
+            Self::SuggestionCreate => "word.suggestion:create",
+            Self::SuggestionDelete => "word.suggestion:delete",
+            Self::TranslationCreate => "word.translation:create",
+            Self::TranslationDelete => "word.translation:delete",
+            Self::CategoryCreate => "category:create",
+            Self::CategoryRead => "category:read",
+            Self::CategoryUpdate => "category:update",
+            Self::CategoryDelete => "category:delete",
         }
     }
 
     /// Get the description of the given [`Permission`].
-    #[rustfmt::skip]
     pub fn description(&self) -> &'static str {
         match self {
-            Permission::UserSelfRead =>
-                "Allows the user to log in and view their account information.",
-            Permission::UserSelfWrite =>
-                "Allows the user to update their account information.",
-            Permission::UserAnyRead =>
-                "Allows the user to view public account information of any other user.",
-            Permission::UserAnyWrite =>
-                "Allows the user to update account information of any other user.",
-            Permission::WordCreate =>
-                "Allows the user to create words in the dictionary.",
-            Permission::WordRead =>
-                "Allows the user to read words in the dictionary.",
-            Permission::WordUpdate =>
-                "Allows the user to update existing words in the dictionary (but not delete them).",
-            Permission::WordDelete =>
-                "Allows the user to delete words from the dictionary.",
-            Permission::SuggestionCreate => 
-                "Allows the user to create a translation suggestion.",
-            Permission::SuggestionDelete => 
-                "Allows the user to remove a translation suggestion.",
-            Permission::TranslationCreate =>
-                "Allows the user to translate a word.",
-            Permission::TranslationDelete => 
-                "Allows the user to remove a word translation.",
-            Permission::CategoryCreate => 
-                "Allows the user to create a word category.",
-            Permission::CategoryUpdate => 
-                "Allows the user to update an existing word category.",
-            Permission::CategoryDelete => 
-                "Allows the user to delete a word category.",
-                
+            Self::UserSelfRead => "Allows the user to log in and view their account information.",
+            Self::UserSelfWrite => "Allows the user to update their account information.",
+            Self::UserAnyRead => {
+                "Allows the user to view public account information of any other user."
+            }
+            Self::UserAnyWrite => "Allows the user to update account information of any other user.",
+            Self::WordCreate => "Allows the user to create words in the dictionary.",
+            Self::WordRead => "Allows the user to read words in the dictionary.",
+            Self::WordUpdate => {
+                "Allows the user to update existing words in the dictionary (but not delete them)."
+            }
+            Self::WordDelete => "Allows the user to delete words from the dictionary.",
+            Self::SuggestionCreate => "Allows the user to create a translation suggestion.",
+            Self::SuggestionDelete => "Allows the user to remove a translation suggestion.",
+            Self::TranslationCreate => "Allows the user to translate a word.",
+            Self::TranslationDelete => "Allows the user to remove a word translation.",
+            Self::CategoryCreate => "Allows the user to create a word category.",
+            Self::CategoryRead => "Allows the user to read categories.",
+            Self::CategoryUpdate => "Allows the user to update an existing word category.",
+            Self::CategoryDelete => "Allows the user to delete a word category.",
         }
     }
 }
 
 /// List of permissions that are given to **ANY API CALLER**,
 /// authenticated or not.
-pub const BLANKET_PERMISSION_GRANT: [Permission; 2] =
-    [Permission::WordRead, Permission::UserAnyRead];
+pub const BLANKET_PERMISSION_GRANT: [Permission; 3] = [
+    Permission::WordRead,
+    Permission::UserAnyRead,
+    Permission::CategoryRead,
+];
 
 
 

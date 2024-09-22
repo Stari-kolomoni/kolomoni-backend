@@ -1,34 +1,37 @@
 use actix_http::StatusCode;
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
 use chrono::{DateTime, Utc};
+use futures_util::StreamExt;
 use kolomoni_auth::Permission;
-use kolomoni_database::{
-    entities,
-    mutation::{EnglishWordMutation, NewEnglishWord, UpdatedEnglishWord, WordMutation},
-    query::{
-        self,
-        EnglishWordQuery,
-        EnglishWordsQueryOptions,
-        ExpandedEnglishWordInfo,
-        RelatedEnglishWordInfo,
-    },
+use kolomoni_core::id::EnglishWordId;
+use kolomoni_database::entities::{
+    self,
+    EnglishWordFieldsToUpdate,
+    EnglishWordMeaningModelWithCategoriesAndTranslations,
+    EnglishWordWithMeaningsModel,
+    EnglishWordsQueryOptions,
+    NewEnglishWord,
+    TranslatesIntoSloveneWordModel,
 };
 use miette::Result;
 use serde::{Deserialize, Serialize};
+use sqlx::Acquire;
 use tracing::info;
 use utoipa::ToSchema;
 
-use super::{slovene_word::SloveneWord, Category};
+use super::meaning::EnglishWordMeaningWithCategoriesAndTranslations;
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
         openapi,
-        v1::dictionary::parse_string_into_uuid,
+        traits::IntoApiModel,
+        v1::dictionary::{parse_string_into_uuid, slovene::meaning::ShallowSloveneWordMeaning},
     },
     authentication::UserAuthenticationExtractor,
-    error_response_with_reason,
     impl_json_response_builder,
+    json_error_response_with_reason,
+    obtain_database_connection,
     require_authentication,
     require_permission,
     require_permission_with_optional_authentication,
@@ -37,6 +40,7 @@ use crate::{
 
 
 
+// TODO needs updated example
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 #[schema(
     example = json!({
@@ -59,22 +63,12 @@ use crate::{
         ]
     })
 )]
-pub struct EnglishWord {
-    /// Internal UUID of the word.
-    pub id: String,
+pub struct EnglishWordWithMeanings {
+    /// Word UUID.
+    pub id: EnglishWordId,
 
     /// An abstract or base form of the word.
     pub lemma: String,
-
-    /// If there are multiple similar words, the disambiguation
-    /// helps distinguish the word from other words at a glance.
-    pub disambiguation: Option<String>,
-
-    /// A short description of the word. Supports Markdown.
-    ///
-    /// TODO Will need special Markdown support for linking to other dictionary words
-    ///      and possibly autocomplete in the frontend editor.
-    pub description: Option<String>,
 
     /// When the word was created.
     pub created_at: DateTime<Utc>,
@@ -84,106 +78,14 @@ pub struct EnglishWord {
     /// suggestion or translation linked to this word.
     pub last_modified_at: DateTime<Utc>,
 
-    /// A list of categories this word belongs in.
-    pub categories: Vec<Category>,
-
-    /// Suggested slovene translations of this word.
-    pub suggested_translations: Vec<SloveneWord>,
-
-    /// Slovene translations of this word.
-    pub translations: Vec<SloveneWord>,
-}
-
-impl EnglishWord {
-    pub fn new_without_expanded_info(english_model: entities::word_english::Model) -> Self {
-        Self {
-            id: english_model.word_id.to_string(),
-            lemma: english_model.lemma,
-            disambiguation: english_model.disambiguation,
-            description: english_model.description,
-            created_at: english_model.created_at.to_utc(),
-            last_modified_at: english_model.last_modified_at.to_utc(),
-            categories: Vec::new(),
-            suggested_translations: Vec::new(),
-            translations: Vec::new(),
-        }
-    }
-
-    pub fn from_word_and_related_info(
-        word_model: entities::word_english::Model,
-        related_english_word_info: RelatedEnglishWordInfo,
-    ) -> Self {
-        let categories = related_english_word_info
-            .categories
-            .into_iter()
-            .map(Category::from_database_model)
-            .collect();
-
-        let suggested_translations = related_english_word_info
-            .suggested_translations
-            .into_iter()
-            .map(SloveneWord::from_expanded_word_info)
-            .collect();
-
-        let translations = related_english_word_info
-            .translations
-            .into_iter()
-            .map(SloveneWord::from_expanded_word_info)
-            .collect();
-
-
-        Self {
-            id: word_model.word_id.to_string(),
-            lemma: word_model.lemma,
-            disambiguation: word_model.disambiguation,
-            description: word_model.description,
-            created_at: word_model.created_at.to_utc(),
-            last_modified_at: word_model.last_modified_at.to_utc(),
-            categories,
-            suggested_translations,
-            translations,
-        }
-    }
-
-    pub fn from_expanded_word_info(expanded_english_word_info: ExpandedEnglishWordInfo) -> Self {
-        let categories = expanded_english_word_info
-            .categories
-            .into_iter()
-            .map(Category::from_database_model)
-            .collect();
-
-        let suggested_translations = expanded_english_word_info
-            .suggested_translations
-            .into_iter()
-            .map(SloveneWord::from_expanded_word_info)
-            .collect();
-
-        let translations = expanded_english_word_info
-            .translations
-            .into_iter()
-            .map(SloveneWord::from_expanded_word_info)
-            .collect();
-
-
-        Self {
-            id: expanded_english_word_info.word.word_id.to_string(),
-            lemma: expanded_english_word_info.word.lemma,
-            disambiguation: expanded_english_word_info.word.disambiguation,
-            description: expanded_english_word_info.word.description,
-            created_at: expanded_english_word_info.word.created_at.to_utc(),
-            last_modified_at: expanded_english_word_info.word.last_modified_at.to_utc(),
-            categories,
-            suggested_translations,
-            translations,
-        }
-    }
+    pub meanings: Vec<EnglishWordMeaningWithCategoriesAndTranslations>,
 }
 
 
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 pub struct EnglishWordsResponse {
-    pub english_words: Vec<EnglishWord>,
+    pub english_words: Vec<EnglishWordWithMeanings>,
 }
 
 impl_json_response_builder!(EnglishWordsResponse);
@@ -202,6 +104,65 @@ pub struct EnglishWordFilters {
 pub struct EnglishWordsListRequest {
     pub filters: Option<EnglishWordFilters>,
 }
+
+impl IntoApiModel for EnglishWordMeaningModelWithCategoriesAndTranslations {
+    type ApiModel = EnglishWordMeaningWithCategoriesAndTranslations;
+
+    fn into_api_model(self) -> Self::ApiModel {
+        Self::ApiModel {
+            meaning_id: self.id,
+            disambiguation: self.disambiguation,
+            abbreviation: self.abbreviation,
+            description: self.description,
+            categories: self.categories,
+            created_at: self.created_at,
+            last_modified_at: self.last_modified_at,
+            translates_into: self
+                .translates_into
+                .into_iter()
+                .map(|internal_model| internal_model.into_api_model())
+                .collect(),
+        }
+    }
+}
+
+impl IntoApiModel for TranslatesIntoSloveneWordModel {
+    type ApiModel = ShallowSloveneWordMeaning;
+
+    fn into_api_model(self) -> Self::ApiModel {
+        Self::ApiModel {
+            meaning_id: self.word_meaning_id,
+            disambiguation: self.disambiguation,
+            abbreviation: self.abbreviation,
+            description: self.description,
+            categories: self.categories,
+            created_at: self.created_at,
+            last_modified_at: self.last_modified_at,
+        }
+    }
+}
+
+
+impl IntoApiModel for EnglishWordWithMeaningsModel {
+    type ApiModel = EnglishWordWithMeanings;
+
+    fn into_api_model(self) -> Self::ApiModel {
+        let meanings = self
+            .meanings
+            .into_iter()
+            .map(|meaning| meaning.into_api_model())
+            .collect();
+
+        Self::ApiModel {
+            id: self.word_id,
+            lemma: self.lemma,
+            created_at: self.created_at,
+            last_modified_at: self.last_modified_at,
+            meanings,
+        }
+    }
+}
+
 
 
 /// List all english words
@@ -234,39 +195,44 @@ pub async fn get_all_english_words(
     authentication: UserAuthenticationExtractor,
     request_body: Option<web::Json<EnglishWordsListRequest>>,
 ) -> EndpointResult {
-    require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
+    let mut database_connection = obtain_database_connection!(state);
+
+    require_permission_with_optional_authentication!(
+        &mut database_connection,
+        authentication,
+        Permission::WordRead
+    );
 
 
 
-    let word_query_options = match request_body {
-        Some(body) => {
-            let body = body.into_inner();
+    let word_query_options = request_body
+        .map(|options| {
+            options
+                .into_inner()
+                .filters
+                .map(|filter_options| EnglishWordsQueryOptions {
+                    only_words_modified_after: filter_options.last_modified_after,
+                })
+        })
+        .flatten()
+        .unwrap_or_default();
 
-            match body.filters {
-                Some(filters) => EnglishWordsQueryOptions {
-                    only_words_modified_after: filters.last_modified_after,
-                },
-                None => EnglishWordsQueryOptions::default(),
-            }
-        }
-        None => EnglishWordsQueryOptions::default(),
-    };
-
-    let words_with_additional_info =
-        query::EnglishWordQuery::all_words_expanded(&state.database, word_query_options)
-            .await
-            .map_err(APIError::InternalError)?;
-
-    let words_as_api_structures = words_with_additional_info
-        .into_iter()
-        .map(EnglishWord::from_expanded_word_info)
-        .collect();
+    let mut words_with_meanings_stream =
+        entities::EnglishWordQuery::get_all_english_words_with_meanings(
+            &mut database_connection,
+            word_query_options,
+        )
+        .await;
 
 
-    Ok(EnglishWordsResponse {
-        english_words: words_as_api_structures,
+    let mut english_words = Vec::new();
+
+    while let Some(word_result) = words_with_meanings_stream.next().await {
+        english_words.push(word_result?.into_api_model());
     }
-    .into_response())
+
+
+    Ok(EnglishWordsResponse { english_words }.into_response())
 }
 
 
@@ -275,15 +241,11 @@ pub async fn get_all_english_words(
 #[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
 #[schema(
     example = json!({
-        "lemma": "adventurer",
-        "disambiguation": "character",
-        "description": "Playable or non-playable character.",
+        "lemma": "adventurer"
     })
 )]
 pub struct EnglishWordCreationRequest {
     pub lemma: String,
-    pub disambiguation: Option<String>,
-    pub description: Option<String>,
 }
 
 
@@ -294,15 +256,27 @@ pub struct EnglishWordCreationRequest {
         "word": {
             "id": "018dbe00-266e-7398-abd2-0906df0aa345",
             "lemma": "adventurer",
-            "disambiguation": "character",
-            "description": "Playable or non-playable character.",
             "added_at": "2023-06-27T20:34:27.217273Z",
             "last_edited_at": "2023-06-27T20:34:27.217273Z"
         }
     })
 )]
 pub struct EnglishWordCreationResponse {
-    pub word: EnglishWord,
+    pub word: EnglishWordWithMeanings,
+}
+
+impl IntoApiModel for entities::EnglishWordModel {
+    type ApiModel = EnglishWordWithMeanings;
+
+    fn into_api_model(self) -> Self::ApiModel {
+        Self::ApiModel {
+            id: self.word_id,
+            lemma: self.lemma,
+            created_at: self.created_at,
+            last_modified_at: self.last_modified_at,
+            meanings: vec![],
+        }
+    }
 }
 
 impl_json_response_builder!(EnglishWordCreationResponse);
@@ -347,55 +321,60 @@ pub async fn create_english_word(
     authentication: UserAuthenticationExtractor,
     creation_request: web::Json<EnglishWordCreationRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+
     let authenticated_user = require_authentication!(authentication);
-    require_permission!(state, authenticated_user, Permission::WordCreate);
+    require_permission!(
+        &mut database_connection,
+        authenticated_user,
+        Permission::WordCreate
+    );
 
 
     let creation_request = creation_request.into_inner();
 
 
-    let lemma_already_exists =
-        EnglishWordQuery::word_exists_by_lemma(&state.database, creation_request.lemma.clone())
-            .await
-            .map_err(APIError::InternalError)?;
+    let word_lemma_already_exists = entities::EnglishWordQuery::exists_by_exact_lemma(
+        &mut database_connection,
+        &creation_request.lemma,
+    )
+    .await?;
 
-    if lemma_already_exists {
-        return Ok(error_response_with_reason!(
+    if word_lemma_already_exists {
+        return Ok(json_error_response_with_reason!(
             StatusCode::CONFLICT,
             "An english word with the given lemma already exists."
         ));
     }
 
 
-    let newly_created_word = EnglishWordMutation::create(
-        &state.database,
+    let newly_created_word = entities::EnglishWordMutation::create(
+        &mut database_connection,
         NewEnglishWord {
             lemma: creation_request.lemma,
-            disambiguation: creation_request.disambiguation,
-            description: creation_request.description,
         },
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
 
     info!(
-        created_by_user = authenticated_user.user_id(),
+        created_by_user = %authenticated_user.user_id(),
         "Created new english word: {}", newly_created_word.lemma,
     );
 
 
+    /* TODO needs cache layer rework
     // Signals to the the search indexer that the word has been created.
     state
         .search
         .signal_english_word_created_or_updated(newly_created_word.word_id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(EnglishWordCreationResponse {
-        // A newly-created word can not have any suggestions or translations yet.
-        word: EnglishWord::new_without_expanded_info(newly_created_word),
+        // A newly-created word can not have any meanings yet.
+        word: newly_created_word.into_api_model(),
     }
     .into_response())
 }
@@ -406,7 +385,7 @@ pub async fn create_english_word(
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
 pub struct EnglishWordInfoResponse {
-    pub word: EnglishWord,
+    pub word: EnglishWordWithMeanings,
 }
 
 impl_json_response_builder!(EnglishWordInfoResponse);
@@ -451,28 +430,36 @@ impl_json_response_builder!(EnglishWordInfoResponse);
     )
 )]
 #[get("/{word_uuid}")]
-pub async fn get_specific_english_word(
+pub async fn get_english_word_by_id(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
+    let mut database_connection = obtain_database_connection!(state);
+
+    require_permission_with_optional_authentication!(
+        &mut database_connection,
+        authentication,
+        Permission::WordRead
+    );
 
 
     let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
 
 
-    let target_word = EnglishWordQuery::expanded_word_by_uuid(&state.database, target_word_uuid)
-        .await
-        .map_err(APIError::InternalError)?;
+    let potential_english_word = entities::EnglishWordQuery::get_by_id_with_meanings(
+        &mut database_connection,
+        EnglishWordId::new(target_word_uuid),
+    )
+    .await?;
 
-    let Some(target_word) = target_word else {
+    let Some(english_word) = potential_english_word else {
         return Err(APIError::not_found());
     };
 
 
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::from_expanded_word_info(target_word),
+        word: english_word.into_api_model(),
     }
     .into_response())
 }
@@ -515,27 +502,36 @@ pub async fn get_specific_english_word(
     )
 )]
 #[get("/by-lemma/{word_lemma}")]
-pub async fn get_specific_english_word_by_lemma(
+pub async fn get_english_word_by_lemma(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    require_permission_with_optional_authentication!(state, authentication, Permission::WordRead);
+    let mut database_connection = obtain_database_connection!(state);
+
+    require_permission_with_optional_authentication!(
+        &mut database_connection,
+        authentication,
+        Permission::WordRead
+    );
 
 
     let target_word_lemma = parameters.into_inner().0;
 
-    let target_word = EnglishWordQuery::expanded_word_by_lemma(&state.database, target_word_lemma)
-        .await
-        .map_err(APIError::InternalError)?;
 
-    let Some(target_word) = target_word else {
+    let potential_english_word = entities::EnglishWordQuery::get_by_exact_lemma_with_meanings(
+        &mut database_connection,
+        &target_word_lemma,
+    )
+    .await?;
+
+    let Some(english_word) = potential_english_word else {
         return Err(APIError::not_found());
     };
 
 
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::from_expanded_word_info(target_word),
+        word: english_word.into_api_model(),
     }
     .into_response())
 }
@@ -544,8 +540,6 @@ pub async fn get_specific_english_word_by_lemma(
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
 pub struct EnglishWordUpdateRequest {
     pub lemma: Option<String>,
-    pub disambiguation: Option<String>,
-    pub description: Option<String>,
 }
 
 impl_json_response_builder!(EnglishWordUpdateRequest);
@@ -603,55 +597,75 @@ pub async fn update_specific_english_word(
     parameters: web::Path<(String,)>,
     request_data: web::Json<EnglishWordUpdateRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
     let authenticated_user = require_authentication!(authentication);
-    require_permission!(state, authenticated_user, Permission::WordUpdate);
+    require_permission!(
+        &mut transaction,
+        authenticated_user,
+        Permission::WordUpdate
+    );
 
 
-    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
-
+    let target_word_uuid = EnglishWordId::new(parse_string_into_uuid(
+        &parameters.into_inner().0,
+    )?);
     let request_data = request_data.into_inner();
 
 
+
     let target_word_exists =
-        EnglishWordQuery::word_exists_by_uuid(&state.database, target_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
+        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_word_uuid).await?;
 
     if !target_word_exists {
         return Err(APIError::not_found());
     }
 
 
-    let updated_model = EnglishWordMutation::update(
-        &state.database,
+    let updated_successfully = entities::EnglishWordMutation::update(
+        &mut transaction,
         target_word_uuid,
-        UpdatedEnglishWord {
-            lemma: request_data.lemma,
-            disambiguation: request_data.disambiguation,
-            description: request_data.description,
+        EnglishWordFieldsToUpdate {
+            new_lemma: request_data.lemma,
         },
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
+
+    if !updated_successfully {
+        transaction.rollback().await?;
+
+        return Err(APIError::internal_error_with_reason(
+            "Failed to update english word.",
+        ));
+    }
 
 
-    let target_word_additional_info =
-        EnglishWordQuery::related_word_information_only(&state.database, target_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
+
+    let updated_word =
+        entities::EnglishWordQuery::get_by_id_with_meanings(&mut transaction, target_word_uuid)
+            .await?
+            .ok_or_else(|| {
+                APIError::internal_error_with_reason(
+                    "Database inconsistency: word did not exist after being updated.",
+                )
+            })?;
 
 
+    transaction.commit().await?;
 
+
+    /* TODO pending rewrite of cache layer
     // Signals to the the search indexer that the word has been updated.
     state
         .search
         .signal_english_word_created_or_updated(updated_model.word_id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(EnglishWordInfoResponse {
-        word: EnglishWord::from_word_and_related_info(updated_model, target_word_additional_info),
+        word: updated_word.into_api_model(),
     }
     .into_response())
 }
@@ -698,56 +712,66 @@ pub async fn update_specific_english_word(
     )
 )]
 #[delete("/{word_uuid}")]
-pub async fn delete_specific_english_word(
+pub async fn delete_english_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
     let authenticated_user = require_authentication!(authentication);
-    require_permission!(state, authenticated_user, Permission::WordDelete);
+    require_permission!(
+        &mut transaction,
+        authenticated_user,
+        Permission::WordDelete
+    );
 
 
-    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
+    let target_word_uuid = EnglishWordId::new(parse_string_into_uuid(
+        &parameters.into_inner().0,
+    )?);
+
 
     let target_word_exists =
-        EnglishWordQuery::word_exists_by_uuid(&state.database, target_word_uuid)
-            .await
-            .map_err(APIError::InternalError)?;
+        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_word_uuid).await?;
 
     if !target_word_exists {
         return Err(APIError::not_found());
     }
 
 
-    WordMutation::delete(&state.database, target_word_uuid)
-        .await
-        .map_err(APIError::InternalError)?;
+    let has_been_deleted =
+        entities::EnglishWordMutation::delete(&mut transaction, target_word_uuid).await?;
+
+    if !has_been_deleted {
+        return Err(APIError::internal_error_with_reason(
+            "database inconsistency: failed to delete english word that \
+            just existed in the same transaction",
+        ));
+    }
 
 
-
+    /* TODO needs update when cache layer is rewritten
     // Signals to the the search indexer that the word has been removed.
     state
         .search
         .signal_english_word_removed(target_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
-
+        .map_err(APIError::InternalGenericError)?;
+    */
 
     Ok(HttpResponse::Ok().finish())
 }
 
 
-
-// TODO Links.
-
-
 #[rustfmt::skip]
-pub fn english_dictionary_router() -> Scope {
-    web::scope("/english")
+pub fn english_word_router() -> Scope {
+    web::scope("")
         .service(get_all_english_words)
         .service(create_english_word)
-        .service(get_specific_english_word)
-        .service(get_specific_english_word_by_lemma)
-        .service(update_specific_english_word)
-        .service(delete_specific_english_word)
+        .service(get_english_word_by_id)
+        .service(get_english_word_by_lemma)
+        // .service(update_specific_english_word)
+        .service(delete_english_word)
 }

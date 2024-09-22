@@ -1,52 +1,23 @@
-use std::borrow::Cow;
-
 use futures_core::stream::BoxStream;
-use kolomoni_auth::{ArgonHasher, ArgonHasherError};
+use kolomoni_auth::ArgonHasher;
 use kolomoni_core::id::UserId;
 use sqlx::PgConnection;
-use thiserror::Error;
 
-use crate::{IntoModel, QueryError, QueryResult};
-
-
-#[derive(Debug, Error)]
-pub enum UserCredentialValidationError {
-    #[error("sqlx error")]
-    SqlxError {
-        #[source]
-        error: sqlx::Error,
-    },
-
-    #[error("model error: {}", .reason)]
-    ModelError { reason: Cow<'static, str> },
-
-    #[error("hasher error")]
-    HasherError {
-        #[source]
-        error: ArgonHasherError,
-    },
-}
-
-impl From<QueryError> for UserCredentialValidationError {
-    fn from(value: QueryError) -> Self {
-        match value {
-            QueryError::SqlxError { error } => Self::SqlxError { error },
-            QueryError::ModelError { reason } => Self::ModelError { reason },
-        }
-    }
-}
+use super::{UserQueryError, UserQueryResult};
+use crate::{IntoExternalModel, QueryError, QueryResult};
 
 
 
-type RawUserStream<'c> = BoxStream<'c, Result<super::IntermediateModel, sqlx::Error>>;
+
+type RawUserStream<'c> = BoxStream<'c, Result<super::InternalUserModel, sqlx::Error>>;
 
 create_async_stream_wrapper!(
     pub struct UserStream<'c>;
-    transforms stream RawUserStream<'c> => stream of QueryResult<super::Model>:
+    transforms stream RawUserStream<'c> => stream of QueryResult<super::UserModel>:
         |value|
             value.map(|result| {
                 result
-                    .map(super::IntermediateModel::into_model)
+                    .map(super::InternalUserModel::into_external_model)
                     .map_err(|error| QueryError::SqlxError { error })
             })
 );
@@ -54,37 +25,37 @@ create_async_stream_wrapper!(
 
 
 
-pub struct Query;
+pub struct UserQuery;
 
-impl Query {
+impl UserQuery {
     pub async fn get_user_by_id(
         connection: &mut PgConnection,
         user_id: UserId,
-    ) -> QueryResult<Option<super::Model>> {
+    ) -> QueryResult<Option<super::UserModel>> {
         let optional_intermediate_model = sqlx::query_as!(
-            super::IntermediateModel,
+            super::InternalUserModel,
             "SELECT \
                 id, username, display_name, hashed_password, \
                 joined_at, last_modified_at, last_active_at \
             FROM kolomoni.user \
             WHERE id = $1",
-            user_id.into_inner()
+            user_id.into_uuid()
         )
         .fetch_optional(connection)
         .await?;
 
-        Ok(optional_intermediate_model.map(super::IntermediateModel::into_model))
+        Ok(optional_intermediate_model.map(super::InternalUserModel::into_external_model))
     }
 
     pub async fn get_user_by_username<U>(
         connection: &mut PgConnection,
         username: U,
-    ) -> QueryResult<Option<super::Model>>
+    ) -> QueryResult<Option<super::UserModel>>
     where
         U: AsRef<str>,
     {
         let optional_intermediate_model = sqlx::query_as!(
-            super::IntermediateModel,
+            super::InternalUserModel,
             "SELECT \
                 id, username, display_name, hashed_password, \
                 joined_at, last_modified_at, last_active_at \
@@ -95,13 +66,13 @@ impl Query {
         .fetch_optional(connection)
         .await?;
 
-        Ok(optional_intermediate_model.map(super::IntermediateModel::into_model))
+        Ok(optional_intermediate_model.map(super::InternalUserModel::into_external_model))
     }
 
     pub async fn exists_by_id(connection: &mut PgConnection, user_id: UserId) -> QueryResult<bool> {
         sqlx::query_scalar!(
             "SELECT EXISTS (SELECT 1 FROM kolomoni.user WHERE id = $1)",
-            user_id.into_inner()
+            user_id.into_uuid()
         )
         .fetch_one(connection)
         .await
@@ -148,7 +119,7 @@ impl Query {
         hasher: &ArgonHasher,
         username: U,
         password: P,
-    ) -> QueryResult<Option<super::Model>, UserCredentialValidationError>
+    ) -> UserQueryResult<Option<super::UserModel>>
     where
         U: AsRef<str>,
         P: AsRef<str>,
@@ -161,7 +132,7 @@ impl Query {
 
         let is_valid_password = hasher
             .verify_password_against_hash(password.as_ref(), &user.hashed_password)
-            .map_err(|error| UserCredentialValidationError::HasherError { error })?;
+            .map_err(|error| UserQueryError::HasherError { error })?;
 
 
         if is_valid_password {
@@ -173,7 +144,7 @@ impl Query {
 
     pub fn get_all_users(connection: &mut PgConnection) -> UserStream<'_> {
         let user_stream = sqlx::query_as!(
-            super::IntermediateModel,
+            super::InternalUserModel,
             "SELECT \
                 id, username, display_name, hashed_password, \
                 joined_at, last_modified_at, last_active_at \

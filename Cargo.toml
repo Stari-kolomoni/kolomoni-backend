@@ -19,7 +19,7 @@ members = [
     "kolomoni_migrations_core",
     "kolomoni_migrations_macros",
     "kolomoni_openapi",
-    "kolomoni_search",
+    # "kolomoni_search",
     "kolomoni_test",
     "kolomoni_test_util"
 ]
@@ -102,6 +102,7 @@ features = [
     "postgres",
     "uuid",
     "chrono",
+    "json"
 ]
 
 
@@ -136,11 +137,12 @@ path = "./kolomoni/src/main.rs"
 
 
 [dependencies]
+kolomoni_core = { path = "./kolomoni_core" }
 kolomoni_migrations = { path = "./kolomoni_migrations" }
 kolomoni_configuration = { path = "./kolomoni_configuration" }
 kolomoni_auth = { path = "./kolomoni_auth" }
 kolomoni_database = { path = "./kolomoni_database" }
-kolomoni_search = { path = "./kolomoni_search" }
+# kolomoni_search = { path = "./kolomoni_search" }
 
 clap = { workspace = true }
 
@@ -164,10 +166,13 @@ actix-cors = { workspace = true }
 
 utoipa = { workspace = true }
 
+sqlx = { workspace = true }
+
 # sea-orm = { workspace = true }
 # sea-orm-migration = { workspace = true }
 
 dunce = { workspace = true }
+uuid = { workspace = true }
 chrono = { workspace = true }
 
 itertools = { workspace = true }
@@ -178,6 +183,7 @@ paste = { workspace = true }
 
 
 
+# TODO rename
 [features]
 with_test_facilities = []
 

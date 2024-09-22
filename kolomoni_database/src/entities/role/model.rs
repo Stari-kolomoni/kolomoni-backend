@@ -1,6 +1,6 @@
 use kolomoni_core::id::RoleId;
 
-pub struct FullModel {
+pub struct RoleModel {
     pub id: RoleId,
 
     pub key: String,
@@ -8,10 +8,4 @@ pub struct FullModel {
     pub description_en: String,
 
     pub description_sl: String,
-}
-
-pub struct ReducedModel {
-    pub id: RoleId,
-
-    pub key: String,
 }

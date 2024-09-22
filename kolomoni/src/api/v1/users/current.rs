@@ -1,44 +1,37 @@
-use actix_web::{
-    get,
-    http::{header, StatusCode},
-    patch,
-    web,
-    HttpResponse,
-};
+use actix_web::{get, http::StatusCode, patch, web};
 use kolomoni_auth::Permission;
-use kolomoni_database::{
-    begin_transaction,
-    mutation,
-    query::{self, UserQuery, UserRoleQuery},
-};
-use miette::IntoDiagnostic;
+use kolomoni_core::api_models::UserDisplayNameChangeRequest;
+use kolomoni_database::entities;
+use sqlx::Acquire;
 use tracing::info;
 
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::{
-            construct_last_modified_header_value,
+            construct_not_modified_response,
             ContextlessResponder,
             IntoKolomoniResponseBuilder,
         },
         openapi,
+        traits::IntoApiModel,
         v1::users::{
-            UserDisplayNameChangeRequest,
             UserDisplayNameChangeResponse,
             UserInfoResponse,
-            UserInformation,
             UserPermissionsResponse,
             UserRolesResponse,
         },
         OptionalIfModifiedSince,
     },
     authentication::UserAuthenticationExtractor,
-    error_response_with_reason,
+    json_error_response_with_reason,
+    obtain_database_connection,
     require_authentication,
     require_permission,
     state::ApplicationState,
 };
+
+// TODO introduce transactions here and elsewhere (even in read-only operations, for consistency)
 
 
 /// Get your user information
@@ -85,43 +78,43 @@ use crate::{
 pub async fn get_current_user_info(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    if_modified_since: OptionalIfModifiedSince,
+    if_modified_since_header: OptionalIfModifiedSince,
 ) -> EndpointResult {
-    // User must provide an authentication token and
-    // have the `user.self:read` permission to access this endpoint.
+    let mut database_connection = obtain_database_connection!(state);
+
+
+    // To access this endpoint, the user:
+    // - MUST provide an authentication token, and
+    // - MUST have the `user.self:read` permission.
     let authenticated_user = require_authentication!(authentication_extractor);
-    let authenticated_user_id = authenticated_user.user_id();
     require_permission!(
-        state,
+        &mut database_connection,
         authenticated_user,
         Permission::UserSelfRead
     );
 
 
+    let authenticated_user_id = authenticated_user.user_id();
+
+
     // Load user from database.
-    let user = query::UserQuery::get_user_by_id(&state.database, authenticated_user_id)
-        .await
-        .map_err(APIError::InternalError)?
-        .ok_or_else(APIError::not_found)?;
+    let current_user =
+        entities::UserQuery::get_user_by_id(&mut database_connection, authenticated_user_id)
+            .await?
+            .ok_or_else(APIError::not_found)?;
 
-    let last_modification_time = user.last_modified_at.to_utc();
 
-    if if_modified_since.has_not_changed_since(&last_modification_time) {
-        let mut unchanged_response = HttpResponse::new(StatusCode::NOT_MODIFIED);
-
-        unchanged_response.headers_mut().append(
-            header::LAST_MODIFIED,
-            construct_last_modified_header_value(&last_modification_time)
-                .into_diagnostic()
-                .map_err(APIError::InternalError)?,
-        );
-
-        Ok(unchanged_response)
+    if if_modified_since_header.enabled_and_has_not_changed_since(&current_user.last_modified_at) {
+        construct_not_modified_response(&current_user.last_modified_at)
     } else {
-        Ok(UserInfoResponse::new(user)
-            .into_response_builder()?
-            .last_modified_at(last_modification_time)?
-            .build())
+        let last_modified_at = current_user.last_modified_at;
+
+        Ok(UserInfoResponse {
+            user: current_user.into_api_model(),
+        }
+        .into_response_builder()?
+        .last_modified_at(last_modified_at)?
+        .build())
     }
 }
 
@@ -161,27 +154,36 @@ pub async fn get_current_user_roles(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+
+
     let authenticated_user = require_authentication!(authentication);
     require_permission!(
-        state,
+        &mut database_connection,
         authenticated_user,
         Permission::UserSelfRead
     );
 
-    let user_exists =
-        UserQuery::user_exists_by_user_id(&state.database, authenticated_user.user_id())
-            .await
-            .map_err(APIError::InternalError)?;
+
+    let user_exists = entities::UserQuery::exists_by_id(
+        &mut database_connection,
+        authenticated_user.user_id(),
+    )
+    .await?;
+
     if !user_exists {
         return Err(APIError::not_found());
     }
 
 
-    let user_roles = UserRoleQuery::user_roles(&state.database, authenticated_user.user_id())
-        .await
-        .map_err(APIError::InternalError)?;
+    let user_roles = entities::UserRoleQuery::roles_for_user(
+        &mut database_connection,
+        authenticated_user.user_id(),
+    )
+    .await?;
 
     let user_role_names = user_roles.role_names();
+
 
     Ok(UserRolesResponse {
         role_names: user_role_names,
@@ -227,13 +229,15 @@ async fn get_current_user_effective_permissions(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+
+
     // User must be authenticated and
     // have the `user.self:read` permission to access this endpoint.
     let authenticated_user = require_authentication!(authentication_extractor);
     let user_permissions = authenticated_user
-        .permissions(&state.database)
-        .await
-        .map_err(APIError::InternalError)?;
+        .fetch_transitive_permissions(&mut database_connection)
+        .await?;
 
     require_permission!(user_permissions, Permission::UserSelfRead);
 
@@ -303,32 +307,32 @@ async fn update_current_user_display_name(
     authentication_extractor: UserAuthenticationExtractor,
     json_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
+
     // User must be authenticated and have
     // the `user.self:write` permission to access this endpoint.
     let authenticated_user = require_authentication!(authentication_extractor);
-    let authenticated_user_id = authenticated_user.user_id();
     require_permission!(
-        state,
+        &mut transaction,
         authenticated_user,
         Permission::UserSelfWrite
     );
 
 
+    let authenticated_user_id = authenticated_user.user_id();
     let json_data = json_data.into_inner();
-    let database_transaction =
-        begin_transaction!(&state.database).map_err(APIError::InternalError)?;
+
 
 
     // Ensure the display name is unique.
-    let display_name_already_exists = query::UserQuery::user_exists_by_display_name(
-        &database_transaction,
-        &json_data.new_display_name,
-    )
-    .await
-    .map_err(APIError::InternalError)?;
+    let display_name_already_exists =
+        entities::UserQuery::exists_by_display_name(&mut *transaction, &json_data.new_display_name)
+            .await?;
 
     if display_name_already_exists {
-        return Ok(error_response_with_reason!(
+        return Ok(json_error_response_with_reason!(
             StatusCode::CONFLICT,
             "User with given display name already exists."
         ));
@@ -336,28 +340,26 @@ async fn update_current_user_display_name(
 
 
     // Update user in the database.
-    let updated_user = mutation::UserMutation::update_display_name_by_user_id(
-        &database_transaction,
+    let updated_user = entities::UserMutation::change_display_name_by_user_id(
+        &mut *transaction,
         authenticated_user_id,
-        json_data.new_display_name.clone(),
+        &json_data.new_display_name,
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
-    database_transaction
-        .commit()
-        .await
-        .map_err(APIError::InternalDatabaseError)?;
+
+    transaction.commit().await?;
 
 
     info!(
-        user_id = authenticated_user_id,
+        user_id = %authenticated_user_id,
         new_display_name = json_data.new_display_name,
         "User has updated their display name."
     );
 
+
     Ok(UserDisplayNameChangeResponse {
-        user: UserInformation::from_user_model(updated_user),
+        user: updated_user.into_api_model(),
     }
     .into_response())
 }

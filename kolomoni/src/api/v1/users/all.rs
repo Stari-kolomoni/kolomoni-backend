@@ -1,44 +1,22 @@
 use actix_web::get;
+use futures_util::StreamExt;
 use kolomoni_auth::Permission;
-use kolomoni_database::query;
-use serde::Serialize;
-use utoipa::ToSchema;
+use kolomoni_core::api_models::RegisteredUsersListResponse;
+use kolomoni_database::entities;
 
-use super::UserInformation;
 use crate::{
-    api::{
-        errors::{APIError, EndpointResult},
-        macros::ContextlessResponder,
-        openapi,
-    },
+    api::{errors::EndpointResult, macros::ContextlessResponder, openapi, traits::IntoApiModel},
     authentication::UserAuthenticationExtractor,
     impl_json_response_builder,
+    obtain_database_connection,
     require_authentication,
     require_permission,
     state::ApplicationState,
 };
 
-/// List of registered users.
-#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(serde::Deserialize))]
-#[schema(title = "RegisteredUsersListResponse")]
-#[schema(example = json!({
-    "users": [
-        {
-            "id": 1,
-            "username": "janeznovak",
-            "display_name": "Janez Novak",
-            "joined_at": "2023-06-27T20:33:53.078789Z",
-            "last_modified_at": "2023-06-27T20:34:27.217273Z",
-            "last_active_at": "2023-06-27T20:34:27.253746Z"
-        },
-    ]
-}))]
-pub struct RegisteredUsersListResponse {
-    pub users: Vec<UserInformation>,
-}
 
 impl_json_response_builder!(RegisteredUsersListResponse);
+
 
 
 /// List all registered users.
@@ -70,25 +48,36 @@ pub async fn get_all_registered_users(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
 ) -> EndpointResult {
-    // User MUST provide their authentication token AND
-    // have the `user.any:read` permission to access this endpoint.
+    let mut database_connection = obtain_database_connection!(state);
+
+
+    // To access this endpoint, the user:
+    // - MUST provide their authentication token, and
+    // - MUST have the `user.any:read` permission.
     let authenticated_user = require_authentication!(authentication);
-    require_permission!(state, authenticated_user, Permission::UserAnyRead);
+    require_permission!(
+        &mut database_connection,
+        authenticated_user,
+        Permission::UserAnyRead
+    );
+
 
 
     // Load all users from the database and parse them info `UserInformation` instances.
-    let all_users = query::UserQuery::get_all_users(&state.database)
-        .await
-        .map_err(APIError::InternalError)?;
+    let mut all_users_stream = entities::UserQuery::get_all_users(&mut database_connection);
 
-    let all_users_as_public_struct: Vec<UserInformation> = all_users
-        .into_iter()
-        .map(UserInformation::from_user_model)
-        .collect();
+
+    let mut parsed_users = Vec::new();
+
+    while let Some(next_user_result) = all_users_stream.next().await {
+        let next_user_as_api_model = next_user_result?.into_api_model();
+
+        parsed_users.push(next_user_as_api_model);
+    }
 
 
     Ok(RegisteredUsersListResponse {
-        users: all_users_as_public_struct,
+        users: parsed_users,
     }
     .into_response())
 }

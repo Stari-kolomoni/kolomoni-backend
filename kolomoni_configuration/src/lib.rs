@@ -19,6 +19,8 @@
 //! additional configuration validation in [`resolve`][traits::ResolvableConfiguration::resolve],
 //! e.g. raising an error if some specified file path doesn't actually exist.
 
+// TODO need to upgrade traits (two types, try resolve and normal resolve)
+
 #![allow(rustdoc::private_intra_doc_links)]
 
 mod structure;

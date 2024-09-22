@@ -113,6 +113,15 @@ impl Default for MigrationsWithStatusOptions {
     }
 }
 
+impl MigrationsWithStatusOptions {
+    pub fn strict() -> Self {
+        Self {
+            require_up_hashes_match: true,
+            require_down_hashes_match: true,
+        }
+    }
+}
+
 
 
 

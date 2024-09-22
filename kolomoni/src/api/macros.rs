@@ -5,8 +5,8 @@ use actix_web::http::header::{self, HeaderValue, InvalidHeaderValue};
 use actix_web::http::StatusCode;
 use actix_web::{http, HttpResponse, ResponseError};
 use chrono::{DateTime, Utc};
-use miette::{Context, IntoDiagnostic, Result};
 use serde::Serialize;
+use thiserror::Error;
 
 use super::errors::APIError;
 
@@ -24,6 +24,42 @@ pub fn construct_last_modified_header_value(
     HeaderValue::from_str(date_time_formatter.to_string().as_str())
 }
 
+
+pub fn construct_not_modified_response(
+    last_modified_at: &DateTime<Utc>,
+) -> Result<HttpResponse, APIError> {
+    let mut not_modified_response = HttpResponse::new(StatusCode::NOT_MODIFIED);
+
+    not_modified_response.headers_mut().append(
+        header::LAST_MODIFIED,
+        construct_last_modified_header_value(last_modified_at).map_err(|_| {
+            APIError::internal_error_with_reason("unable to construct Last-Modified header")
+        })?,
+    );
+
+    Ok(not_modified_response)
+}
+
+
+#[derive(Debug, Error)]
+pub enum KolomoniResponseBuilderJSONError {
+    #[error("failed to encode value as JSON")]
+    JsonError {
+        #[from]
+        #[source]
+        error: serde_json::Error,
+    },
+}
+
+#[derive(Debug, Error)]
+pub enum KolomoniResponseBuilderLMAError {
+    #[error("failed to encode Last-Modified-At header")]
+    JsonError {
+        #[from]
+        #[source]
+        error: InvalidHeaderValue,
+    },
+}
 
 
 /// A builder struct for a HTTP response with a JSON body.
@@ -52,13 +88,11 @@ impl KolomoniResponseBuilder {
     ///
     /// The value will be serialized as JSON and prepared to be included
     /// in the body of the HTTP response.
-    pub fn new_json<S>(value: S) -> Result<Self>
+    pub fn new_json<S>(value: S) -> Result<Self, KolomoniResponseBuilderJSONError>
     where
         S: Serialize,
     {
-        let body = serde_json::to_string(&value)
-            .into_diagnostic()
-            .wrap_err("Failed to serialize JSON body.")?;
+        let body = serde_json::to_string(&value)?;
 
         let mut additional_headers = http::header::HeaderMap::with_capacity(1);
         additional_headers.append(
@@ -84,13 +118,14 @@ impl KolomoniResponseBuilder {
     /// Set the `Last-Modified` HTTP response header to some date and time.
     /// This has no default --- the header will not be included in the response
     /// if this is not called.
-    pub fn last_modified_at(mut self, last_modified_at: DateTime<Utc>) -> Result<Self, APIError> {
+    pub fn last_modified_at(
+        mut self,
+        last_modified_at: DateTime<Utc>,
+    ) -> Result<Self, KolomoniResponseBuilderLMAError> {
         // See <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified#directives>
         self.additional_headers.append(
             http::header::LAST_MODIFIED,
-            construct_last_modified_header_value(&last_modified_at)
-                .into_diagnostic()
-                .map_err(APIError::InternalError)?,
+            construct_last_modified_header_value(&last_modified_at)?,
         );
 
         Ok(self)
@@ -175,9 +210,17 @@ where
 
             response
         }
-        Err(_) => APIError::InternalReason("Failed to serialize value to JSON.".to_string())
+        Err(_) => APIError::internal_error_with_reason("Failed to serialize value to JSON.")
             .error_response(),
     }
+}
+
+
+#[macro_export]
+macro_rules! obtain_database_connection {
+    ($state:expr) => {
+        $state.database.acquire().await?
+    };
 }
 
 
@@ -281,8 +324,7 @@ macro_rules! impl_json_response_builder {
                 self,
             ) -> Result<$crate::api::macros::KolomoniResponseBuilder, $crate::api::errors::APIError>
             {
-                $crate::api::macros::KolomoniResponseBuilder::new_json(self)
-                    .map_err($crate::api::errors::APIError::InternalError)
+                Ok($crate::api::macros::KolomoniResponseBuilder::new_json(self)?)
             }
         }
     };
@@ -325,7 +367,7 @@ macro_rules! impl_json_response_builder {
 /// }
 /// ```
 #[macro_export]
-macro_rules! error_response_with_reason {
+macro_rules! json_error_response_with_reason {
     ($status_code:expr, $reason:expr) => {
         actix_web::HttpResponseBuilder::new($status_code)
             .json($crate::api::errors::ErrorReasonResponse::custom_reason($reason))
@@ -392,13 +434,12 @@ macro_rules! require_authentication {
 
 #[macro_export]
 macro_rules! require_permission_with_optional_authentication {
-    ($application_state:expr, $user_auth_extractor:expr, $permission:expr) => {
+    ($database_connection:expr, $user_auth_extractor:expr, $permission:expr) => {
         match $user_auth_extractor.authenticated_user() {
             Some(_authenticated_user) => {
                 if !_authenticated_user
-                    .has_permission(&$application_state.database, $permission)
-                    .await
-                    .map_err($crate::api::errors::APIError::InternalError)?
+                    .transitively_has_permission($database_connection, $permission)
+                    .await?
                 {
                     return Err(
                         $crate::api::errors::APIError::missing_specific_permission($permission),
@@ -431,11 +472,12 @@ macro_rules! require_permission_with_optional_authentication {
 ///
 /// # Arguments and examples
 /// ## Variant 1 (three arguments, most common)
-/// - The first argument must be the [`ApplicationState`][crate::state::ApplicationState].
+/// - The first argument must be somethings that derefs to [`PgConnection`][sqlx::PgConnection]
+///   (e.g. [`PoolConnection`][sqlx::PoolConnection]).
 /// - The second argument must be an
-///   [`AuthenticatedUser`][crate::authentication::AuthenticatedUser] instance.
-/// - The third argument must be the [`Permission`][kolomoni_auth::Permission]
-///   you wish to check for.
+///   [`AuthenticatedUser`][crate::authentication::AuthenticatedUser] instance, which is usually obtained
+///   by calling the [`require_authentication!`][crate::api::macros::require_authentication] macro.
+/// - The third argument must be the [`Permission`][kolomoni_auth::Permission] you want to ensure the user has.
 ///
 /// ```
 /// use actix_web::get;
@@ -523,11 +565,10 @@ macro_rules! require_permission {
         }
     };
 
-    ($state:expr, $authenticated_user:expr, $required_permission:expr) => {
+    ($database_connection:expr, $authenticated_user:expr, $required_permission:expr) => {
         if !$authenticated_user
-            .has_permission(&$state.database, $required_permission)
-            .await
-            .map_err($crate::api::errors::APIError::InternalError)?
+            .transitively_has_permission($database_connection, $required_permission)
+            .await?
         {
             return Err(
                 $crate::api::errors::APIError::missing_specific_permission($required_permission),

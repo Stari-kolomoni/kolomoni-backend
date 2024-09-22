@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::Permission;
+use crate::{Permission, PermissionSet};
 
 
 /// User roles that we have.
@@ -126,6 +126,16 @@ impl RoleSet {
     /// Checks whether the role set contains a specific role.
     pub fn has_role(&self, role: &Role) -> bool {
         self.roles.contains(role)
+    }
+
+    pub fn granted_permission_set(&self) -> PermissionSet {
+        let mut permission_hash_set = HashSet::new();
+
+        for role in self.roles.iter() {
+            permission_hash_set.extend(role.permissions_granted());
+        }
+
+        PermissionSet::from_permission_hash_set(permission_hash_set)
     }
 
     /// Consumes the [`RoleSet`] and returns a raw [`HashSet`] of [`Role`]s.

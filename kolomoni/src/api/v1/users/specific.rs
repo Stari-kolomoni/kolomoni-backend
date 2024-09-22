@@ -1,11 +1,14 @@
+use std::collections::HashSet;
+
 use actix_web::{delete, get, http::StatusCode, patch, post, web, HttpResponse};
-use kolomoni_auth::{Permission, Role};
-use kolomoni_database::{
-    begin_transaction,
-    mutation,
-    query::{self, UserQuery, UserRoleQuery},
+use kolomoni_auth::{Permission, Role, RoleSet};
+use kolomoni_core::{
+    api_models::{UserDisplayNameChangeRequest, UserDisplayNameChangeResponse},
+    id::UserId,
 };
+use kolomoni_database::entities;
 use serde::Deserialize;
+use sqlx::{types::Uuid, Acquire};
 use tracing::info;
 use utoipa::ToSchema;
 
@@ -14,17 +17,12 @@ use crate::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
         openapi,
-        v1::users::{
-            UserDisplayNameChangeRequest,
-            UserDisplayNameChangeResponse,
-            UserInfoResponse,
-            UserInformation,
-            UserPermissionsResponse,
-            UserRolesResponse,
-        },
+        traits::IntoApiModel,
+        v1::users::{UserInfoResponse, UserPermissionsResponse, UserRolesResponse},
     },
     authentication::UserAuthenticationExtractor,
-    error_response_with_reason,
+    json_error_response_with_reason,
+    obtain_database_connection,
     require_authentication,
     require_permission,
     require_permission_with_optional_authentication,
@@ -46,7 +44,11 @@ use crate::{
     path = "/users/{user_id}",
     tag = "users",
     params(
-        ("user_id" = i32, Path, description = "ID of the user to get information about.")
+        (
+            "user_id" = Uuid,
+            Path,
+            description = "ID of the user to get information about."
+        )
     ),
     responses(
         (
@@ -76,15 +78,18 @@ use crate::{
 async fn get_specific_user_info(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(i32,)>,
+    path_info: web::Path<(Uuid,)>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+
+
     // Users don't need to authenticate due to a
     // blanket permission grant for `user.any:read`.
     // This will also work if we remove the blanket grant
     // in the future - it will fall back to requiring authentication
     // AND the `user.any:read` permission.
     require_permission_with_optional_authentication!(
-        state,
+        &mut database_connection,
         authentication_extractor,
         Permission::UserAnyRead
     );
@@ -93,16 +98,22 @@ async fn get_specific_user_info(
     // Return information about the requested user.
     let requested_user_id = path_info.into_inner().0;
 
-    let optional_requested_user =
-        query::UserQuery::get_user_by_id(&state.database, requested_user_id)
-            .await
-            .map_err(APIError::InternalError)?;
 
-    let Some(user) = optional_requested_user else {
+    let user_info_if_they_exist = entities::UserQuery::get_user_by_id(
+        &mut database_connection,
+        UserId::new(requested_user_id),
+    )
+    .await?;
+
+
+    let Some(user_info) = user_info_if_they_exist else {
         return Ok(HttpResponse::NotFound().finish());
     };
 
-    Ok(UserInfoResponse::new(user).into_response())
+    Ok(UserInfoResponse {
+        user: user_info.into_api_model(),
+    }
+    .into_response())
 }
 
 
@@ -118,7 +129,7 @@ async fn get_specific_user_info(
     tag = "users",
     params(
         (
-            "user_id" = i32,
+            "user_id" = Uuid,
             Path,
             description = "ID of the user to query roles for."
         )
@@ -141,39 +152,39 @@ async fn get_specific_user_info(
 pub async fn get_specific_user_roles(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(i32,)>,
+    path_info: web::Path<(Uuid,)>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+
+
     // Users don't need to authenticate due to a
     // blanket permission grant for `user.any:read`.
     // This will also work if we remove the blanket grant
     // in the future - it will fall back to requiring authentication
     // AND the `user.any:read` permission.
     require_permission_with_optional_authentication!(
-        state,
+        &mut database_connection,
         authentication_extractor,
         Permission::UserAnyRead
     );
 
-    let target_user_id = path_info.into_inner().0;
-    let target_user_exists = UserQuery::user_exists_by_user_id(&state.database, target_user_id)
-        .await
-        .map_err(APIError::InternalError)?;
+
+    let target_user_id = UserId::new(path_info.into_inner().0);
+
+
+    let target_user_exists =
+        entities::UserQuery::exists_by_id(&mut database_connection, target_user_id).await?;
 
     if !target_user_exists {
         return Err(APIError::not_found());
     }
 
 
-    let target_user_roles = UserRoleQuery::user_roles(&state.database, target_user_id)
-        .await
-        .map_err(APIError::InternalError)?;
+    let target_user_role_set =
+        entities::UserRoleQuery::roles_for_user(&mut database_connection, target_user_id).await?;
 
-    let target_user_role_names = target_user_roles
-        .into_roles()
-        .into_iter()
-        .map(|role| role.name().to_string())
-        .collect();
 
+    let target_user_role_names = target_user_role_set.role_names();
 
     Ok(UserRolesResponse {
         role_names: target_user_role_names,
@@ -199,7 +210,7 @@ pub async fn get_specific_user_roles(
     tag = "users",
     params(
         (
-            "user_id" = i32,
+            "user_id" = Uuid,
             Path,
             description = "ID of the user to get effective permissions for."
         )
@@ -225,37 +236,42 @@ pub async fn get_specific_user_roles(
 async fn get_specific_user_effective_permissions(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(i32,)>,
+    path_info: web::Path<(Uuid,)>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+
+
     // Only authenticated users with the `user.any:read` permission can access this endpoint.
     let authenticated_user = require_authentication!(authentication_extractor);
-    require_permission!(state, authenticated_user, Permission::UserAnyRead);
+    require_permission!(
+        &mut database_connection,
+        authenticated_user,
+        Permission::UserAnyRead
+    );
 
 
     // Get requested user's permissions.
-    let target_user_id = path_info.into_inner().0;
+    let target_user_id = UserId::new(path_info.into_inner().0);
+
 
     let target_user_exists =
-        query::UserQuery::user_exists_by_user_id(&state.database, target_user_id)
-            .await
-            .map_err(APIError::InternalError)?;
+        entities::UserQuery::exists_by_id(&mut database_connection, target_user_id).await?;
 
     if !target_user_exists {
         return Ok(HttpResponse::NotFound().finish());
     }
 
 
-    let target_user_permission_set = query::UserRoleQuery::effective_user_permissions_from_user_id(
-        &state.database,
+    let target_user_permission_set = entities::UserRoleQuery::transitive_permissions_for_user(
+        &mut database_connection,
         target_user_id,
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
     let permission_names = target_user_permission_set
-        .into_permissions()
+        .permission_names()
         .into_iter()
-        .map(|permission| permission.name().to_string())
+        .map(|name| name.to_string())
         .collect();
 
 
@@ -265,6 +281,7 @@ async fn get_specific_user_effective_permissions(
     .into_response())
 }
 
+// TODO Continue from here.
 
 
 /// Update a user's display name
@@ -283,7 +300,7 @@ async fn get_specific_user_effective_permissions(
     tag = "users",
     params(
         (
-            "user_id" = i32,
+            "user_id" = Uuid,
             Path,
             description = "User ID."
         )
@@ -331,25 +348,30 @@ async fn get_specific_user_effective_permissions(
 async fn update_specific_user_display_name(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(i32,)>,
+    path_info: web::Path<(Uuid,)>,
     json_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
+
     // Only authenticated users with the `user.any:write` permission can modify
     // others' display names. Intended for moderation tooling.
     let authenticated_user = require_authentication!(authentication_extractor);
-    let authenticated_user_id = authenticated_user.user_id();
     require_permission!(
-        state,
+        &mut transaction,
         authenticated_user,
         Permission::UserAnyWrite
     );
 
 
-    // Disallow modifying your own account on these `/{user_id}/*` endpoints.
-    let target_user_id = path_info.into_inner().0;
+    let authenticated_user_id = authenticated_user.user_id();
+    let target_user_id = UserId::new(path_info.into_inner().0);
 
+
+    // Disallow modifying your own account on these `/{user_id}/*` endpoints.
     if authenticated_user_id == target_user_id {
-        return Ok(error_response_with_reason!(
+        return Ok(json_error_response_with_reason!(
             StatusCode::FORBIDDEN,
             "Can't modify your own account on this endpoint."
         ));
@@ -357,30 +379,25 @@ async fn update_specific_user_display_name(
 
 
     let target_user_exists =
-        query::UserQuery::user_exists_by_user_id(&state.database, target_user_id)
-            .await
-            .map_err(APIError::InternalError)?;
+        entities::UserQuery::exists_by_id(&mut transaction, target_user_id).await?;
 
     if !target_user_exists {
         return Err(APIError::not_found_with_reason("no such user"));
     }
 
 
-    let json_data = json_data.into_inner();
-    let database_transaction =
-        begin_transaction!(&state.database).map_err(APIError::InternalError)?;
+    let change_request_data = json_data.into_inner();
 
 
     // Modify requested user's display name.
-    let display_name_already_exists = query::UserQuery::user_exists_by_display_name(
-        &database_transaction,
-        &json_data.new_display_name,
+    let display_name_already_exists = entities::UserQuery::exists_by_display_name(
+        &mut transaction,
+        &change_request_data.new_display_name,
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
     if display_name_already_exists {
-        return Ok(error_response_with_reason!(
+        return Ok(json_error_response_with_reason!(
             StatusCode::CONFLICT,
             "User with given display name already exists."
         ));
@@ -388,37 +405,26 @@ async fn update_specific_user_display_name(
 
 
     // Update requested user's display name.
-    mutation::UserMutation::update_display_name_by_user_id(
-        &database_transaction,
+    let updated_user = entities::UserMutation::change_display_name_by_user_id(
+        &mut transaction,
         target_user_id,
-        json_data.new_display_name.clone(),
+        &change_request_data.new_display_name,
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
-    let updated_user = mutation::UserMutation::update_last_active_at_by_user_id(
-        &database_transaction,
-        target_user_id,
-        None,
-    )
-    .await
-    .map_err(APIError::InternalError)?;
 
-    database_transaction
-        .commit()
-        .await
-        .map_err(APIError::InternalDatabaseError)?;
-
+    transaction.commit().await?;
 
     info!(
-        operator_id = authenticated_user_id,
-        target_user_id = target_user_id,
-        new_display_name = json_data.new_display_name,
+        operator_id = %authenticated_user_id,
+        target_user_id = %target_user_id,
+        new_display_name = %change_request_data.new_display_name,
         "User has updated another user's display name."
     );
 
+
     Ok(UserDisplayNameChangeResponse {
-        user: UserInformation::from_user_model(updated_user),
+        user: updated_user.into_api_model(),
     }
     .into_response())
 }
@@ -455,7 +461,7 @@ pub struct UserRoleAddRequest {
     tag = "users",
     params(
         (
-            "user_id" = i32,
+            "user_id" = Uuid,
             Path,
             description = "ID of the user to add roles to."
         )
@@ -508,64 +514,63 @@ pub struct UserRoleAddRequest {
 pub async fn add_roles_to_specific_user(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    path_info: web::Path<(i32,)>,
+    path_info: web::Path<(Uuid,)>,
     json_data: web::Json<UserRoleAddRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
+
     // Only authenticated users with the `user.any:write` permission can add roles
     // to other users, but only if they also have that role.
     // Intended for moderation tooling.
     let authenticated_user = require_authentication!(authentication);
-    let authenticated_user_id = authenticated_user.user_id();
-    let authenticated_user_roles = authenticated_user
-        .roles(&state.database)
-        .await
-        .map_err(APIError::InternalError)?;
+    let authenticated_user_roles = authenticated_user.fetch_roles(&mut transaction).await?;
+    let authenticated_user_permissions = authenticated_user_roles.granted_permission_set();
 
     require_permission!(
-        state,
-        authenticated_user,
+        authenticated_user_permissions,
         Permission::UserAnyWrite
     );
 
 
-    let target_user_id = path_info.into_inner().0;
+    let authenticated_user_id = authenticated_user.user_id();
+    let target_user_id = UserId::new(path_info.into_inner().0);
+
     let request_data = json_data.into_inner();
 
 
     // Disallow modifying your own user account on this endpoint.
     if authenticated_user_id == target_user_id {
-        return Ok(error_response_with_reason!(
+        return Ok(json_error_response_with_reason!(
             StatusCode::FORBIDDEN,
             "Can't modify your own account on this endpoint."
         ));
     }
 
 
-    let parsed_roles_to_add_result = request_data
-        .roles_to_add
-        .into_iter()
-        .map(|role_name| {
-            Role::from_name(&role_name).ok_or_else(|| format!("No such role: \"{role_name}\"."))
-        })
-        .collect::<Result<Vec<_>, _>>();
+    let mut roles_to_add_to_user = HashSet::with_capacity(request_data.roles_to_add.len());
 
-    let roles_to_add = match parsed_roles_to_add_result {
-        Ok(roles) => roles,
-        Err(error_reason) => {
-            return Ok(error_response_with_reason!(
+    for raw_role_name in request_data.roles_to_add {
+        let Some(role) = Role::from_name(&raw_role_name) else {
+            return Ok(json_error_response_with_reason!(
                 StatusCode::BAD_REQUEST,
-                error_reason
+                format!("{} is an invalid role name", raw_role_name)
             ));
-        }
-    };
+        };
+
+        roles_to_add_to_user.insert(role);
+    }
+
+    let roles_to_add_to_user = RoleSet::from_role_hash_set(roles_to_add_to_user);
 
 
     // Validate that the authenticated user has all of the roles
     // they wish to assign to other users. Not checking for this would
     // be dangerous as it would essentially allow for privilege escalation.
-    for role in roles_to_add.iter() {
+    for role in roles_to_add_to_user.roles() {
         if !authenticated_user_roles.has_role(role) {
-            return Ok(error_response_with_reason!(
+            return Ok(json_error_response_with_reason!(
                 StatusCode::FORBIDDEN,
                 format!(
                     "You cannot give out roles you do not have (missing role: {}).",
@@ -576,9 +581,8 @@ pub async fn add_roles_to_specific_user(
     }
 
 
-    let user_exists = query::UserQuery::user_exists_by_user_id(&state.database, target_user_id)
-        .await
-        .map_err(APIError::InternalError)?;
+
+    let user_exists = entities::UserQuery::exists_by_id(&mut transaction, target_user_id).await?;
 
     if !user_exists {
         return Err(APIError::not_found_with_reason(
@@ -587,17 +591,19 @@ pub async fn add_roles_to_specific_user(
     }
 
 
-    mutation::UserRoleMutation::add_roles_to_user(&state.database, target_user_id, &roles_to_add)
-        .await
-        .map_err(APIError::InternalError)?;
+    let full_updated_user_role_set = entities::UserRoleMutation::add_roles_to_user(
+        &mut transaction,
+        target_user_id,
+        roles_to_add_to_user,
+    )
+    .await?;
 
-    let updated_role_set = query::UserRoleQuery::user_roles(&state.database, target_user_id)
-        .await
-        .map_err(APIError::InternalError)?;
+
+    transaction.commit().await?;
 
 
     Ok(UserRolesResponse {
-        role_names: updated_role_set.role_names(),
+        role_names: full_updated_user_role_set.role_names(),
     }
     .into_response())
 }
@@ -634,7 +640,7 @@ pub struct UserRoleRemoveRequest {
     tag = "users",
     params(
         (
-            "user_id" = i32,
+            "user_id" = Uuid,
             Path,
             description = "ID of the user to remove roles from."
         )
@@ -687,64 +693,63 @@ pub struct UserRoleRemoveRequest {
 pub async fn remove_roles_from_specific_user(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    path_info: web::Path<(i32,)>,
+    path_info: web::Path<(Uuid,)>,
     json_data: web::Json<UserRoleRemoveRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
+
     // Only authenticated users with the `user.any:write` permission can remove roles
     // from other users, but only if they also have that role.
     // Intended for moderation tooling.
     let authenticated_user = require_authentication!(authentication);
-    let authenticated_user_id = authenticated_user.user_id();
-    let authenticated_user_roles = authenticated_user
-        .roles(&state.database)
-        .await
-        .map_err(APIError::InternalError)?;
+    let authenticated_user_roles = authenticated_user.fetch_roles(&mut transaction).await?;
+    let authenticated_user_permissions = authenticated_user_roles.granted_permission_set();
 
     require_permission!(
-        state,
-        authenticated_user,
+        authenticated_user_permissions,
         Permission::UserAnyWrite
     );
 
 
-    let target_user_id = path_info.into_inner().0;
+    let authenticated_user_id = authenticated_user.user_id();
+    let target_user_id = UserId::new(path_info.into_inner().0);
+
     let request_data = json_data.into_inner();
 
 
     // Disallow modifying your own user account on this endpoint.
     if authenticated_user_id == target_user_id {
-        return Ok(error_response_with_reason!(
+        return Ok(json_error_response_with_reason!(
             StatusCode::FORBIDDEN,
             "Can't modify your own account on this endpoint."
         ));
     }
 
 
-    let parsed_roles_to_remove_result = request_data
-        .roles_to_remove
-        .into_iter()
-        .map(|role_name| {
-            Role::from_name(&role_name).ok_or_else(|| format!("No such role: \"{role_name}\"."))
-        })
-        .collect::<Result<Vec<_>, _>>();
+    let mut roles_to_remove_from_user = HashSet::with_capacity(request_data.roles_to_remove.len());
 
-    let roles_to_remove = match parsed_roles_to_remove_result {
-        Ok(roles) => roles,
-        Err(error_reason) => {
-            return Ok(error_response_with_reason!(
+    for raw_role_name in request_data.roles_to_remove {
+        let Some(role) = Role::from_name(&raw_role_name) else {
+            return Ok(json_error_response_with_reason!(
                 StatusCode::BAD_REQUEST,
-                error_reason
+                format!("{} is an invalid role name", raw_role_name)
             ));
-        }
-    };
+        };
+
+        roles_to_remove_from_user.insert(role);
+    }
+
+    let roles_to_remove_from_user = RoleSet::from_role_hash_set(roles_to_remove_from_user);
 
 
     // Validate that the authenticated user (caller) has all of the roles
     // they wish to remove from the target user. Not checking for this would
     // be dangerous as it would essentially allow for privilege de-escalation.
-    for role in roles_to_remove.iter() {
+    for role in roles_to_remove_from_user.roles() {
         if !authenticated_user_roles.has_role(role) {
-            return Ok(error_response_with_reason!(
+            return Ok(json_error_response_with_reason!(
                 StatusCode::FORBIDDEN,
                 format!(
                     "You cannot remove others' roles which you do not have (missing role: {}).",
@@ -755,9 +760,7 @@ pub async fn remove_roles_from_specific_user(
     }
 
 
-    let user_exists = query::UserQuery::user_exists_by_user_id(&state.database, target_user_id)
-        .await
-        .map_err(APIError::InternalError)?;
+    let user_exists = entities::UserQuery::exists_by_id(&mut transaction, target_user_id).await?;
 
     if !user_exists {
         return Err(APIError::not_found_with_reason(
@@ -766,21 +769,16 @@ pub async fn remove_roles_from_specific_user(
     }
 
 
-    mutation::UserRoleMutation::remove_roles_from_user(
-        &state.database,
+    let full_updated_user_role_set = entities::UserRoleMutation::remove_roles_from_user(
+        &mut transaction,
         target_user_id,
-        &roles_to_remove,
+        roles_to_remove_from_user,
     )
-    .await
-    .map_err(APIError::InternalError)?;
-
-    let updated_role_set = query::UserRoleQuery::user_roles(&state.database, target_user_id)
-        .await
-        .map_err(APIError::InternalError)?;
+    .await?;
 
 
     Ok(UserRolesResponse {
-        role_names: updated_role_set.role_names(),
+        role_names: full_updated_user_role_set.role_names(),
     }
     .into_response())
 }

@@ -17,6 +17,8 @@ use actix_web::{web, Scope};
 
 use self::{dictionary::dictionary_router, login::login_router, users::users_router};
 
+// TODO refactor the API out of the v1 directory, since we currently have only one version (but keep the HTTP path /v1/ prefix!)
+
 /// Router for the entire V1 API.
 /// Lives under the `/api/v1` path.
 pub fn v1_api_router() -> Scope {

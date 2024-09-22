@@ -7,11 +7,11 @@ use kolomoni_core::{
 };
 use uuid::Uuid;
 
-use crate::TryIntoModel;
+use crate::TryIntoExternalModel;
 
 
 
-pub struct Model {
+pub struct EditModel {
     pub id: EditId,
 
     /// Contains certain duplicated information which we've decided *not* to
@@ -30,23 +30,23 @@ pub struct Model {
 
 
 
-pub struct IntermediateModel {
-    pub id: Uuid,
+pub struct InternalEditModel {
+    pub(crate) id: Uuid,
 
-    pub data: serde_json::Value,
+    pub(crate) data: serde_json::Value,
 
-    pub data_schema_version: i32,
+    pub(crate) data_schema_version: i32,
 
-    pub performed_at: DateTime<Utc>,
+    pub(crate) performed_at: DateTime<Utc>,
 
-    pub performed_by: Uuid,
+    pub(crate) performed_by: Uuid,
 }
 
-impl TryIntoModel for IntermediateModel {
-    type Model = Model;
+impl TryIntoExternalModel for InternalEditModel {
+    type ExternalModel = EditModel;
     type Error = Cow<'static, str>;
 
-    fn try_into_model(self) -> Result<Self::Model, Self::Error> {
+    fn try_into_external_model(self) -> Result<Self::ExternalModel, Self::Error> {
         let id = EditId::new(self.id);
 
         let data = serde_json::from_value::<Edit>(self.data).map_err(|error| {
@@ -65,7 +65,7 @@ impl TryIntoModel for IntermediateModel {
         let performed_by = UserId::new(self.performed_by);
 
 
-        Ok(Self::Model {
+        Ok(Self::ExternalModel {
             id,
             data,
             data_schema_version,

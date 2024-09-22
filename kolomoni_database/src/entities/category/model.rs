@@ -2,10 +2,10 @@ use chrono::{DateTime, Utc};
 use kolomoni_core::id::CategoryId;
 use uuid::Uuid;
 
-use crate::IntoModel;
+use crate::IntoExternalModel;
 
 
-pub struct Model {
+pub struct CategoryModel {
     pub id: CategoryId,
 
     pub parent_category_id: Option<CategoryId>,
@@ -20,28 +20,28 @@ pub struct Model {
 }
 
 
-pub(super) struct IntermediateModel {
-    pub(super) id: Uuid,
+pub struct InternalCategoryModel {
+    pub(crate) id: Uuid,
 
-    pub(super) parent_category_id: Option<Uuid>,
+    pub(crate) parent_category_id: Option<Uuid>,
 
-    pub(super) name_sl: String,
+    pub(crate) name_sl: String,
 
-    pub(super) name_en: String,
+    pub(crate) name_en: String,
 
-    pub(super) created_at: DateTime<Utc>,
+    pub(crate) created_at: DateTime<Utc>,
 
-    pub(super) last_modified_at: DateTime<Utc>,
+    pub(crate) last_modified_at: DateTime<Utc>,
 }
 
-impl IntoModel for IntermediateModel {
-    type Model = Model;
+impl IntoExternalModel for InternalCategoryModel {
+    type ExternalModel = CategoryModel;
 
-    fn into_model(self) -> Self::Model {
+    fn into_external_model(self) -> Self::ExternalModel {
         let id = CategoryId::new(self.id);
         let parent_category_id = self.parent_category_id.map(CategoryId::new);
 
-        Self::Model {
+        Self::ExternalModel {
             id,
             parent_category_id,
             slovene_name: self.name_sl,

@@ -2,18 +2,23 @@
 //! and ways to have those errors automatically turned into correct
 //! HTTP error responses when returned as `Err(error)` from those functions.
 
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
 use actix_web::body::BoxBody;
 use actix_web::http::StatusCode;
 use actix_web::{HttpResponse, ResponseError};
 use itertools::Itertools;
-use kolomoni_auth::Permission;
-use sea_orm::DbErr;
+use kolomoni_auth::{JWTCreationError, Permission};
+use kolomoni_database::entities::UserQueryError;
+use kolomoni_database::QueryError;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::error;
 use utoipa::ToSchema;
+
+use super::macros::{KolomoniResponseBuilderJSONError, KolomoniResponseBuilderLMAError};
+use crate::authentication::AuthenticatedUserError;
 
 
 /// Simple JSON-encodable response containing a single field: a `reason`.
@@ -212,25 +217,33 @@ pub enum APIError {
 
     /// Bad client request with a reason; will produce a `400 Bad Request`.
     /// The `reason` will also be sent along in the response.
-    OtherClientError { reason: String },
+    OtherClientError { reason: Cow<'static, str> },
 
     /// Internal error with a string reason.
-    /// Triggers a `500 Internal Server Error` (*doesn't leak the error through the API*).
-    InternalReason(String),
+    /// Triggers a `500 Internal Server Error` (**reason doesn't leak through the API**).
+    InternalErrorWithReason { reason: Cow<'static, str> },
 
-    /// Internal error, constructed from an [`miette::Error`].
-    /// Triggers a `500 Internal Server Error` (*doesn't leak the error through the API*).
-    InternalError(miette::Error),
+    /// Internal error, constructed from a boxed [`Error`].
+    /// Triggers a `500 Internal Server Error` (**error doesn't leak through the API**).
+    InternalGenericError {
+        #[from]
+        #[source]
+        error: Box<dyn std::error::Error>,
+    },
 
-    /// Internal error, constructed from an [`sea_orm::error::DbErr`].
+    /// Internal error, constructed from a [`sqlx::Error`].
     /// Triggers a `500 Internal Server Error` (*doesn't leak the error through the API*).
-    InternalDatabaseError(DbErr),
+    InternalDatabaseError {
+        #[from]
+        #[source]
+        error: sqlx::Error,
+    },
 }
 
 impl APIError {
     /// Initialize a new not found API error without a specific reason.
     #[inline]
-    pub fn not_found() -> Self {
+    pub const fn not_found() -> Self {
         Self::NotFound {
             reason_response: None,
         }
@@ -249,7 +262,7 @@ impl APIError {
     /// a permission (or multiple permissions), but without clarification as to which those are.
     #[allow(dead_code)]
     #[inline]
-    pub fn missing_permission() -> Self {
+    pub const fn missing_permission() -> Self {
         Self::NotEnoughPermissions {
             missing_permission: None,
         }
@@ -257,10 +270,10 @@ impl APIError {
 
     pub fn client_error<S>(reason: S) -> Self
     where
-        S: Into<String>,
+        S: Into<Cow<'static, str>>,
     {
         Self::OtherClientError {
-            reason: reason.into(),
+            reason: Cow::from(reason.into()),
         }
     }
 
@@ -277,21 +290,36 @@ impl APIError {
     /// some set of permissions.
     #[inline]
     #[allow(dead_code)]
-    pub fn missing_specific_permissions(permissions: Vec<Permission>) -> Self {
+    pub const fn missing_specific_permissions(permissions: Vec<Permission>) -> Self {
         Self::NotEnoughPermissions {
             missing_permission: Some(permissions),
         }
+    }
+
+    pub fn internal_error<E>(error: E) -> Self
+    where
+        E: std::error::Error + 'static,
+    {
+        Self::InternalGenericError {
+            error: Box::new(error),
+        }
+    }
+
+    pub fn internal_database_error(error: sqlx::Error) -> Self {
+        Self::InternalDatabaseError { error }
     }
 
     /// Initialize a new internal API error using an internal reason string.
     /// When constructing an HTTP response using this error variant, the **reason
     /// is not leaked through the API.**
     #[inline]
-    pub fn internal_reason<S>(reason: S) -> Self
+    pub fn internal_error_with_reason<S>(reason: S) -> Self
     where
-        S: Into<String>,
+        S: Into<Cow<'static, str>>,
     {
-        Self::InternalReason(reason.into())
+        Self::InternalErrorWithReason {
+            reason: reason.into(),
+        }
     }
 }
 
@@ -330,9 +358,19 @@ impl Display for APIError {
                 }
             },
             APIError::OtherClientError { reason } => write!(f, "Client error: {}", reason),
-            APIError::InternalReason(reason) => write!(f, "Internal error: {reason}."),
-            APIError::InternalError(error) => write!(f, "Internal error: {error}."),
-            APIError::InternalDatabaseError(error) => write!(f, "Internal database error: {error}."),
+            APIError::InternalErrorWithReason { reason } => write!(
+                f,
+                "Internal server error (with reason): {reason}."
+            ),
+            APIError::InternalGenericError { error } => {
+                write!(f, "Internal server error (generic): {error:?}")
+            }
+            APIError::InternalDatabaseError { error } => {
+                write!(
+                    f,
+                    "Internal server error (database error): {error}."
+                )
+            }
         }
     }
 }
@@ -344,9 +382,9 @@ impl ResponseError for APIError {
             APIError::NotEnoughPermissions { .. } => StatusCode::FORBIDDEN,
             APIError::NotFound { .. } => StatusCode::NOT_FOUND,
             APIError::OtherClientError { .. } => StatusCode::BAD_REQUEST,
-            APIError::InternalReason(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            APIError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            APIError::InternalDatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            APIError::InternalErrorWithReason { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            APIError::InternalGenericError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            APIError::InternalDatabaseError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -370,23 +408,23 @@ impl ResponseError for APIError {
                     reason: reason.to_string(),
                 })
             }
-            APIError::InternalReason(error) => {
-                error!(error = error, "Internal error.");
+            APIError::InternalErrorWithReason { reason } => {
+                error!(error = %reason, "Internal database error (custom reason).");
 
                 HttpResponse::InternalServerError().finish()
             }
-            APIError::InternalError(error) => {
+            APIError::InternalGenericError { error } => {
                 error!(
-                    error = error.to_string(),
-                    "Internal server error."
+                    error = ?error,
+                    "Internal server error (generic)."
                 );
 
                 HttpResponse::InternalServerError().finish()
             }
-            APIError::InternalDatabaseError(error) => {
+            APIError::InternalDatabaseError { error } => {
                 error!(
-                    error = error.to_string(),
-                    "Internal database error.",
+                    error = ?error,
+                    "Internal server error (database error).",
                 );
 
                 HttpResponse::InternalServerError().finish()
@@ -394,6 +432,71 @@ impl ResponseError for APIError {
         }
     }
 }
+
+
+impl From<QueryError> for APIError {
+    fn from(value: QueryError) -> Self {
+        match value {
+            QueryError::SqlxError { error } => Self::InternalDatabaseError { error },
+            QueryError::ModelError { reason } => Self::InternalErrorWithReason { reason },
+            QueryError::DatabaseInconsistencyError { problem: reason } => {
+                Self::InternalErrorWithReason { reason }
+            }
+        }
+    }
+}
+
+impl From<UserQueryError> for APIError {
+    fn from(value: UserQueryError) -> Self {
+        match value {
+            UserQueryError::SqlxError { error } => Self::InternalDatabaseError { error },
+            UserQueryError::ModelError { reason } => Self::InternalErrorWithReason { reason },
+            UserQueryError::HasherError { error } => Self::InternalGenericError {
+                error: Box::new(error),
+            },
+        }
+    }
+}
+
+impl From<AuthenticatedUserError> for APIError {
+    fn from(value: AuthenticatedUserError) -> Self {
+        match value {
+            AuthenticatedUserError::QueryError { error } => Self::from(error),
+        }
+    }
+}
+
+impl From<JWTCreationError> for APIError {
+    fn from(value: JWTCreationError) -> Self {
+        match value {
+            JWTCreationError::JWTError { error } => Self::InternalGenericError {
+                error: Box::new(error),
+            },
+        }
+    }
+}
+
+impl From<KolomoniResponseBuilderJSONError> for APIError {
+    fn from(value: KolomoniResponseBuilderJSONError) -> Self {
+        match value {
+            KolomoniResponseBuilderJSONError::JsonError { error } => Self::InternalGenericError {
+                error: Box::new(error),
+            },
+        }
+    }
+}
+
+impl From<KolomoniResponseBuilderLMAError> for APIError {
+    fn from(value: KolomoniResponseBuilderLMAError) -> Self {
+        match value {
+            KolomoniResponseBuilderLMAError::JsonError { error } => Self::InternalGenericError {
+                error: Box::new(error),
+            },
+        }
+    }
+}
+
+
 
 
 /// Short for [`Result`]`<`[`HttpResponse`]`, `[`APIError`]`>`, intended to be used in most

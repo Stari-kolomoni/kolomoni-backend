@@ -1,5 +1,5 @@
 use http::{Method, StatusCode};
-use kolomoni::api::v1::dictionary::{english_word::{EnglishWord, EnglishWordCreationRequest, EnglishWordCreationResponse}, slovene_word::{SloveneWord, SloveneWordCreationRequest, SloveneWordCreationResponse}, suggestions::TranslationSuggestionRequest, translations::TranslationRequest};
+use kolomoni::api::v1::dictionary::{english_word::{EnglishWordWithMeanings, EnglishWordCreationRequest, EnglishWordCreationResponse}, slovene_word::{SloveneWord, SloveneWordCreationRequest, SloveneWordCreationResponse}, suggestions::TranslationSuggestionRequest, translations::TranslationCreationRequest};
 use uuid::Uuid;
 
 use crate::TestServer;
@@ -57,7 +57,7 @@ impl SampleEnglishWord {
         &self,
         server: &TestServer,
         access_token: &str,
-    ) -> EnglishWord {
+    ) -> EnglishWordWithMeanings {
         let creation_response = server.request(
             Method::POST,
             "/api/v1/dictionary/english",
@@ -196,9 +196,9 @@ pub async fn link_word_as_translation(
         Method::POST,
         "/api/v1/dictionary/translation"
     )
-        .with_json_body(TranslationRequest {
-            english_word_id: english_word_id.to_string(),
-            slovene_word_id: slovene_word_id.to_string(),
+        .with_json_body(TranslationCreationRequest {
+            english_word_meaning_id: english_word_id.to_string(),
+            slovene_word_meaning_id: slovene_word_id.to_string(),
         })
         .with_access_token(access_token)
         .send()

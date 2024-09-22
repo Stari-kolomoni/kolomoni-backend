@@ -19,7 +19,7 @@ use crate::{
         v1::dictionary::parse_string_into_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    error_response_with_reason,
+    json_error_response_with_reason,
     require_authentication,
     require_permission,
     state::ApplicationState,
@@ -96,7 +96,7 @@ pub async fn suggest_translation(
     let english_word_exists =
         EnglishWordQuery::word_exists_by_uuid(&state.database, english_word_uuid)
             .await
-            .map_err(APIError::InternalError)?;
+            .map_err(APIError::InternalGenericError)?;
     if !english_word_exists {
         return Err(APIError::client_error(
             "The provided english word does not exist.",
@@ -106,7 +106,7 @@ pub async fn suggest_translation(
     let slovene_word_exists =
         SloveneWordQuery::word_exists_by_uuid(&state.database, slovene_word_uuid)
             .await
-            .map_err(APIError::InternalError)?;
+            .map_err(APIError::InternalGenericError)?;
     if !slovene_word_exists {
         return Err(APIError::client_error(
             "The provided slovene word does not exist.",
@@ -120,10 +120,10 @@ pub async fn suggest_translation(
         slovene_word_uuid,
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
 
     if suggestion_already_exists {
-        return Ok(error_response_with_reason!(
+        return Ok(json_error_response_with_reason!(
             StatusCode::CONFLICT,
             "The translation suggestion already exists."
         ));
@@ -138,7 +138,7 @@ pub async fn suggest_translation(
         },
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
 
 
 
@@ -147,12 +147,12 @@ pub async fn suggest_translation(
         .search
         .signal_english_word_created_or_updated(english_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
     state
         .search
         .signal_slovene_word_created_or_updated(slovene_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
 
 
     Ok(HttpResponse::Ok().finish())
@@ -230,7 +230,7 @@ pub async fn delete_suggestion(
     let english_word_exists =
         EnglishWordQuery::word_exists_by_uuid(&state.database, english_word_uuid)
             .await
-            .map_err(APIError::InternalError)?;
+            .map_err(APIError::InternalGenericError)?;
     if !english_word_exists {
         return Err(APIError::client_error(
             "The provided english word does not exist.",
@@ -240,7 +240,7 @@ pub async fn delete_suggestion(
     let slovene_word_exists =
         SloveneWordQuery::word_exists_by_uuid(&state.database, slovene_word_uuid)
             .await
-            .map_err(APIError::InternalError)?;
+            .map_err(APIError::InternalGenericError)?;
     if !slovene_word_exists {
         return Err(APIError::client_error(
             "The provided slovene word does not exist.",
@@ -255,7 +255,7 @@ pub async fn delete_suggestion(
         slovene_word_uuid,
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
 
     if !suggestion_exists {
         return Err(APIError::not_found());
@@ -270,7 +270,7 @@ pub async fn delete_suggestion(
         },
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
 
 
 
@@ -279,12 +279,12 @@ pub async fn delete_suggestion(
         .search
         .signal_english_word_created_or_updated(english_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
     state
         .search
         .signal_slovene_word_created_or_updated(slovene_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
 
 
     Ok(HttpResponse::Ok().finish())

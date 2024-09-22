@@ -9,12 +9,14 @@ use actix_web::{FromRequest, HttpRequest};
 use chrono::{DateTime, Utc};
 use kolomoni_auth::{JWTClaims, JWTValidationError, RoleSet, BLANKET_PERMISSION_GRANT};
 use kolomoni_auth::{Permission, PermissionSet};
-use kolomoni_database::query::UserRoleQuery;
-use miette::{Context, Result};
-use sea_orm::ConnectionTrait;
+use kolomoni_core::id::UserId;
+use kolomoni_database::{entities, QueryError};
+use sqlx::PgConnection;
+use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::state::ApplicationStateInner;
+
 
 
 /// User authentication extractor.
@@ -72,7 +74,7 @@ impl FromRequest for UserAuthenticationExtractor {
                 let jwt_manager = match req.app_data::<Data<ApplicationStateInner>>() {
                     Some(app_state) => &app_state.jwt_manager,
                     None => {
-                        error!("BUG: No AppState injected, all UserAuth extractors will fail!");
+                        error!("BUG: No AppState injected, all `UserAuthenticationExtractor`s will fail!");
 
                         return future::err(
                             actix_web::error::InternalError::new(
@@ -89,6 +91,7 @@ impl FromRequest for UserAuthenticationExtractor {
                     Err(_) => return future::err(actix_web::error::ParseError::Header.into()),
                 };
 
+
                 // Strip Bearer prefix
                 if !header_value.starts_with("Bearer ") {
                     return future::err(actix_web::error::ParseError::Header.into());
@@ -96,15 +99,17 @@ impl FromRequest for UserAuthenticationExtractor {
 
                 let token_string = header_value
                     .strip_prefix("Bearer ")
+                    // PANIC SAFETY: We just checked that the value starts with "Bearer ".
                     .expect("BUG: String started with \"Bearer \", but couldn't strip prefix.");
+
 
                 let token = match jwt_manager.decode_token(token_string) {
                     Ok(token) => token,
                     Err(error) => {
                         return match error {
-                            JWTValidationError::Expired(token) => {
+                            JWTValidationError::Expired { expired_token } => {
                                 debug!(
-                                    user_id = token.user_id,
+                                    user_id = %expired_token.user_id,
                                     "User tried authenticating with expired token."
                                 );
 
@@ -112,9 +117,9 @@ impl FromRequest for UserAuthenticationExtractor {
                                     "Authentication token expired.",
                                 ))
                             }
-                            JWTValidationError::InvalidToken(error) => {
+                            JWTValidationError::InvalidToken { reason } => {
                                 info!(
-                                    error = error,
+                                    reason = %reason,
                                     "User tried authenticating with invalid token."
                                 );
 
@@ -134,6 +139,17 @@ impl FromRequest for UserAuthenticationExtractor {
 }
 
 
+
+
+#[derive(Debug, Error)]
+pub enum AuthenticatedUserError {
+    #[error("database error")]
+    QueryError {
+        #[from]
+        #[source]
+        error: QueryError,
+    },
+}
 
 /// An authenticated user with a valid JWT token.
 pub struct AuthenticatedUser {
@@ -155,7 +171,7 @@ impl AuthenticatedUser {
     }
 
     /// Returns the ID of the user who owns the token.
-    pub fn user_id(&self) -> i32 {
+    pub fn user_id(&self) -> UserId {
         self.token.user_id
     }
 
@@ -168,40 +184,52 @@ impl AuthenticatedUser {
     ///
     /// Prefer using [`Self::has_permission`] if you'll be checking for a single permission,
     /// and this method if you're checking for multiple or doing advanced permission logic.
-    pub async fn permissions<C: ConnectionTrait>(&self, database: &C) -> Result<PermissionSet> {
-        let permission_set =
-            UserRoleQuery::effective_user_permissions_from_user_id(database, self.token.user_id)
-                .await
-                .wrap_err("Could not query effective permissions for user.")?;
+    pub async fn fetch_transitive_permissions(
+        &self,
+        database_connection: &mut PgConnection,
+    ) -> Result<PermissionSet, AuthenticatedUserError> {
+        let effective_permission_set = entities::UserRoleQuery::transitive_permissions_for_user(
+            database_connection,
+            self.token.user_id,
+        )
+        .await?;
 
-        Ok(permission_set)
+        Ok(effective_permission_set)
     }
 
-    /// Returns a boolean indicating whether the authenticated user has the provided permission.
+    /// Returns a boolean indicating whether the authenticated user has the provided permission,
+    /// obtained from any of the granted roles.
     ///
     /// This operation performs a database lookup.
-    pub async fn has_permission<C: ConnectionTrait>(
+    pub async fn transitively_has_permission(
         &self,
-        database: &C,
+        database_connection: &mut PgConnection,
         permission: Permission,
-    ) -> Result<bool> {
+    ) -> Result<bool, AuthenticatedUserError> {
         if BLANKET_PERMISSION_GRANT.contains(&permission) {
             return Ok(true);
         }
 
-        UserRoleQuery::user_has_permission(database, self.token.user_id, permission)
-            .await
-            .wrap_err("Could not query whether the user has a specific permission.")
+        let has_permission = entities::UserRoleQuery::user_has_permission_transitively(
+            database_connection,
+            self.token.user_id,
+            permission,
+        )
+        .await?;
+
+        Ok(has_permission)
     }
 
     /// Returns a list of roles the user has.
     ///
     /// This operation performs a database lookup.
-    pub async fn roles<C: ConnectionTrait>(&self, database: &C) -> Result<RoleSet> {
-        let role_set = UserRoleQuery::user_roles(database, self.token.user_id)
-            .await
-            .wrap_err("Could not query roles for user.")?;
+    pub async fn fetch_roles(
+        &self,
+        database_connection: &mut PgConnection,
+    ) -> Result<RoleSet, AuthenticatedUserError> {
+        let user_role_set =
+            entities::UserRoleQuery::roles_for_user(database_connection, self.token.user_id).await?;
 
-        Ok(role_set)
+        Ok(user_role_set)
     }
 }

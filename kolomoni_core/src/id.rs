@@ -1,33 +1,34 @@
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 
-macro_rules! impl_ser_de_for_newtype_struct {
-    ($struct_type:ty, $inner_type:ty) => {
-        impl serde::Serialize for $struct_type {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: serde::Serializer,
-            {
-                self.0.serialize(serializer)
+macro_rules! impl_uuid_display_for_newtype_struct {
+    ($struct_type:ty) => {
+        impl std::fmt::Display for $struct_type {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                uuid::fmt::Simple::from_uuid(self.0).fmt(f)
             }
         }
+    };
+}
 
-        impl<'de> serde::Deserialize<'de> for $struct_type {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                Ok(Self(
-                    <$inner_type as serde::Deserialize>::deserialize(deserializer)?,
-                ))
+macro_rules! impl_transparent_display_for_newtype_struct {
+    ($struct_type:ty) => {
+        impl std::fmt::Display for $struct_type {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.0.fmt(f)
             }
         }
     };
 }
 
 
+
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct CategoryId(pub(crate) Uuid);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CategoryId(#[serde(with = "uuid::serde::simple")] pub(crate) Uuid);
 
 impl CategoryId {
     #[inline]
@@ -36,17 +37,24 @@ impl CategoryId {
     }
 
     #[inline]
-    pub fn into_inner(self) -> Uuid {
+    pub fn generate() -> Self {
+        Self(Uuid::now_v7())
+    }
+
+    #[inline]
+    pub fn into_uuid(self) -> Uuid {
         self.0
     }
 }
 
-impl_ser_de_for_newtype_struct!(CategoryId, Uuid);
+impl_uuid_display_for_newtype_struct!(CategoryId);
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct EditId(pub(crate) Uuid);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct EditId(#[serde(with = "uuid::serde::simple")] pub(crate) Uuid);
 
 impl EditId {
     #[inline]
@@ -60,11 +68,13 @@ impl EditId {
     }
 }
 
-impl_ser_de_for_newtype_struct!(EditId, Uuid);
+impl_uuid_display_for_newtype_struct!(EditId);
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct PermissionId(pub(crate) i32);
 
 impl PermissionId {
@@ -79,12 +89,14 @@ impl PermissionId {
     }
 }
 
-impl_ser_de_for_newtype_struct!(PermissionId, i32);
+impl_transparent_display_for_newtype_struct!(PermissionId);
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct RoleId(i32);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct RoleId(pub(crate) i32);
 
 impl RoleId {
     #[inline]
@@ -98,55 +110,69 @@ impl RoleId {
     }
 }
 
-impl_ser_de_for_newtype_struct!(RoleId, i32);
+impl_transparent_display_for_newtype_struct!(RoleId);
+
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct UserId(Uuid);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct UserId(#[serde(with = "uuid::serde::simple")] pub(crate) Uuid);
 
 impl UserId {
     #[inline]
-    pub fn new(uuid: Uuid) -> Self {
+    pub const fn new(uuid: Uuid) -> Self {
         Self(uuid)
     }
 
     #[inline]
-    pub fn into_inner(self) -> Uuid {
+    pub const fn into_uuid(self) -> Uuid {
         self.0
     }
 }
 
-impl_ser_de_for_newtype_struct!(UserId, Uuid);
+impl_uuid_display_for_newtype_struct!(UserId);
+
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct WordId(pub(crate) Uuid);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct WordId(#[serde(with = "uuid::serde::simple")] pub(crate) Uuid);
 
 impl WordId {
     #[inline]
-    pub fn new(uuid: Uuid) -> Self {
+    pub const fn new(uuid: Uuid) -> Self {
         Self(uuid)
     }
 
     #[inline]
-    pub fn into_inner(self) -> Uuid {
+    pub const fn into_inner(self) -> Uuid {
         self.0
     }
 }
 
-impl_ser_de_for_newtype_struct!(WordId, Uuid);
+impl_uuid_display_for_newtype_struct!(WordId);
+
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct EnglishWordId(Uuid);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct EnglishWordId(#[serde(with = "uuid::serde::simple")] pub(crate) Uuid);
 
 impl EnglishWordId {
     #[inline]
-    pub fn new(uuid: Uuid) -> Self {
+    pub const fn new(uuid: Uuid) -> Self {
         Self(uuid)
+    }
+
+    #[inline]
+    pub fn generate() -> Self {
+        Self(Uuid::now_v7())
     }
 
     #[inline]
@@ -155,17 +181,20 @@ impl EnglishWordId {
     }
 
     #[inline]
-    pub fn into_inner(self) -> Uuid {
+    pub fn into_uuid(self) -> Uuid {
         self.0
     }
 }
 
-impl_ser_de_for_newtype_struct!(EnglishWordId, Uuid);
+impl_uuid_display_for_newtype_struct!(EnglishWordId);
+
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SloveneWordId(Uuid);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SloveneWordId(#[serde(with = "uuid::serde::simple")] pub(crate) Uuid);
 
 impl SloveneWordId {
     #[inline]
@@ -174,22 +203,30 @@ impl SloveneWordId {
     }
 
     #[inline]
+    pub fn generate() -> Self {
+        Self(Uuid::now_v7())
+    }
+
+    #[inline]
     pub fn into_word_id(self) -> WordId {
         WordId::new(self.0)
     }
 
     #[inline]
-    pub fn into_inner(self) -> Uuid {
+    pub fn into_uuid(self) -> Uuid {
         self.0
     }
 }
 
-impl_ser_de_for_newtype_struct!(SloveneWordId, Uuid);
+impl_uuid_display_for_newtype_struct!(SloveneWordId);
+
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct WordMeaningId(Uuid);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct WordMeaningId(#[serde(with = "uuid::serde::simple")] pub(crate) Uuid);
 
 impl WordMeaningId {
     #[inline]
@@ -203,12 +240,15 @@ impl WordMeaningId {
     }
 }
 
-impl_ser_de_for_newtype_struct!(WordMeaningId, Uuid);
+impl_uuid_display_for_newtype_struct!(WordMeaningId);
+
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct EnglishWordMeaningId(Uuid);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct EnglishWordMeaningId(#[serde(with = "uuid::serde::simple")] pub(crate) Uuid);
 
 impl EnglishWordMeaningId {
     #[inline]
@@ -217,6 +257,11 @@ impl EnglishWordMeaningId {
     }
 
     #[inline]
+    pub fn generate() -> Self {
+        Self(Uuid::now_v7())
+    }
+
+    #[inline]
     pub fn into_word_meaning_id(self) -> WordMeaningId {
         WordMeaningId::new(self.0)
     }
@@ -227,12 +272,15 @@ impl EnglishWordMeaningId {
     }
 }
 
-impl_ser_de_for_newtype_struct!(EnglishWordMeaningId, Uuid);
+impl_uuid_display_for_newtype_struct!(EnglishWordMeaningId);
+
 
 
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct SloveneWordMeaningId(Uuid);
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SloveneWordMeaningId(#[serde(with = "uuid::serde::simple")] pub(crate) Uuid);
 
 impl SloveneWordMeaningId {
     #[inline]
@@ -241,6 +289,11 @@ impl SloveneWordMeaningId {
     }
 
     #[inline]
+    pub fn generate() -> Self {
+        Self(Uuid::now_v7())
+    }
+
+    #[inline]
     pub fn into_word_meaning_id(self) -> WordMeaningId {
         WordMeaningId::new(self.0)
     }
@@ -251,4 +304,4 @@ impl SloveneWordMeaningId {
     }
 }
 
-impl_ser_de_for_newtype_struct!(SloveneWordMeaningId, Uuid);
+impl_uuid_display_for_newtype_struct!(SloveneWordMeaningId);

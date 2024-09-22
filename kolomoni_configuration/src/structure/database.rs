@@ -12,13 +12,13 @@ pub struct DatabaseConfiguration {
     pub host: String,
 
     /// Port the database is listening at.
-    pub port: usize,
+    pub port: u16,
 
     /// Login username.
     pub username: String,
 
     /// Login password.
-    pub password: String,
+    pub password: Option<String>,
 
     /// Database name.
     pub database_name: String,

@@ -2,15 +2,15 @@ use kolomoni_core::id::{RoleId, UserId};
 use uuid::Uuid;
 
 
-pub struct Model {
+pub struct UserRoleModel {
     pub user_id: UserId,
 
     pub role_id: RoleId,
 }
 
 #[allow(dead_code)]
-pub(super) struct IntermediateModel {
-    pub(super) user_id: Uuid,
+pub struct InternalUserRoleModel {
+    pub(crate) user_id: Uuid,
 
-    pub(super) role_id: i32,
+    pub(crate) role_id: i32,
 }

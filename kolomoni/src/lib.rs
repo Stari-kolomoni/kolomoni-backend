@@ -1,5 +1,7 @@
 //! Stari Kolomoni backend API project.
 //!
+//! TODO This needs an update.
+//!
 //! # Workspace structure
 //! - [`kolomoni`][crate] *(this crate)* --- provides the entire API surface,
 //!   with [`actix_web`] as the server software.
@@ -61,13 +63,37 @@
 //! ```
 //!
 
-use itertools::Itertools;
-use kolomoni_configuration::Configuration;
-use kolomoni_migrations::{Migrator, MigratorTrait};
-use miette::{Context, IntoDiagnostic, Result};
-use sea_orm::{Database, DatabaseConnection};
-use sea_orm_migration::MigrationStatus;
-use tracing::info;
+
+// TODO -- things to do, in rough order: --
+// TODO migrate to the new database structure, which will remove and add some new endpoints
+// TODO refactor actix extractors/data into a better structure
+// TODO refactor non-library things out of this crate into kolomoni_core (including API request/response models?)
+// TODO refactor how state is updated locally, so it can be more general than just for the search crate
+// TODO rework search crate with either a deep-dive into tantivy or by removing tantivy and using manual similarity metrics
+// TODO rework the kolomoni_sample_data to be rust, and to ingest the Google Sheets document for seeding data
+// TODO migrate tests to new database structure
+// TODO for clarity, create two directories: `crates` and `binaries`, where workspaces crates will be categorized
+//      (e.g. `kolomoni` + `kolomoni_openapi` can go in `binaries`)
+// TODO review documentation, especially top-level crate docs (+ check for cargo doc warnings)
+// TODO review CI
+// TODO review makefile
+// TODO review unused dependencies
+
+use std::time::Duration;
+
+use kolomoni_configuration::DatabaseConfiguration;
+use kolomoni_migrations::core::{
+    errors::{MigrationApplyError, StatusError},
+    migrations::MigrationsWithStatusOptions,
+    MigrationStatus,
+};
+use miette::Result;
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    PgConnection,
+    PgPool,
+};
+use thiserror::Error;
 
 
 pub mod api;
@@ -79,72 +105,81 @@ pub mod state;
 #[cfg(feature = "with_test_facilities")]
 pub mod testing;
 
-pub async fn apply_pending_migrations(database_connection: &DatabaseConnection) -> Result<()> {
-    let migrations_status = Migrator::get_migration_with_status(database_connection)
-        .await
-        .into_diagnostic()
-        .wrap_err("Failed to check current database migration status.")?;
 
-    let pending_migrations = migrations_status
+#[derive(Debug, Error)]
+pub enum PendingMigrationApplyError {
+    #[error("failed to retrieve database migration status")]
+    StatusError(
+        #[from]
+        #[source]
+        StatusError,
+    ),
+
+    #[error("failed to apply migration")]
+    MigrationApplyError(
+        #[from]
+        #[source]
+        MigrationApplyError,
+    ),
+}
+
+// TODO needs logging
+pub async fn apply_pending_migrations(
+    database_connection: &mut PgConnection,
+) -> Result<(), PendingMigrationApplyError> {
+    let manager = kolomoni_migrations::migrations::manager();
+
+    let migrations = manager
+        .migrations_with_status(
+            database_connection,
+            MigrationsWithStatusOptions::strict(),
+        )
+        .await?;
+
+    let pending_migrations = migrations
         .into_iter()
-        .filter(|migration| migration.status() == MigrationStatus::Pending)
+        .filter(|migration| migration.status() == &MigrationStatus::Pending)
         .collect::<Vec<_>>();
 
+
     if pending_migrations.is_empty() {
-        info!("No pending database migrations.");
         return Ok(());
     }
 
 
-    let num_pending_migrations = pending_migrations.len();
-    let pending_migration_names = pending_migrations
-        .into_iter()
-        .map(|migration| migration.name().to_string())
-        .join(", ");
-
-    info!(
-        "There are {} pending migrations: {}",
-        num_pending_migrations, pending_migration_names
-    );
-
-
-    info!("Applying migrations.");
-    Migrator::up(database_connection, None)
-        .await
-        .into_diagnostic()
-        .wrap_err("Could not apply database migration.")?;
-    info!("Migrations applied.");
+    for pending_migration in pending_migrations {
+        pending_migration.execute_up(database_connection).await?;
+    }
 
     Ok(())
 }
 
 
+pub async fn establish_database_connection_pool(
+    database_configuration: &DatabaseConfiguration,
+) -> Result<PgPool, sqlx::Error> {
+    let mut connection_options = PgConnectOptions::new_without_pgpass()
+        .application_name(&format!(
+            "stari-kolomoni-backend-api_v{}",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .statement_cache_capacity(200)
+        .host(&database_configuration.host)
+        .port(database_configuration.port)
+        .username(&database_configuration.username)
+        .database(&database_configuration.database_name);
 
-pub async fn connect_and_set_up_database_with_full_url(
-    database_url: String,
-) -> Result<DatabaseConnection> {
-    let database = Database::connect(database_url)
+    if let Some(password) = &database_configuration.password {
+        connection_options = connection_options.password(password.as_str());
+    }
+
+
+    PgPoolOptions::new()
+        .idle_timeout(Some(Duration::from_secs(60 * 20)))
+        .max_lifetime(Some(Duration::from_secs(60 * 60)))
+        .min_connections(1)
+        .max_connections(10)
+        .test_before_acquire(true)
+        .connect_with(connection_options)
         .await
-        .into_diagnostic()
-        .wrap_err("Could not initialize connection to PostgreSQL database.")?;
-
-    info!("Database connection established.");
-
-    apply_pending_migrations(&database).await?;
-
-    Ok(database)
-}
-
-/// Connect to PostgreSQL database as specified in the configuration file
-/// and apply any pending migrations.
-pub async fn connect_and_set_up_database(config: &Configuration) -> Result<DatabaseConnection> {
-    connect_and_set_up_database_with_full_url(format!(
-        "postgres://{}:{}@{}:{}/{}",
-        config.database.username,
-        config.database.password,
-        config.database.host,
-        config.database.port,
-        config.database.database_name,
-    ))
-    .await
 }

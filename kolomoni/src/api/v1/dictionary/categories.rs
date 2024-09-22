@@ -1,26 +1,29 @@
 use actix_http::StatusCode;
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
+use futures_util::StreamExt;
 use kolomoni_auth::Permission;
-use kolomoni_database::{
-    mutation::{CategoryMutation, NewCategory, UpdatedCategory, WordCategoryMutation},
-    query::{CategoriesQueryOptions, CategoryQuery, WordCategoryQuery, WordQuery},
-    shared::WordLanguage,
-};
+use kolomoni_core::id::CategoryId;
+use kolomoni_database::entities::{self, CategoryValuesToUpdate, NewCategory};
 use serde::{Deserialize, Serialize};
+use sqlx::Acquire;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
         openapi,
-        v1::dictionary::{parse_string_into_uuid, Category},
+        traits::IntoApiModel,
+        v1::dictionary::Category,
     },
     authentication::UserAuthenticationExtractor,
-    error_response_with_reason,
     impl_json_response_builder,
+    json_error_response_with_reason,
+    obtain_database_connection,
     require_authentication,
     require_permission,
+    require_permission_with_optional_authentication,
     state::ApplicationState,
 };
 
@@ -36,6 +39,7 @@ use crate::{
     })
 )]
 pub struct CategoryCreationRequest {
+    pub parent_category_id: Option<Uuid>,
     pub slovene_name: String,
     pub english_name: String,
 }
@@ -59,6 +63,21 @@ pub struct CategoryCreationResponse {
 }
 
 impl_json_response_builder!(CategoryCreationResponse);
+
+
+impl IntoApiModel for entities::CategoryModel {
+    type ApiModel = Category;
+
+    fn into_api_model(self) -> Self::ApiModel {
+        Category {
+            id: self.id,
+            english_name: self.english_name,
+            slovene_name: self.slovene_name,
+            created_at: self.created_at,
+            last_modified_at: self.last_modified_at,
+        }
+    }
+}
 
 
 
@@ -99,9 +118,12 @@ pub async fn create_category(
     authentication: UserAuthenticationExtractor,
     request_body: web::Json<CategoryCreationRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
     let authenticated_user = require_authentication!(authentication);
     require_permission!(
-        state,
+        &mut transaction,
         authenticated_user,
         Permission::CategoryCreate
     );
@@ -110,42 +132,54 @@ pub async fn create_category(
     let request_body = request_body.into_inner();
 
 
-    let exact_category_already_exists = CategoryQuery::exists_by_both_names(
-        &state.database,
-        request_body.slovene_name.clone(),
-        request_body.english_name.clone(),
+    let category_exists_by_slovene_name = entities::CategoryQuery::exists_by_slovene_name(
+        &mut transaction,
+        &request_body.slovene_name,
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
-    if exact_category_already_exists {
-        return Ok(error_response_with_reason!(
+    if category_exists_by_slovene_name {
+        return Ok(json_error_response_with_reason!(
             StatusCode::CONFLICT,
-            "Category already exists."
+            "Category with given slovene name already exists."
+        ));
+    }
+
+    let category_exists_by_english_name = entities::CategoryQuery::exists_by_english_name(
+        &mut transaction,
+        &request_body.english_name,
+    )
+    .await?;
+
+    if category_exists_by_english_name {
+        return Ok(json_error_response_with_reason!(
+            StatusCode::CONFLICT,
+            "Category with given english name already exists."
         ));
     }
 
 
-    let new_category = CategoryMutation::create(
-        &state.database,
+
+    let newly_created_category = entities::CategoryMutation::create(
+        &mut transaction,
         NewCategory {
-            english_name: request_body.english_name,
+            parent_category_id: request_body.parent_category_id.map(CategoryId::new),
             slovene_name: request_body.slovene_name,
+            english_name: request_body.english_name,
         },
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
 
-
+    /* TODO pending rewrite of cache layer
     state
         .search
         .signal_category_created_or_updated(new_category.id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(CategoryCreationResponse {
-        category: Category::from_database_model(new_category),
+        category: newly_created_category.into_api_model(),
     }
     .into_response())
 }
@@ -183,21 +217,31 @@ impl_json_response_builder!(CategoriesResponse);
     )
 )]
 #[get("")]
-pub async fn get_all_categories(state: ApplicationState) -> EndpointResult {
-    let category_models = CategoryQuery::all(&state.database, CategoriesQueryOptions::default())
-        .await
-        .map_err(APIError::InternalError)?;
+pub async fn get_all_categories(
+    state: ApplicationState,
+    authentication: UserAuthenticationExtractor,
+) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
 
-    let categories_as_api_models = category_models
-        .into_iter()
-        .map(Category::from_database_model)
-        .collect();
+    require_permission_with_optional_authentication!(
+        &mut database_connection,
+        authentication,
+        Permission::CategoryRead
+    );
 
 
-    Ok(CategoriesResponse {
-        categories: categories_as_api_models,
+
+    let mut category_stream =
+        entities::CategoryQuery::get_all_categories(&mut database_connection).await;
+
+
+    let mut categories = Vec::new();
+    while let Some(internal_category) = category_stream.next().await {
+        categories.push(internal_category?.into_api_model());
     }
-    .into_response())
+
+
+    Ok(CategoriesResponse { categories }.into_response())
 }
 
 
@@ -254,22 +298,31 @@ impl_json_response_builder!(CategoryResponse);
 #[get("/{category_id}")]
 pub async fn get_specific_category(
     state: ApplicationState,
-    parameters: web::Path<(i32,)>,
+    authentication: UserAuthenticationExtractor,
+    parameters: web::Path<(Uuid,)>,
 ) -> EndpointResult {
-    let target_category_id = parameters.into_inner().0;
+    let mut database_connection = obtain_database_connection!(state);
 
-    let category_model = CategoryQuery::get_by_id(&state.database, target_category_id)
-        .await
-        .map_err(APIError::InternalError)?;
+    require_permission_with_optional_authentication!(
+        &mut database_connection,
+        authentication,
+        Permission::CategoryRead
+    );
 
 
-    let Some(category_model) = category_model else {
+    let target_category_id = CategoryId::new(parameters.into_inner().0);
+
+
+    let category =
+        entities::CategoryQuery::get_by_id(&mut database_connection, target_category_id).await?;
+
+    let Some(category) = category else {
         return Err(APIError::not_found());
     };
 
 
     Ok(CategoryResponse {
-        category: Category::from_database_model(category_model),
+        category: category.into_api_model(),
     }
     .into_response())
 }
@@ -285,8 +338,20 @@ pub async fn get_specific_category(
     })
 )]
 pub struct CategoryUpdateRequest {
-    pub slovene_name: Option<String>,
-    pub english_name: Option<String>,
+    /// # Interpreting the double option
+    /// To distinguish from an unset and a null JSON value, this field is a
+    /// double option. `None` indicates the field was not present
+    /// (i.e. that the parent category should not change as part of this update),
+    /// while `Some(None)` indicates it was set to `null`
+    /// (i.e. that the parent category should be cleared).
+    ///
+    /// See also: [`serde_with::rust::double_option`].
+    #[serde(default, with = "::serde_with::rust::double_option")]
+    pub new_parent_category_id: Option<Option<Uuid>>,
+
+    pub new_slovene_name: Option<String>,
+
+    pub new_english_name: Option<String>,
 }
 
 
@@ -333,77 +398,124 @@ pub struct CategoryUpdateRequest {
 #[patch("/{category_id}")]
 pub async fn update_specific_category(
     state: ApplicationState,
-    parameters: web::Path<(i32,)>,
+    parameters: web::Path<(Uuid,)>,
     authentication: UserAuthenticationExtractor,
     request_body: web::Json<CategoryUpdateRequest>,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
+
     let authenticated_user = require_authentication!(authentication);
     require_permission!(
-        state,
+        &mut transaction,
         authenticated_user,
         Permission::CategoryUpdate
     );
 
 
+    let target_category_id = CategoryId::new(parameters.into_inner().0);
     let request_body = request_body.into_inner();
-    let target_category_id = parameters.into_inner().0;
 
 
-    let target_category_before_update =
-        CategoryQuery::get_by_id(&state.database, target_category_id)
-            .await
-            .map_err(APIError::InternalError)?;
+    let has_no_fields_to_update = request_body.new_parent_category_id.is_none()
+        && request_body.new_slovene_name.is_none()
+        && request_body.new_english_name.is_none();
 
-    let Some(target_category_before_update) = target_category_before_update else {
-        return Err(APIError::not_found());
-    };
-
-
-    let updated_category_would_conflict = CategoryQuery::exists_by_both_names(
-        &state.database,
-        if let Some(updated_slovene_name) = &request_body.slovene_name {
-            updated_slovene_name.to_owned()
-        } else {
-            target_category_before_update.slovene_name
-        },
-        if let Some(updated_english_name) = &request_body.english_name {
-            updated_english_name.to_owned()
-        } else {
-            target_category_before_update.english_name
-        },
-    )
-    .await
-    .map_err(APIError::InternalError)?;
-
-    if updated_category_would_conflict {
-        return Ok(error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "Updated category would conflict with an existing category."
+    if has_no_fields_to_update {
+        return Ok(json_error_response_with_reason!(
+            StatusCode::BAD_REQUEST,
+            "Client should provide at least one category field to update; \
+            providing none on this endpoint is invalid."
         ));
     }
 
 
-    let updated_category = CategoryMutation::update(
-        &state.database,
+    let target_category_exists =
+        entities::CategoryQuery::exists_by_id(&mut transaction, target_category_id).await?;
+
+    if !target_category_exists {
+        return Err(APIError::not_found());
+    };
+
+
+
+    let would_conflict_by_slovene_name = if let Some(new_slovene_name) =
+        request_body.new_slovene_name.as_ref()
+    {
+        entities::CategoryQuery::exists_by_slovene_name(&mut transaction, &new_slovene_name).await?
+    } else {
+        false
+    };
+
+    if would_conflict_by_slovene_name {
+        return Ok(json_error_response_with_reason!(
+            StatusCode::CONFLICT,
+            "Updated category would conflict with an existing category by its slovene name."
+        ));
+    }
+
+
+
+    let would_conflict_by_english_name = if let Some(new_english_name) =
+        request_body.new_english_name.as_ref()
+    {
+        entities::CategoryQuery::exists_by_english_name(&mut transaction, &new_english_name).await?
+    } else {
+        false
+    };
+
+    if would_conflict_by_english_name {
+        return Ok(json_error_response_with_reason!(
+            StatusCode::CONFLICT,
+            "Updated category would conflict with an existing category by its english name."
+        ));
+    }
+
+
+
+    let successfully_updated = entities::CategoryMutation::update(
+        &mut transaction,
         target_category_id,
-        UpdatedCategory {
-            english_name: request_body.english_name,
-            slovene_name: request_body.slovene_name,
+        CategoryValuesToUpdate {
+            parent_category_id: request_body
+                .new_parent_category_id
+                .map(|optional_id| optional_id.map(CategoryId::new)),
+            slovene_name: request_body.new_slovene_name,
+            english_name: request_body.new_english_name,
         },
     )
-    .await
-    .map_err(APIError::InternalError)?;
+    .await?;
+
+    if !successfully_updated {
+        return Err(APIError::internal_error_with_reason(
+            "database inconsistency: failed to update a category \
+            that existed in a previous call inside the same transaction",
+        ));
+    }
 
 
+    let target_category_after_update =
+        entities::CategoryQuery::get_by_id(&mut transaction, target_category_id).await?;
+
+    let Some(target_category_after_update) = target_category_after_update else {
+        return Err(APIError::internal_error_with_reason(
+            "database inconsistency: failed to fetch a category \
+            that was just updated in a previous call inside the same transaction",
+        ));
+    };
+
+
+    /* TODO pending rewrite of cache layer
     state
         .search
         .signal_category_created_or_updated(updated_category.id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(CategoryResponse {
-        category: Category::from_database_model(updated_category),
+        category: target_category_after_update.into_api_model(),
     }
     .into_response())
 }
@@ -447,38 +559,49 @@ pub async fn update_specific_category(
 #[delete("/{category_id}")]
 pub async fn delete_specific_category(
     state: ApplicationState,
-    parameters: web::Path<(i32,)>,
+    parameters: web::Path<(Uuid,)>,
     authentication: UserAuthenticationExtractor,
 ) -> EndpointResult {
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
     let authenticated_user = require_authentication!(authentication);
     require_permission!(
-        state,
+        &mut transaction,
         authenticated_user,
         Permission::CategoryDelete
     );
 
 
-    let target_category_id = parameters.into_inner().0;
+    let target_category_id = CategoryId::new(parameters.into_inner().0);
 
-    let target_category_exists = CategoryQuery::exists_by_id(&state.database, target_category_id)
-        .await
-        .map_err(APIError::InternalError)?;
+
+
+    let target_category_exists =
+        entities::CategoryQuery::exists_by_id(&mut transaction, target_category_id).await?;
 
     if !target_category_exists {
         return Err(APIError::not_found());
     }
 
 
-    CategoryMutation::delete(&state.database, target_category_id)
-        .await
-        .map_err(APIError::InternalError)?;
+    let successfully_deleted =
+        entities::CategoryMutation::delete(&mut transaction, target_category_id).await?;
+
+    if !successfully_deleted {
+        return Err(APIError::internal_error_with_reason(
+            "database inconsistency: failed to delete a category that \
+            previously existed in the same transaction",
+        ));
+    }
 
 
+    /* TODO pending rewrite of cache layer
     state
         .search
         .signal_category_removed(target_category_id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
 
     Ok(HttpResponse::Ok().finish())
@@ -486,6 +609,7 @@ pub async fn delete_specific_category(
 
 
 
+/* TODO needs to be restructured/rewritten
 
 /// Link category to a word
 ///
@@ -552,7 +676,7 @@ pub async fn link_word_to_category(
 
     let target_category_exists = CategoryQuery::exists_by_id(&state.database, target_category_id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
     if !target_category_exists {
         return Err(APIError::not_found_with_reason(
             "category does not exist.",
@@ -562,7 +686,7 @@ pub async fn link_word_to_category(
 
     let potential_base_target_word = WordQuery::get_by_uuid(&state.database, target_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
 
     let Some(base_target_word) = potential_base_target_word else {
         return Err(APIError::not_found_with_reason(
@@ -577,9 +701,9 @@ pub async fn link_word_to_category(
         target_category_id,
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
     if already_has_category {
-        return Ok(error_response_with_reason!(
+        return Ok(json_error_response_with_reason!(
             StatusCode::CONFLICT,
             "This category is already linked to the word."
         ));
@@ -592,24 +716,24 @@ pub async fn link_word_to_category(
         target_category_id,
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
 
 
     // Signals to the background search indexer that the word has changed.
     match base_target_word
         .language()
-        .map_err(APIError::InternalError)?
+        .map_err(APIError::InternalGenericError)?
     {
         WordLanguage::Slovene => state
             .search
             .signal_slovene_word_created_or_updated(base_target_word.id)
             .await
-            .map_err(APIError::InternalError)?,
+            .map_err(APIError::InternalGenericError)?,
         WordLanguage::English => state
             .search
             .signal_english_word_created_or_updated(base_target_word.id)
             .await
-            .map_err(APIError::InternalError)?,
+            .map_err(APIError::InternalGenericError)?,
     };
 
 
@@ -680,7 +804,7 @@ pub async fn unlink_word_from_category(
 
     let target_category_exists = CategoryQuery::exists_by_id(&state.database, target_category_id)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
     if !target_category_exists {
         return Err(APIError::not_found_with_reason(
             "category does not exist.",
@@ -690,7 +814,7 @@ pub async fn unlink_word_from_category(
 
     let target_word_exists = WordQuery::exists_by_uuid(&state.database, target_word_uuid)
         .await
-        .map_err(APIError::InternalError)?;
+        .map_err(APIError::InternalGenericError)?;
     if !target_word_exists {
         return Err(APIError::not_found_with_reason(
             "word does not exist.",
@@ -704,7 +828,7 @@ pub async fn unlink_word_from_category(
         target_category_id,
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
     if !category_link_exists {
         return Err(APIError::not_found_with_reason(
             "the word isn't linked to this category.",
@@ -718,7 +842,7 @@ pub async fn unlink_word_from_category(
         target_category_id,
     )
     .await
-    .map_err(APIError::InternalError)?;
+    .map_err(APIError::InternalGenericError)?;
 
 
 
@@ -726,27 +850,27 @@ pub async fn unlink_word_from_category(
 
     let base_target_word = WordQuery::get_by_uuid(&state.database, target_word_uuid)
         .await
-        .map_err(APIError::InternalError)?
+        .map_err(APIError::InternalGenericError)?
         .ok_or_else(|| {
-            APIError::internal_reason(
+            APIError::internal_error_with_reason(
                 "BUG: Word dissapeared between category removal and index update.",
             )
         })?;
 
     match base_target_word
         .language()
-        .map_err(APIError::InternalError)?
+        .map_err(APIError::InternalGenericError)?
     {
         WordLanguage::Slovene => state
             .search
             .signal_slovene_word_created_or_updated(base_target_word.id)
             .await
-            .map_err(APIError::InternalError)?,
+            .map_err(APIError::InternalGenericError)?,
         WordLanguage::English => state
             .search
             .signal_english_word_created_or_updated(base_target_word.id)
             .await
-            .map_err(APIError::InternalError)?,
+            .map_err(APIError::InternalGenericError)?,
     };
 
 
@@ -754,7 +878,7 @@ pub async fn unlink_word_from_category(
 }
 
 
-
+ */
 
 #[rustfmt::skip]
 pub fn categories_router() -> Scope {
@@ -764,6 +888,6 @@ pub fn categories_router() -> Scope {
         .service(get_specific_category)
         .service(update_specific_category)
         .service(delete_specific_category)
-        .service(link_word_to_category)
-        .service(unlink_word_from_category)
+        // .service(link_word_to_category)
+        // .service(unlink_word_from_category)
 }
