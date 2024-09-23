@@ -216,11 +216,11 @@ pub struct UserRolesResponse {
     })
 )]
 pub struct UserPermissionsResponse {
-    pub permissions: Vec<String>,
+    pub permissions: Vec<&'static str>,
 }
 
 impl UserPermissionsResponse {
-    pub fn from_permission_names(permission_names: Vec<String>) -> Self {
+    pub fn from_permission_names(permission_names: Vec<&'static str>) -> Self {
         Self {
             permissions: permission_names,
         }

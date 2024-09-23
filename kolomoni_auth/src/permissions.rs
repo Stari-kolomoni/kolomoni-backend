@@ -279,6 +279,13 @@ impl PermissionSet {
             .map(|permission| permission.name())
             .collect()
     }
+
+    pub fn permission_names_owned(&self) -> Vec<String> {
+        self.permissions
+            .iter()
+            .map(|permission| permission.name().to_string())
+            .collect()
+    }
 }
 
 

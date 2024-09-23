@@ -61,13 +61,13 @@ impl_json_response_builder!(UserRegistrationResponse);
 #[post("")]
 pub async fn register_user(
     state: ApplicationState,
-    json_data: web::Json<UserRegistrationRequest>,
+    request_data: web::Json<UserRegistrationRequest>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
 
-    let registration_request_data = json_data.into_inner();
+    let registration_request_data = request_data.into_inner();
 
 
     // Ensure the provided username is unique.
@@ -111,6 +111,9 @@ pub async fn register_user(
         },
     )
     .await?;
+
+
+    transaction.commit().await?;
 
 
     Ok(UserRegistrationResponse {

@@ -454,6 +454,9 @@ impl From<UserQueryError> for APIError {
             UserQueryError::HasherError { error } => Self::InternalGenericError {
                 error: Box::new(error),
             },
+            UserQueryError::DatabaseConsistencyError { reason } => {
+                Self::InternalErrorWithReason { reason }
+            }
         }
     }
 }

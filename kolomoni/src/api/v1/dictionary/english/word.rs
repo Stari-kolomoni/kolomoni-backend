@@ -32,8 +32,8 @@ use crate::{
     impl_json_response_builder,
     json_error_response_with_reason,
     obtain_database_connection,
-    require_authentication,
-    require_permission,
+    require_user_authentication,
+    require_permission_OLD,
     require_permission_with_optional_authentication,
     state::ApplicationState,
 };
@@ -323,8 +323,8 @@ pub async fn create_english_word(
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
 
-    let authenticated_user = require_authentication!(authentication);
-    require_permission!(
+    let authenticated_user = require_user_authentication!(authentication);
+    require_permission_OLD!(
         &mut database_connection,
         authenticated_user,
         Permission::WordCreate
@@ -600,8 +600,8 @@ pub async fn update_specific_english_word(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_authentication!(authentication);
-    require_permission!(
+    let authenticated_user = require_user_authentication!(authentication);
+    require_permission_OLD!(
         &mut transaction,
         authenticated_user,
         Permission::WordUpdate
@@ -720,8 +720,8 @@ pub async fn delete_english_word(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_authentication!(authentication);
-    require_permission!(
+    let authenticated_user = require_user_authentication!(authentication);
+    require_permission_OLD!(
         &mut transaction,
         authenticated_user,
         Permission::WordDelete

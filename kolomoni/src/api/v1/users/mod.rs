@@ -6,6 +6,7 @@ use kolomoni_core::api_models::{
     UserPermissionsResponse,
     UserRolesResponse,
 };
+use kolomoni_database::entities;
 use registration::register_user;
 
 use self::all::get_all_registered_users;
@@ -32,7 +33,7 @@ pub mod registration;
 pub mod specific;
 
 
-impl IntoApiModel for kolomoni_database::entities::UserModel {
+impl IntoApiModel for entities::UserModel {
     type ApiModel = UserInfo;
 
     fn into_api_model(self) -> Self::ApiModel {

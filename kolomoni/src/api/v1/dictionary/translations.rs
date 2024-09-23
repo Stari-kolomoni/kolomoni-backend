@@ -16,8 +16,8 @@ use crate::{
     authentication::UserAuthenticationExtractor,
     json_error_response_with_reason,
     obtain_database_connection,
-    require_authentication,
-    require_permission,
+    require_permission_OLD,
+    require_user_authentication,
     state::ApplicationState,
 };
 
@@ -78,8 +78,8 @@ pub async fn create_translation(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_authentication!(authentication);
-    require_permission!(
+    let authenticated_user = require_user_authentication!(authentication);
+    require_permission_OLD!(
         &mut transaction,
         authenticated_user,
         Permission::TranslationCreate
@@ -216,8 +216,8 @@ pub async fn delete_translation(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_authentication!(authentication);
-    require_permission!(
+    let authenticated_user = require_user_authentication!(authentication);
+    require_permission_OLD!(
         &mut transaction,
         authenticated_user,
         Permission::TranslationDelete

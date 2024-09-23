@@ -17,7 +17,7 @@ use crate::{
     authentication::UserAuthenticationExtractor,
     impl_json_response_builder,
     obtain_database_connection,
-    require_permission,
+    require_permission_OLD,
     require_permission_with_optional_authentication,
     state::ApplicationState,
 };
@@ -165,7 +165,7 @@ pub async fn create_english_word_meaning(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    require_permission!(
+    require_permission_OLD!(
         &mut transaction,
         authentication,
         Permission::WordUpdate
@@ -228,7 +228,7 @@ pub async fn update_english_word_meaning(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    require_permission!(
+    require_permission_OLD!(
         &mut transaction,
         authentication,
         Permission::WordUpdate
@@ -306,7 +306,7 @@ pub async fn delete_english_word_meaning(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    require_permission!(
+    require_permission_OLD!(
         &mut transaction,
         authentication,
         Permission::WordUpdate

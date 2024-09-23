@@ -9,8 +9,7 @@ use crate::{
     authentication::UserAuthenticationExtractor,
     impl_json_response_builder,
     obtain_database_connection,
-    require_authentication,
-    require_permission,
+    require_user_authentication_and_permission,
     state::ApplicationState,
 };
 
@@ -54,25 +53,19 @@ pub async fn get_all_registered_users(
     // To access this endpoint, the user:
     // - MUST provide their authentication token, and
     // - MUST have the `user.any:read` permission.
-    let authenticated_user = require_authentication!(authentication);
-    require_permission!(
+    require_user_authentication_and_permission!(
         &mut database_connection,
-        authenticated_user,
+        authentication,
         Permission::UserAnyRead
     );
 
 
-
-    // Load all users from the database and parse them info `UserInformation` instances.
+    // Load all users from the database and parse each into [`UserInfo`].
     let mut all_users_stream = entities::UserQuery::get_all_users(&mut database_connection);
 
-
     let mut parsed_users = Vec::new();
-
     while let Some(next_user_result) = all_users_stream.next().await {
-        let next_user_as_api_model = next_user_result?.into_api_model();
-
-        parsed_users.push(next_user_as_api_model);
+        parsed_users.push(next_user_result?.into_api_model());
     }
 
 

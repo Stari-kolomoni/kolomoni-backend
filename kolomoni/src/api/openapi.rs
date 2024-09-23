@@ -44,6 +44,7 @@ pub trait RequiredPermission {
 macro_rules! generate_standalone_requirement_struct {
     ($permission_variant:ident) => {
         ::paste::paste! {
+            // FIXME this first doc isn't emitted for some reason? not a problem, but it's a bit annoying
             #[doc = concat!(
                 "Corresponds to the [`Permission::",
                 stringify!($permission_variant),
@@ -176,7 +177,7 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
             )
             .build();
 
-        let missing_user_permission_decription = format!("Missing the `{}` permission.", P::name());
+        let missing_user_permission_description = format!("Missing the `{}` permission.", P::name());
 
         let mut missing_user_permission_example = serde_json::Map::with_capacity(1);
         missing_user_permission_example.insert(
@@ -185,7 +186,7 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
         );
 
         let missing_user_permission_response = ResponseBuilder::new()
-            .description(missing_user_permission_decription)
+            .description(missing_user_permission_description)
             .content(
                 mime::APPLICATION_JSON.to_string(),
                 ContentBuilder::new()

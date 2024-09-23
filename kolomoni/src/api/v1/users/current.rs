@@ -26,8 +26,9 @@ use crate::{
     authentication::UserAuthenticationExtractor,
     json_error_response_with_reason,
     obtain_database_connection,
-    require_authentication,
-    require_permission,
+    require_permission_in_set,
+    require_user_authentication,
+    require_user_authentication_and_permission,
     state::ApplicationState,
 };
 
@@ -86,13 +87,11 @@ pub async fn get_current_user_info(
     // To access this endpoint, the user:
     // - MUST provide an authentication token, and
     // - MUST have the `user.self:read` permission.
-    let authenticated_user = require_authentication!(authentication_extractor);
-    require_permission!(
+    let authenticated_user = require_user_authentication_and_permission!(
         &mut database_connection,
-        authenticated_user,
+        authentication_extractor,
         Permission::UserSelfRead
     );
-
 
     let authenticated_user_id = authenticated_user.user_id();
 
@@ -152,35 +151,34 @@ pub async fn get_current_user_info(
 #[get("/me/roles")]
 pub async fn get_current_user_roles(
     state: ApplicationState,
-    authentication: UserAuthenticationExtractor,
+    authentication_extractor: UserAuthenticationExtractor,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
 
 
-    let authenticated_user = require_authentication!(authentication);
-    require_permission!(
+    // To access this endpoint, the user:
+    // - MUST provide an authentication token, and
+    // - MUST have the `user.self:read` permission.
+    let authenticated_user = require_user_authentication_and_permission!(
         &mut database_connection,
-        authenticated_user,
+        authentication_extractor,
         Permission::UserSelfRead
     );
 
+    let authenticated_user_id = authenticated_user.user_id();
 
-    let user_exists = entities::UserQuery::exists_by_id(
-        &mut database_connection,
-        authenticated_user.user_id(),
-    )
-    .await?;
+
+    let user_exists =
+        entities::UserQuery::exists_by_id(&mut database_connection, authenticated_user_id).await?;
 
     if !user_exists {
         return Err(APIError::not_found());
     }
 
 
-    let user_roles = entities::UserRoleQuery::roles_for_user(
-        &mut database_connection,
-        authenticated_user.user_id(),
-    )
-    .await?;
+    let user_roles =
+        entities::UserRoleQuery::roles_for_user(&mut database_connection, authenticated_user_id)
+            .await?;
 
     let user_role_names = user_roles.role_names();
 
@@ -231,24 +229,21 @@ async fn get_current_user_effective_permissions(
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
 
-
-    // User must be authenticated and
-    // have the `user.self:read` permission to access this endpoint.
-    let authenticated_user = require_authentication!(authentication_extractor);
+    // To access this endpoint, the user:
+    // - MUST provide an authentication token, and
+    // - MUST have the `user.self:read` permission.
+    let authenticated_user = require_user_authentication!(authentication_extractor);
     let user_permissions = authenticated_user
         .fetch_transitive_permissions(&mut database_connection)
         .await?;
 
-    require_permission!(user_permissions, Permission::UserSelfRead);
+    require_permission_in_set!(user_permissions, Permission::UserSelfRead);
 
 
-    let permission_names = user_permissions
-        .permission_names()
-        .into_iter()
-        .map(|name_static_str| name_static_str.to_string())
-        .collect();
-
-    Ok(UserPermissionsResponse::from_permission_names(permission_names).into_response())
+    Ok(
+        UserPermissionsResponse::from_permission_names(user_permissions.permission_names())
+            .into_response(),
+    )
 }
 
 
@@ -305,33 +300,34 @@ async fn get_current_user_effective_permissions(
 async fn update_current_user_display_name(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    json_data: web::Json<UserDisplayNameChangeRequest>,
+    request_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
 
-    // User must be authenticated and have
-    // the `user.self:write` permission to access this endpoint.
-    let authenticated_user = require_authentication!(authentication_extractor);
-    require_permission!(
+    // To access this endpoint, the user:
+    // - MUST provide an authentication token, and
+    // - MUST have the `user.self:write` permission.
+    let authenticated_user = require_user_authentication_and_permission!(
         &mut transaction,
-        authenticated_user,
+        authentication_extractor,
         Permission::UserSelfWrite
     );
 
-
     let authenticated_user_id = authenticated_user.user_id();
-    let json_data = json_data.into_inner();
+    let request_data = request_data.into_inner();
 
 
 
     // Ensure the display name is unique.
-    let display_name_already_exists =
-        entities::UserQuery::exists_by_display_name(&mut *transaction, &json_data.new_display_name)
-            .await?;
+    let new_display_name_already_exists = entities::UserQuery::exists_by_display_name(
+        &mut transaction,
+        &request_data.new_display_name,
+    )
+    .await?;
 
-    if display_name_already_exists {
+    if new_display_name_already_exists {
         return Ok(json_error_response_with_reason!(
             StatusCode::CONFLICT,
             "User with given display name already exists."
@@ -341,9 +337,9 @@ async fn update_current_user_display_name(
 
     // Update user in the database.
     let updated_user = entities::UserMutation::change_display_name_by_user_id(
-        &mut *transaction,
+        &mut transaction,
         authenticated_user_id,
-        &json_data.new_display_name,
+        &request_data.new_display_name,
     )
     .await?;
 
@@ -353,7 +349,7 @@ async fn update_current_user_display_name(
 
     info!(
         user_id = %authenticated_user_id,
-        new_display_name = json_data.new_display_name,
+        new_display_name = request_data.new_display_name,
         "User has updated their display name."
     );
 

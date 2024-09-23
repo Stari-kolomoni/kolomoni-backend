@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 use crate::connect_and_set_up_database;
 
 
-// TODO needs to be reworked to be more general, then connect search into it, or maybe even setup this whole thing to be decoupled by using db triggers or something
+// TODO needs to be reworked to be more general (a cache layer), then connect search into it, or maybe even setup this whole thing to be decoupled by using db triggers or something
 /// A dictionary search engine.
 ///
 /// Handles searching, seeding and incrementally updating the internal index and cache.

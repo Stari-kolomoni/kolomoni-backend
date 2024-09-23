@@ -423,7 +423,7 @@ macro_rules! json_error_response_with_reason {
 /// }
 /// ```
 #[macro_export]
-macro_rules! require_authentication {
+macro_rules! require_user_authentication {
     ($user_auth_extractor:expr) => {
         $user_auth_extractor
             .authenticated_user()
@@ -556,7 +556,8 @@ macro_rules! require_permission_with_optional_authentication {
 /// ```
 ///
 #[macro_export]
-macro_rules! require_permission {
+#[deprecated]
+macro_rules! require_permission_OLD {
     ($permission_set:expr, $required_permission:expr) => {
         if !$permission_set.has_permission($required_permission) {
             return Err(
@@ -566,6 +567,88 @@ macro_rules! require_permission {
     };
 
     ($database_connection:expr, $authenticated_user:expr, $required_permission:expr) => {
+        if !$authenticated_user
+            .transitively_has_permission($database_connection, $required_permission)
+            .await?
+        {
+            return Err(
+                $crate::api::errors::APIError::missing_specific_permission($required_permission),
+            );
+        }
+    };
+}
+
+
+#[macro_export]
+macro_rules! require_permission_in_set {
+    ($permission_set:expr, $required_permission:expr) => {
+        if !$permission_set.has_permission($required_permission) {
+            return Err(
+                $crate::api::errors::APIError::missing_specific_permission($required_permission),
+            );
+        }
+    };
+}
+
+
+#[macro_export]
+macro_rules! require_permission_on_user {
+    ($database_connection:expr, $authenticated_user:expr, $required_permission:expr) => {{
+        if !$authenticated_user
+            .transitively_has_permission($database_connection, $required_permission)
+            .await?
+        {
+            return Err(
+                $crate::api::errors::APIError::missing_specific_permission($required_permission),
+            );
+        }
+
+        $authenticated_user
+    }};
+}
+
+#[macro_export]
+macro_rules! require_user_authentication_and_permission {
+    ($database_connection:expr, $authentication_extractor:expr, $required_permission:expr) => {{
+        let __authenticated_user = $crate::require_user_authentication!($authentication_extractor);
+
+        $crate::require_permission_on_user!(
+            $database_connection,
+            __authenticated_user,
+            $required_permission
+        )
+    }};
+}
+
+#[deprecated]
+#[macro_export]
+macro_rules! require_permissionOLD2 {
+    ($database_connection:expr, on authentication extractor $authentication_extractor:expr, $required_permission:expr) => {
+        if let Some(authenticated_user) = $authentication_extractor.authenticated_user() {
+            require_permission!(
+                $database_connection,
+                authenticated_user,
+                $required_permission
+            )
+        } else {
+            if !$authentication_extractor.is_permission_granted_to_all($required_permission) {
+                return Err(
+                    $crate::api::errors::APIError::missing_specific_permission($required_permission),
+                );
+            }
+        }
+
+        if !$authentication_extractor
+            .transitively_has_permission($database_connection, $required_permission)
+            .await?
+        {
+            return Err(
+                $crate::api::errors::APIError::missing_specific_permission($required_permission),
+            );
+        }
+    };
+
+    ($database_connection:expr, on user $authenticated_user:expr, $required_permission:expr) => {
         if !$authenticated_user
             .transitively_has_permission($database_connection, $required_permission)
             .await?
