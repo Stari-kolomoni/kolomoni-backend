@@ -27,7 +27,7 @@ pub mod translations;
 
 pub fn parse_string_into_uuid(potential_uuid: &str) -> Result<Uuid, APIError> {
     let target_word_uuid =
-        Uuid::from_str(potential_uuid).map_err(|_| APIError::client_error("invalid UUID"))?;
+        Uuid::from_str(potential_uuid).map_err(|_| APIError::client_error("invalid UUID format"))?;
 
     Ok(target_word_uuid)
 }

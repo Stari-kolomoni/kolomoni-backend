@@ -1,4 +1,4 @@
-use actix_web::{post, web, HttpResponse, Scope};
+use actix_web::{post, web, HttpResponse};
 use chrono::{Duration, Utc};
 use kolomoni_auth::{JWTClaims, JWTTokenType, JWTValidationError};
 use kolomoni_core::api_models::{
@@ -13,13 +13,8 @@ use tracing::{debug, warn};
 use crate::api::errors::{EndpointResult, ErrorReasonResponse};
 use crate::api::macros::ContextlessResponder;
 use crate::api::openapi;
+use crate::obtain_database_connection;
 use crate::state::ApplicationState;
-use crate::{impl_json_response_builder, obtain_database_connection};
-
-
-
-impl_json_response_builder!(UserLoginResponse);
-impl_json_response_builder!(UserLoginRefreshResponse);
 
 
 
@@ -29,9 +24,10 @@ impl_json_response_builder!(UserLoginRefreshResponse);
 /// gives the user an access token they can use in future requests to authenticate themselves.
 ///
 /// In addition to the access token, a refresh token is provided to the user so they can request
-/// a new access token. The refresh token is valid for longer than the access token,
-/// but only the access token can be used in the *Authorization* header. For login refreshing,
-/// see the `POST /api/v1/login/refresh` endpoint.
+/// a new access token when it expires. The refresh token is valid for longer than the access token,
+/// but only the access token can be used in the *Authorization* header.
+///
+/// For login refreshing, see the `POST /api/v1/login/refresh` endpoint.
 #[utoipa::path(
     post,
     path = "/login",
@@ -51,8 +47,8 @@ impl_json_response_builder!(UserLoginRefreshResponse);
             body = ErrorReasonResponse,
             example = json!({ "reason": "Invalid login credentials." })
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::InternalServerError,
     )
 )]
 #[post("")]
@@ -160,8 +156,8 @@ pub async fn login(
                 ))
             )
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::InternalServerError,
     )
 )]
 #[post("/refresh")]
@@ -225,13 +221,4 @@ pub async fn refresh_login(
 
 
     Ok(UserLoginRefreshResponse { access_token }.into_response())
-}
-
-
-
-#[rustfmt::skip]
-pub fn login_router() -> Scope {
-    web::scope("/login")
-        .service(login)
-        .service(refresh_login)
 }

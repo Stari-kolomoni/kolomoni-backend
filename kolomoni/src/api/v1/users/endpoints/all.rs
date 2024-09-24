@@ -7,14 +7,10 @@ use kolomoni_database::entities;
 use crate::{
     api::{errors::EndpointResult, macros::ContextlessResponder, openapi, traits::IntoApiModel},
     authentication::UserAuthenticationExtractor,
-    impl_json_response_builder,
     obtain_database_connection,
     require_user_authentication_and_permission,
     state::ApplicationState,
 };
-
-
-impl_json_response_builder!(RegisteredUsersListResponse);
 
 
 
@@ -35,8 +31,8 @@ impl_json_response_builder!(RegisteredUsersListResponse);
             description = "List of registered users.",
             body = RegisteredUsersListResponse
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])

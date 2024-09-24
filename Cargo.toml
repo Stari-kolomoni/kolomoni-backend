@@ -60,7 +60,7 @@ paste = "^1.0.15"
 # The patched version contains some additional merging functionality that helps us make better documentation.
 # utoipa = { version = "4.2.0", features = ["actix_extras", "chrono", "preserve_order"] }
 # utoipa-rapidoc = { version = "3.0.0", features = ["actix-web"] }
-utoipa = { git = "https://github.com/simongoricar/utoipa.git", rev = "fce3e3a1f1c6dede38eab8965ddf074a47196752", features = ["actix_extras", "chrono", "preserve_order"] }
+utoipa = { git = "https://github.com/simongoricar/utoipa.git", rev = "fce3e3a1f1c6dede38eab8965ddf074a47196752", features = ["actix_extras", "chrono", "uuid", "preserve_order"] }
 utoipa-rapidoc = { git = "https://github.com/simongoricar/utoipa.git", rev = "fce3e3a1f1c6dede38eab8965ddf074a47196752", features = ["actix-web"] }
 
 itertools = "^0.13.0"

@@ -47,9 +47,11 @@ pub enum Permission {
     #[serde(rename = "word:delete")]
     WordDelete,
 
+    // TODO Remove.
     #[serde(rename = "word.suggestion:create")]
     SuggestionCreate,
 
+    // TODO Remove.
     #[serde(rename = "word.suggestion:delete")]
     SuggestionDelete,
 

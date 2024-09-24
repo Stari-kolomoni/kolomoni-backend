@@ -1,6 +1,3 @@
-//! Defines commonly used OpenAPI parameters and responses
-//! to be used in conjunction with the [`utiopa::path`][utoipa::path] proc macro on actix handlers.
-
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use serde_json::json;
@@ -16,7 +13,7 @@ use utoipa::{
     ToSchema,
 };
 
-use super::errors::ErrorReasonResponse;
+use crate::api::errors::ErrorReasonResponse;
 
 
 /// A "required permission" trait.
@@ -61,8 +58,8 @@ macro_rules! generate_standalone_requirement_struct {
                 "See documentation on [`FailedAuthenticationResponses`][crate::api::openapi::FailedAuthenticationResponses] \
                 for more information on usage."
             ]
-            pub struct [< Requires $permission_variant >];
-            impl RequiredPermission for [< Requires $permission_variant >] {
+            pub struct $permission_variant;
+            impl RequiredPermission for $permission_variant {
                 fn name() -> &'static str {
                     kolomoni_auth::Permission::$permission_variant.name()
                 }
@@ -74,21 +71,27 @@ macro_rules! generate_standalone_requirement_struct {
 // The macro calls below generate empty structs for all available permissions,
 // making them usable as a parameter for the [`FailedAuthenticationResponses`] generic.
 
-generate_standalone_requirement_struct!(UserSelfRead);
-generate_standalone_requirement_struct!(UserSelfWrite);
-generate_standalone_requirement_struct!(UserAnyRead);
-generate_standalone_requirement_struct!(UserAnyWrite);
-generate_standalone_requirement_struct!(WordCreate);
-generate_standalone_requirement_struct!(WordRead);
-generate_standalone_requirement_struct!(WordUpdate);
-generate_standalone_requirement_struct!(WordDelete);
-generate_standalone_requirement_struct!(SuggestionCreate);
-generate_standalone_requirement_struct!(SuggestionDelete);
-generate_standalone_requirement_struct!(TranslationCreate);
-generate_standalone_requirement_struct!(TranslationDelete);
-generate_standalone_requirement_struct!(CategoryCreate);
-generate_standalone_requirement_struct!(CategoryUpdate);
-generate_standalone_requirement_struct!(CategoryDelete);
+
+pub mod requires {
+    use super::RequiredPermission;
+
+    generate_standalone_requirement_struct!(UserSelfRead);
+    generate_standalone_requirement_struct!(UserSelfWrite);
+    generate_standalone_requirement_struct!(UserAnyRead);
+    generate_standalone_requirement_struct!(UserAnyWrite);
+    generate_standalone_requirement_struct!(WordCreate);
+    generate_standalone_requirement_struct!(WordRead);
+    generate_standalone_requirement_struct!(WordUpdate);
+    generate_standalone_requirement_struct!(WordDelete);
+    generate_standalone_requirement_struct!(SuggestionCreate);
+    generate_standalone_requirement_struct!(SuggestionDelete);
+    generate_standalone_requirement_struct!(TranslationCreate);
+    generate_standalone_requirement_struct!(TranslationDelete);
+    generate_standalone_requirement_struct!(CategoryCreate);
+    generate_standalone_requirement_struct!(CategoryRead);
+    generate_standalone_requirement_struct!(CategoryUpdate);
+    generate_standalone_requirement_struct!(CategoryDelete);
+}
 
 
 
@@ -165,11 +168,11 @@ generate_standalone_requirement_struct!(CategoryDelete);
 ///
 /// [FailedAuthenticationResponses]: crate::api::openapi::FailedAuthenticationResponses
 /// [RequiresUserSelfRead]: crate::api::openapi::RequiresUserSelfRead
-pub struct FailedAuthenticationResponses<P: RequiredPermission> {
+pub struct FailedAuthentication<P: RequiredPermission> {
     _marker: PhantomData<P>,
 }
 
-impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationResponses<P> {
+impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthentication<P> {
     fn responses() -> BTreeMap<String, RefOr<Response>> {
         let missing_user_auth_response = ResponseBuilder::new()
             .description(
@@ -304,9 +307,9 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthenticationRespon
 /// }
 /// ```
 ///
-pub struct UnmodifiedConditionalResponse;
+pub struct UnmodifiedConditional;
 
-impl utoipa::IntoResponses for UnmodifiedConditionalResponse {
+impl utoipa::IntoResponses for UnmodifiedConditional {
     fn responses() -> BTreeMap<String, utoipa::openapi::RefOr<utoipa::openapi::response::Response>> {
         let unmodified_data_response = ResponseBuilder::new()
             .description(
@@ -376,9 +379,9 @@ impl utoipa::IntoResponses for UnmodifiedConditionalResponse {
 ///     # todo!();
 /// }
 /// ```
-pub struct InternalServerErrorResponse;
+pub struct InternalServerError;
 
-impl utoipa::IntoResponses for InternalServerErrorResponse {
+impl utoipa::IntoResponses for InternalServerError {
     fn responses() -> BTreeMap<String, utoipa::openapi::RefOr<utoipa::openapi::response::Response>> {
         let internal_error_response = ResponseBuilder::new()
             .description("Internal server error.")
@@ -439,9 +442,9 @@ impl utoipa::IntoResponses for InternalServerErrorResponse {
 ///     Ok(HttpResponse::Ok().finish())
 /// }
 /// ```
-pub struct MissingOrInvalidJsonRequestBodyResponse;
+pub struct MissingOrInvalidJsonRequestBody;
 
-impl utoipa::IntoResponses for MissingOrInvalidJsonRequestBodyResponse {
+impl utoipa::IntoResponses for MissingOrInvalidJsonRequestBody {
     fn responses() -> BTreeMap<String, utoipa::openapi::RefOr<utoipa::openapi::response::Response>> {
         let bad_request_response = ResponseBuilder::new()
             .description(
@@ -497,98 +500,5 @@ impl utoipa::IntoResponses for MissingOrInvalidJsonRequestBodyResponse {
             .response("400", bad_request_response)
             .build()
             .into()
-    }
-}
-
-
-
-
-/// A `utoipa` endpoint parameter for when an endpoint supports specifying
-/// the [`If-Modified-Since` header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Modified-Since).
-///
-/// For a real-life example, see the [`get_current_user_info`][crate::api::v1::users::current::get_current_user_info]
-/// endpoint function.
-///
-/// # Example
-/// This example uses the `If-Modified-Since` extractor, see
-/// [`OptionalIfModifiedSince`][crate::api::OptionalIfModifiedSince]
-/// for more info.
-///
-/// ```no_run
-/// use miette::IntoDiagnostic;
-/// use actix_web::{get, http::{StatusCode, header}};
-/// use actix_web::HttpResponse;
-/// use kolomoni::state::ApplicationState;
-/// use kolomoni::api::OptionalIfModifiedSince;
-/// use kolomoni::api::openapi;
-/// use kolomoni::api::errors::{APIError, EndpointResult};
-/// use kolomoni::api::macros::construct_last_modified_header_value;
-///
-/// #[utoipa::path(
-///     get,
-///     path = "/hello-world",
-///     params(
-///         openapi::IfModifiedSinceParameter,
-///     ),
-///     responses(
-///         openapi::InternalServerErrorResponse,
-///     )
-/// )]
-/// #[get("/hello-world")]
-/// pub async fn some_endpoint_function(
-///     state: ApplicationState,
-///     if_modified_since: OptionalIfModifiedSince,
-/// ) -> EndpointResult {
-///     # let last_modification_time = chrono::Utc::now();
-///     // ...
-///
-///     if if_modified_since.has_not_changed_since(&last_modification_time) {
-///         let mut unchanged_response = HttpResponse::new(StatusCode::NOT_MODIFIED);
-///
-///         unchanged_response
-///             .headers_mut()
-///             .append(
-///                 header::LAST_MODIFIED,
-///                 construct_last_modified_header_value(&last_modification_time)
-///                     .into_diagnostic()
-///                     .map_err(APIError::InternalError)?,
-///             );
-///         
-///         return Ok(unchanged_response);
-///     }
-///
-///     // ... and so on
-///     # todo!();
-/// }
-/// ```
-pub struct IfModifiedSinceParameter;
-
-impl utoipa::IntoParams for IfModifiedSinceParameter {
-    fn into_params(
-        _parameter_in_provider: impl Fn() -> Option<utoipa::openapi::path::ParameterIn>,
-    ) -> Vec<utoipa::openapi::path::Parameter> {
-        let description
-            = "If specified, this header makes the server return `304 Not Modified` without \
-              content (instead of `200 OK` with the usual response) if the requested data \
-              hasn't changed since the specified timestamp.\n\n See \
-              [this article on MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Modified-Since) \
-              for more information about this conditional header.";
-
-        let example = "Wed, 21 Oct 2015 07:28:00 GMT";
-
-        vec![utoipa::openapi::path::ParameterBuilder::new()
-            .name("If-Modified-Since")
-            .parameter_in(utoipa::openapi::path::ParameterIn::Header)
-            .description(Some(description))
-            .required(utoipa::openapi::Required::True)
-            .example(Some(serde_json::Value::String(
-                example.to_string(),
-            )))
-            .schema(Some(
-                utoipa::openapi::ObjectBuilder::new()
-                    .schema_type(utoipa::openapi::SchemaType::String)
-                    .read_only(Some(true)),
-            ))
-            .build()]
     }
 }

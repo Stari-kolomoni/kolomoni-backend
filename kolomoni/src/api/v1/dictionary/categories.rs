@@ -104,9 +104,9 @@ impl IntoApiModel for entities::CategoryModel {
             status = 409,
             description = "This english-slovene word combination already exists as a category."
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresCategoryCreate>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBodyResponse,
+        openapi::response::FailedAuthenticationResponses<openapi::response::RequiresCategoryCreate>,
+        openapi::response::InternalServerErrorResponse,
     ),
     security(
         ("access_token" = [])

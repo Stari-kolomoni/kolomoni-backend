@@ -24,12 +24,14 @@ pub struct UserLoginRequest {
 }
 
 
+
+
 /// Information with which to refresh a user's login, generating a new access token.
 #[derive(Deserialize, ToSchema)]
 #[schema(
     example = json!({
         "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN\
-                          1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTIyLCJ1c2V\
+                          1YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTI2LCJ1c2V\
                           ybmFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCJ9.Ze6DI5EZ-swXRQrMW3NIpp\
                           YejclGbyI9D6zmYBWJMLk"
     })
@@ -42,12 +44,14 @@ pub struct UserLoginRefreshRequest {
 }
 
 
+
+
 /// Response on successful login refresh.
 #[derive(Serialize, Debug, ToSchema)]
 #[schema(
     example = json!({
         "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1\
-                         YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzIyLCJ1c2Vyb\
+                         YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzI2LCJ1c2Vyb\
                          mFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.ZnuhEVacQD_pYzkW9h6aX3eoRN\
                          OAs2-y3EngGBglxkk"
     })
@@ -56,6 +60,7 @@ pub struct UserLoginRefreshResponse {
     /// Newly-generated access token to use in future requests.
     pub access_token: String,
 }
+
 
 
 
@@ -72,11 +77,11 @@ pub struct UserLoginRefreshResponse {
 #[schema(
     example = json!({
         "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1Y\
-                         iI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzIyLCJ1c2VybmF\
+                         iI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4MDU3NzI2LCJ1c2VybmF\
                          tZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoiYWNjZXNzIn0.ZnuhEVacQD_pYzkW9h6aX3eoRNOAs\
                          2-y3EngGBglxkk",
         "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1\
-                          YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTIyLCJ1c2Vyb\
+                          YiI6IkFQSSB0b2tlbiIsImlhdCI6MTY4Nzk3MTMyMiwiZXhwIjoxNjg4NTc2MTI2LCJ1c2Vyb\
                           mFtZSI6InRlc3QiLCJ0b2tlbl90eXBlIjoicmVmcmVzaCJ9.Ze6DI5EZ-swXRQrMW3NIppYej\
                           clGbyI9D6zmYBWJMLk"
     })
@@ -89,6 +94,9 @@ pub struct UserLoginResponse {
     /// JWT refresh token.
     pub refresh_token: String,
 }
+
+
+
 
 /// Information about a single user.
 ///
@@ -127,6 +135,7 @@ pub struct UserInfo {
 
 
 
+
 /// Information about one user in particular.
 ///
 /// This struct is used as a response in the public API.
@@ -146,15 +155,7 @@ pub struct UserInfoResponse {
     pub user: UserInfo,
 }
 
-/*
-impl UserInfoResponse {
-    pub fn new(model: entities::user::Model) -> Self {
-        Self {
-            user: UserInformation::from_user_model(model),
-        }
-    }
-}
-*/
+
 
 
 /// User (API caller) request to change a user's display name.
@@ -171,6 +172,7 @@ pub struct UserDisplayNameChangeRequest {
     /// Display name to change to.
     pub new_display_name: String,
 }
+
 
 
 
@@ -195,12 +197,13 @@ pub struct UserDisplayNameChangeResponse {
         ]
     })
 )]
-
-
-
 pub struct UserRolesResponse {
     pub role_names: Vec<String>,
 }
+
+
+
+
 /// Response containing a list of active permissions.
 ///
 /// This struct is used as a response in the public API.
@@ -219,13 +222,6 @@ pub struct UserPermissionsResponse {
     pub permissions: Vec<&'static str>,
 }
 
-impl UserPermissionsResponse {
-    pub fn from_permission_names(permission_names: Vec<&'static str>) -> Self {
-        Self {
-            permissions: permission_names,
-        }
-    }
-}
 
 
 
@@ -250,6 +246,7 @@ pub struct RegisteredUsersListResponse {
 
 
 
+
 /// User registration request provided by an API caller.
 #[derive(Deserialize, Clone, Debug, ToSchema)]
 #[schema(example = json!({
@@ -270,6 +267,8 @@ pub struct UserRegistrationRequest {
 }
 
 
+
+
 /// API-serializable response upon successful user registration.
 /// Contains the newly-created user's information.
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
@@ -288,4 +287,29 @@ pub struct UserRegistrationRequest {
 )]
 pub struct UserRegistrationResponse {
     pub user: UserInfo,
+}
+
+
+
+#[derive(Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+#[cfg_attr(feature = "more_serde_impls", derive(serde::Serialize))]
+#[schema(
+    example = json!({
+        "roles_to_add": ["administrator"]
+    })
+)]
+pub struct UserRoleAddRequest {
+    pub roles_to_add: Vec<String>,
+}
+
+
+#[derive(Deserialize, PartialEq, Eq, Debug, ToSchema)]
+#[cfg_attr(feature = "more_serde_impls", derive(serde::Serialize))]
+#[schema(
+    example = json!({
+        "roles_to_remove": ["administrator"]
+    })
+)]
+pub struct UserRoleRemoveRequest {
+    pub roles_to_remove: Vec<String>,
 }

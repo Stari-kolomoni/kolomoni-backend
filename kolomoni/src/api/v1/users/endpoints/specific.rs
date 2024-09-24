@@ -3,7 +3,15 @@ use std::collections::HashSet;
 use actix_web::{delete, get, http::StatusCode, patch, post, web, HttpResponse};
 use kolomoni_auth::{Permission, Role, RoleSet};
 use kolomoni_core::{
-    api_models::{UserDisplayNameChangeRequest, UserDisplayNameChangeResponse},
+    api_models::{
+        UserDisplayNameChangeRequest,
+        UserDisplayNameChangeResponse,
+        UserInfoResponse,
+        UserPermissionsResponse,
+        UserRoleAddRequest,
+        UserRoleRemoveRequest,
+        UserRolesResponse,
+    },
     id::UserId,
 };
 use kolomoni_database::entities;
@@ -18,7 +26,7 @@ use crate::{
         macros::ContextlessResponder,
         openapi,
         traits::IntoApiModel,
-        v1::users::{UserInfoResponse, UserPermissionsResponse, UserRolesResponse},
+        v1::dictionary::parse_string_into_uuid,
     },
     authentication::UserAuthenticationExtractor,
     json_error_response_with_reason,
@@ -47,9 +55,10 @@ use crate::{
     tag = "users",
     params(
         (
-            "user_id" = Uuid,
+            "user_id" = String,
             Path,
-            description = "ID (UUIDv7) of the user to get information about."
+            format = Uuid,
+            description = "UUID of the user to get information about."
         )
     ),
     responses(
@@ -72,15 +81,15 @@ use crate::{
             status = 404,
             description = "Requested user does not exist."
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::InternalServerError,
     )
 )]
 #[get("/{user_id}")]
 async fn get_specific_user_info(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(Uuid,)>,
+    path_info: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
 
@@ -98,7 +107,9 @@ async fn get_specific_user_info(
 
 
     // Return information about the requested user.
-    let requested_user_id = UserId::new(path_info.into_inner().0);
+    let requested_user_id = UserId::new(parse_string_into_uuid(
+        path_info.into_inner().0.as_str(),
+    )?);
 
 
     let user_info_if_they_exist =
@@ -129,23 +140,24 @@ async fn get_specific_user_info(
     tag = "users",
     params(
         (
-            "user_id" = Uuid,
+            "user_id" = String,
             Path,
-            description = "ID (UUIDv7) of the user to query roles for."
+            format = Uuid,
+            description = "UUID of the user to query roles for."
         )
     ),
     responses(
         (
             status = 200,
-            description = "User role list.",
+            description = "User's role list.",
             body = UserRolesResponse
         ),
         (
             status = 404,
-            description = "No user with provided ID."
+            description = "No such user."
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::InternalServerError,
     )
 )]
 #[get("/{user_id}/roles")]
@@ -209,9 +221,10 @@ pub async fn get_specific_user_roles(
     tag = "users",
     params(
         (
-            "user_id" = Uuid,
+            "user_id" = String,
             Path,
-            description = "ID (UUIDv7) of the user to get effective permissions for."
+            format = Uuid,
+            description = "UUID of the user to get effective permissions for."
         )
     ),
     responses(
@@ -224,8 +237,8 @@ pub async fn get_specific_user_roles(
             status = 404,
             description = "Requested user does not exist."
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -235,7 +248,7 @@ pub async fn get_specific_user_roles(
 async fn get_specific_user_effective_permissions(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(Uuid,)>,
+    path_info: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
 
@@ -251,7 +264,9 @@ async fn get_specific_user_effective_permissions(
 
 
     // Get requested user's permissions.
-    let requested_user_id = UserId::new(path_info.into_inner().0);
+    let requested_user_id = UserId::new(parse_string_into_uuid(
+        path_info.into_inner().0.as_str(),
+    )?);
 
 
     let requested_user_exists =
@@ -294,9 +309,10 @@ async fn get_specific_user_effective_permissions(
     tag = "users",
     params(
         (
-            "user_id" = Uuid,
+            "user_id" = String,
             Path,
-            description = "User ID (UUIDv7)."
+            format = Uuid,
+            description = "UUID of the user to change the display name for."
         )
     ),
     request_body(
@@ -330,9 +346,9 @@ async fn get_specific_user_effective_permissions(
             body = ErrorReasonResponse,
             example = json!({ "reason": "User with given display name already exists." })
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyWrite>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -342,7 +358,7 @@ async fn get_specific_user_effective_permissions(
 async fn update_specific_user_display_name(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(Uuid,)>,
+    path_info: web::Path<(String,)>,
     request_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
@@ -362,7 +378,9 @@ async fn update_specific_user_display_name(
 
     let authenticated_user_id = authenticated_user.user_id();
 
-    let requested_user_id = UserId::new(path_info.into_inner().0);
+    let requested_user_id = UserId::new(parse_string_into_uuid(
+        path_info.into_inner().0.as_str(),
+    )?);
     let request_data = request_data.into_inner();
 
 
@@ -426,19 +444,6 @@ async fn update_specific_user_display_name(
 
 
 
-
-#[derive(Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(serde::Serialize))]
-#[schema(
-    example = json!({
-        "roles_to_add": ["administrator"]
-    })
-)]
-pub struct UserRoleAddRequest {
-    pub roles_to_add: Vec<String>,
-}
-
-
 /// Add roles to a user
 ///
 /// This endpoint allows a user with enough permissions to add roles to another user.
@@ -456,9 +461,10 @@ pub struct UserRoleAddRequest {
     tag = "users",
     params(
         (
-            "user_id" = Uuid,
+            "user_id" = String,
             Path,
-            description = "ID (UUIDv7) of the user to add roles to."
+            format = Uuid,
+            description = "UUID of the user to add roles to."
         )
     ),
     request_body(
@@ -497,9 +503,9 @@ pub struct UserRoleAddRequest {
             body = ErrorReasonResponse,
             example = json!({ "reason": "The specified user does not exist." })
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyWrite>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -509,7 +515,7 @@ pub struct UserRoleAddRequest {
 pub async fn add_roles_to_specific_user(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(Uuid,)>,
+    path_info: web::Path<(String,)>,
     json_data: web::Json<UserRoleAddRequest>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
@@ -533,7 +539,9 @@ pub async fn add_roles_to_specific_user(
 
     let authenticated_user_id = authenticated_user.user_id();
 
-    let requested_user_id = UserId::new(path_info.into_inner().0);
+    let requested_user_id = UserId::new(parse_string_into_uuid(
+        path_info.into_inner().0.as_str(),
+    )?);
     let request_data = json_data.into_inner();
 
 
@@ -618,18 +626,6 @@ pub async fn add_roles_to_specific_user(
 
 
 
-#[derive(Deserialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(serde::Serialize))]
-#[schema(
-    example = json!({
-        "roles_to_remove": ["administrator"]
-    })
-)]
-pub struct UserRoleRemoveRequest {
-    pub roles_to_remove: Vec<String>,
-}
-
-
 /// Removes roles from a user
 ///
 /// This endpoint allows a user with enough permission to remove roles from another user.
@@ -649,7 +645,8 @@ pub struct UserRoleRemoveRequest {
         (
             "user_id" = Uuid,
             Path,
-            description = "ID (UUIDv7) of the user to remove roles from."
+            format = Uuid,
+            description = "UUID of the user to remove roles from."
         )
     ),
     request_body(
@@ -688,9 +685,9 @@ pub struct UserRoleRemoveRequest {
             body = ErrorReasonResponse,
             example = json!({ "reason": "The specified user does not exist." })
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyWrite>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyWrite>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -700,7 +697,7 @@ pub struct UserRoleRemoveRequest {
 pub async fn remove_roles_from_specific_user(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(Uuid,)>,
+    path_info: web::Path<(String,)>,
     request_data: web::Json<UserRoleRemoveRequest>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
@@ -724,7 +721,9 @@ pub async fn remove_roles_from_specific_user(
 
     let authenticated_user_id = authenticated_user.user_id();
 
-    let requested_user_id = UserId::new(path_info.into_inner().0);
+    let requested_user_id = UserId::new(parse_string_into_uuid(
+        path_info.into_inner().0.as_str(),
+    )?);
     let request_data = request_data.into_inner();
 
 

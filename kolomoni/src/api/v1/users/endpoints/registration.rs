@@ -5,15 +5,11 @@ use sqlx::Acquire;
 
 use crate::{
     api::{errors::EndpointResult, macros::ContextlessResponder, openapi, traits::IntoApiModel},
-    impl_json_response_builder,
     json_error_response_with_reason,
     obtain_database_connection,
     state::ApplicationState,
 };
 
-
-
-impl_json_response_builder!(UserRegistrationResponse);
 
 
 
@@ -54,8 +50,8 @@ impl_json_response_builder!(UserRegistrationResponse);
                 )),
             )
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::InternalServerError,
     )
 )]
 #[post("")]
@@ -72,7 +68,7 @@ pub async fn register_user(
 
     // Ensure the provided username is unique.
     let username_already_exists = entities::UserQuery::exists_by_username(
-        &mut *transaction,
+        &mut transaction,
         &registration_request_data.username,
     )
     .await?;
@@ -87,7 +83,7 @@ pub async fn register_user(
 
     // Ensure the provided display name is unique.
     let display_name_already_exists = entities::UserQuery::exists_by_display_name(
-        &mut *transaction,
+        &mut transaction,
         &registration_request_data.display_name,
     )
     .await?;
@@ -102,7 +98,7 @@ pub async fn register_user(
 
     // Create new user.
     let newly_created_user = entities::UserMutation::create_user(
-        &mut *transaction,
+        &mut transaction,
         &state.hasher,
         UserRegistrationInfo {
             username: registration_request_data.username,

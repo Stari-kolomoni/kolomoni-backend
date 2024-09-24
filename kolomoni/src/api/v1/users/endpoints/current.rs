@@ -1,6 +1,12 @@
 use actix_web::{get, http::StatusCode, patch, web};
 use kolomoni_auth::Permission;
-use kolomoni_core::api_models::UserDisplayNameChangeRequest;
+use kolomoni_core::api_models::{
+    UserDisplayNameChangeRequest,
+    UserDisplayNameChangeResponse,
+    UserInfoResponse,
+    UserPermissionsResponse,
+    UserRolesResponse,
+};
 use kolomoni_database::entities;
 use sqlx::Acquire;
 use tracing::info;
@@ -15,12 +21,6 @@ use crate::{
         },
         openapi,
         traits::IntoApiModel,
-        v1::users::{
-            UserDisplayNameChangeResponse,
-            UserInfoResponse,
-            UserPermissionsResponse,
-            UserRolesResponse,
-        },
         OptionalIfModifiedSince,
     },
     authentication::UserAuthenticationExtractor,
@@ -32,7 +32,7 @@ use crate::{
     state::ApplicationState,
 };
 
-// TODO introduce transactions here and elsewhere (even in read-only operations, for consistency)
+// TODO introduce transactions here and elsewhere (even in read-only operations?, for consistency)
 
 
 /// Get your user information
@@ -47,7 +47,7 @@ use crate::{
     path = "/users/me",
     tag = "users:self",
     params(
-        openapi::IfModifiedSinceParameter
+        openapi::param::IfModifiedSince
     ),
     responses(
         (
@@ -59,17 +59,17 @@ use crate::{
             headers(
                 (
                     "Last-Modified" = String,
-                    description = "Last user modification time. Use this value for caching."
+                    description = "Last user modification time. You may use this value for caching purposes."
                 )
             )
         ),
         (
             status = 404,
-            description = "The user no longer exists."
+            description = "Your user account does not exist."
         ),
-        openapi::InternalServerErrorResponse,
-        openapi::UnmodifiedConditionalResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserSelfRead>,
+        openapi::response::InternalServerError,
+        openapi::response::UnmodifiedConditional,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserSelfRead>,
     ),
     security(
         ("access_token" = [])
@@ -134,15 +134,15 @@ pub async fn get_current_user_info(
     responses(
         (
             status = 200,
-            description = "The authenticated user's role list.",
+            description = "List of roles for the authenticated user.",
             body = UserRolesResponse
         ),
         (
             status = 404,
-            description = "You do not exist."
+            description = "Your user account does not exist."
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserAnyRead>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -215,8 +215,8 @@ pub async fn get_current_user_roles(
                 ]
             })
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserSelfRead>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserSelfRead>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -240,10 +240,10 @@ async fn get_current_user_effective_permissions(
     require_permission_in_set!(user_permissions, Permission::UserSelfRead);
 
 
-    Ok(
-        UserPermissionsResponse::from_permission_names(user_permissions.permission_names())
-            .into_response(),
-    )
+    Ok(UserPermissionsResponse {
+        permissions: user_permissions.permission_names(),
+    }
+    .into_response())
 }
 
 
@@ -273,12 +273,12 @@ async fn get_current_user_effective_permissions(
             body = UserDisplayNameChangeResponse,
             example = json!({
                 "user": {
-                "id": 1,
-                "username": "janeznovak",
-                "display_name": "Janez Novak Veliki",
-                "joined_at": "2023-06-27T20:33:53.078789Z",
-                "last_modified_at": "2023-06-27T20:44:27.217273Z",
-                "last_active_at": "2023-06-27T20:34:27.253746Z"
+                    "id": "01922622-dbe9-7871-91df-f0646e70b2e8",
+                    "username": "janeznovak",
+                    "display_name": "Janez Novak Veliki",
+                    "joined_at": "2023-06-27T20:33:53.078789Z",
+                    "last_modified_at": "2023-06-27T20:44:27.217273Z",
+                    "last_active_at": "2023-06-27T20:34:27.253746Z"
                 }
             })
         ),
@@ -288,9 +288,9 @@ async fn get_current_user_effective_permissions(
             body = ErrorReasonResponse,
             example = json!({ "reason": "User with given display name already exists." })
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresUserSelfWrite>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::UserSelfWrite>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
