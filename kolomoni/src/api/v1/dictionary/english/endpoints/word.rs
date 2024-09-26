@@ -1,167 +1,43 @@
 use actix_http::StatusCode;
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
-use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
 use kolomoni_auth::Permission;
-use kolomoni_core::id::EnglishWordId;
+use kolomoni_core::{
+    api_models::{
+        EnglishWordCreationRequest,
+        EnglishWordCreationResponse,
+        EnglishWordInfoResponse,
+        EnglishWordUpdateRequest,
+        EnglishWordsListRequest,
+        EnglishWordsResponse,
+    },
+    id::EnglishWordId,
+};
 use kolomoni_database::entities::{
     self,
     EnglishWordFieldsToUpdate,
-    EnglishWordMeaningModelWithCategoriesAndTranslations,
-    EnglishWordWithMeaningsModel,
     EnglishWordsQueryOptions,
     NewEnglishWord,
-    TranslatesIntoSloveneWordModel,
 };
-use miette::Result;
-use serde::{Deserialize, Serialize};
 use sqlx::Acquire;
 use tracing::info;
-use utoipa::ToSchema;
 
-use super::meaning::EnglishWordMeaningWithCategoriesAndTranslations;
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
         openapi,
         traits::IntoApiModel,
-        v1::dictionary::{parse_string_into_uuid, slovene::meaning::ShallowSloveneWordMeaning},
+        v1::dictionary::parse_string_into_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    impl_json_response_builder,
     json_error_response_with_reason,
     obtain_database_connection,
-    require_user_authentication,
-    require_permission_OLD,
     require_permission_with_optional_authentication,
+    require_user_authentication_and_permission,
     state::ApplicationState,
 };
 
-
-
-// TODO needs updated example
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-#[schema(
-    example = json!({
-        "id": "018dbe00-266e-7398-abd2-0906df0aa345",
-        "lemma": "adventurer",
-        "disambiguation": "character",
-        "description": "Playable or non-playable character.",
-        "created_at": "2023-06-27T20:34:27.217273Z",
-        "last_modified_at": "2023-06-27T20:34:27.217273Z",
-        "suggested_translations": [],
-        "translations": [
-            {
-                "id": "018dbe00-266e-7398-abd2-0906df0aa346",
-                "lemma": "pustolovec",
-                "disambiguation": "lik",
-                "description": "Igrani ali neigrani liki, ki se odpravijo na pustolovščino.",
-                "created_at": "2023-06-27T20:34:27.217273Z",
-                "last_modified_at": "2023-06-27T20:34:27.217273Z"
-            }
-        ]
-    })
-)]
-pub struct EnglishWordWithMeanings {
-    /// Word UUID.
-    pub id: EnglishWordId,
-
-    /// An abstract or base form of the word.
-    pub lemma: String,
-
-    /// When the word was created.
-    pub created_at: DateTime<Utc>,
-
-    /// When the word was last modified.
-    /// This includes the last creation or deletion time of the
-    /// suggestion or translation linked to this word.
-    pub last_modified_at: DateTime<Utc>,
-
-    pub meanings: Vec<EnglishWordMeaningWithCategoriesAndTranslations>,
-}
-
-
-#[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
-pub struct EnglishWordsResponse {
-    pub english_words: Vec<EnglishWordWithMeanings>,
-}
-
-impl_json_response_builder!(EnglishWordsResponse);
-
-
-
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
-#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
-pub struct EnglishWordFilters {
-    pub last_modified_after: Option<DateTime<Utc>>,
-}
-
-
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
-pub struct EnglishWordsListRequest {
-    pub filters: Option<EnglishWordFilters>,
-}
-
-impl IntoApiModel for EnglishWordMeaningModelWithCategoriesAndTranslations {
-    type ApiModel = EnglishWordMeaningWithCategoriesAndTranslations;
-
-    fn into_api_model(self) -> Self::ApiModel {
-        Self::ApiModel {
-            meaning_id: self.id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            categories: self.categories,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-            translates_into: self
-                .translates_into
-                .into_iter()
-                .map(|internal_model| internal_model.into_api_model())
-                .collect(),
-        }
-    }
-}
-
-impl IntoApiModel for TranslatesIntoSloveneWordModel {
-    type ApiModel = ShallowSloveneWordMeaning;
-
-    fn into_api_model(self) -> Self::ApiModel {
-        Self::ApiModel {
-            meaning_id: self.word_meaning_id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            categories: self.categories,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-        }
-    }
-}
-
-
-impl IntoApiModel for EnglishWordWithMeaningsModel {
-    type ApiModel = EnglishWordWithMeanings;
-
-    fn into_api_model(self) -> Self::ApiModel {
-        let meanings = self
-            .meanings
-            .into_iter()
-            .map(|meaning| meaning.into_api_model())
-            .collect();
-
-        Self::ApiModel {
-            id: self.word_id,
-            lemma: self.lemma,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-            meanings,
-        }
-    }
-}
 
 
 
@@ -185,8 +61,8 @@ impl IntoApiModel for EnglishWordWithMeaningsModel {
             description = "A list of all english words.",
             body = EnglishWordsResponse,
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresWordRead>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::WordRead>,
+        openapi::response::InternalServerError,
     )
 )]
 #[get("")]
@@ -237,50 +113,6 @@ pub async fn get_all_english_words(
 
 
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
-#[schema(
-    example = json!({
-        "lemma": "adventurer"
-    })
-)]
-pub struct EnglishWordCreationRequest {
-    pub lemma: String,
-}
-
-
-#[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
-#[schema(
-    example = json!({
-        "word": {
-            "id": "018dbe00-266e-7398-abd2-0906df0aa345",
-            "lemma": "adventurer",
-            "added_at": "2023-06-27T20:34:27.217273Z",
-            "last_edited_at": "2023-06-27T20:34:27.217273Z"
-        }
-    })
-)]
-pub struct EnglishWordCreationResponse {
-    pub word: EnglishWordWithMeanings,
-}
-
-impl IntoApiModel for entities::EnglishWordModel {
-    type ApiModel = EnglishWordWithMeanings;
-
-    fn into_api_model(self) -> Self::ApiModel {
-        Self::ApiModel {
-            id: self.word_id,
-            lemma: self.lemma,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-            meanings: vec![],
-        }
-    }
-}
-
-impl_json_response_builder!(EnglishWordCreationResponse);
-
 
 /// Create an english word
 ///
@@ -307,9 +139,9 @@ impl_json_response_builder!(EnglishWordCreationResponse);
             body = ErrorReasonResponse,
             example = json!({ "reason": "An english word with the given lemma already exists." })
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresWordCreate>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::WordCreate>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -323,10 +155,9 @@ pub async fn create_english_word(
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
 
-    let authenticated_user = require_user_authentication!(authentication);
-    require_permission_OLD!(
+    let authenticated_user = require_user_authentication_and_permission!(
         &mut database_connection,
-        authenticated_user,
+        authentication,
         Permission::WordCreate
     );
 
@@ -382,15 +213,6 @@ pub async fn create_english_word(
 
 
 
-#[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
-pub struct EnglishWordInfoResponse {
-    pub word: EnglishWordWithMeanings,
-}
-
-impl_json_response_builder!(EnglishWordInfoResponse);
-
-
 /// Get an english word
 ///
 /// This endpoint returns information about a single english word from the dictionary.
@@ -406,6 +228,7 @@ impl_json_response_builder!(EnglishWordInfoResponse);
         (
             "word_uuid" = String,
             Path,
+            format = Uuid,
             description = "UUID of the english word."
         )
     ),
@@ -425,8 +248,8 @@ impl_json_response_builder!(EnglishWordInfoResponse);
             status = 404,
             description = "The requested english word does not exist."
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresWordRead>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::WordRead>,
+        openapi::response::InternalServerError,
     )
 )]
 #[get("/{word_uuid}")]
@@ -444,12 +267,14 @@ pub async fn get_english_word_by_id(
     );
 
 
-    let target_word_uuid = parse_string_into_uuid(&parameters.into_inner().0)?;
+    let target_english_word_id = EnglishWordId::new(parse_string_into_uuid(
+        &parameters.into_inner().0,
+    )?);
 
 
     let potential_english_word = entities::EnglishWordQuery::get_by_id_with_meanings(
         &mut database_connection,
-        EnglishWordId::new(target_word_uuid),
+        target_english_word_id,
     )
     .await?;
 
@@ -463,6 +288,7 @@ pub async fn get_english_word_by_id(
     }
     .into_response())
 }
+
 
 
 
@@ -497,8 +323,8 @@ pub async fn get_english_word_by_id(
             status = 404,
             description = "The requested english word does not exist."
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresWordRead>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::WordRead>,
+        openapi::response::InternalServerError,
     )
 )]
 #[get("/by-lemma/{word_lemma}")]
@@ -537,13 +363,6 @@ pub async fn get_english_word_by_lemma(
 }
 
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
-pub struct EnglishWordUpdateRequest {
-    pub lemma: Option<String>,
-}
-
-impl_json_response_builder!(EnglishWordUpdateRequest);
-
 
 
 /// Update an english word
@@ -560,6 +379,7 @@ impl_json_response_builder!(EnglishWordUpdateRequest);
         (
             "word_uuid" = String,
             Path,
+            format = Uuid,
             description = "UUID of the english word."
         )
     ),
@@ -582,9 +402,9 @@ impl_json_response_builder!(EnglishWordUpdateRequest);
             status = 404,
             description = "The requested english word does not exist."
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresWordUpdate>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::WordUpdate>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -600,10 +420,9 @@ pub async fn update_specific_english_word(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_user_authentication!(authentication);
-    require_permission_OLD!(
+    require_user_authentication_and_permission!(
         &mut transaction,
-        authenticated_user,
+        authentication,
         Permission::WordUpdate
     );
 
@@ -611,6 +430,7 @@ pub async fn update_specific_english_word(
     let target_word_uuid = EnglishWordId::new(parse_string_into_uuid(
         &parameters.into_inner().0,
     )?);
+
     let request_data = request_data.into_inner();
 
 
@@ -686,6 +506,7 @@ pub async fn update_specific_english_word(
         (
             "word_uuid" = String,
             Path,
+            format = Uuid,
             description = "UUID of the english word to delete."
         )
     ),
@@ -704,8 +525,8 @@ pub async fn update_specific_english_word(
             status = 404,
             description = "The given english word does not exist."
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresWordDelete>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::WordDelete>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -720,10 +541,9 @@ pub async fn delete_english_word(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_user_authentication!(authentication);
-    require_permission_OLD!(
+    require_user_authentication_and_permission!(
         &mut transaction,
-        authenticated_user,
+        authentication,
         Permission::WordDelete
     );
 
@@ -763,6 +583,8 @@ pub async fn delete_english_word(
 
     Ok(HttpResponse::Ok().finish())
 }
+
+
 
 
 #[rustfmt::skip]

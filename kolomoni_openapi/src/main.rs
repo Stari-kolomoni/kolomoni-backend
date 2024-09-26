@@ -4,7 +4,7 @@ use actix_web::{App, HttpServer};
 use kolomoni::api::errors;
 use kolomoni::api::v1::dictionary;
 use kolomoni::api::v1::login;
-use kolomoni::api::v1::ping;
+use kolomoni::api::v1::health;
 use kolomoni::api::v1::users;
 use kolomoni::logging::initialize_tracing;
 use miette::Context;
@@ -86,7 +86,7 @@ use utoipa_rapidoc::RapiDoc;
              */
 
             // ping.rs
-            ping::PingResponse,
+            health::PingResponse,
 
             // login.rs
             login::UserLoginRequest,

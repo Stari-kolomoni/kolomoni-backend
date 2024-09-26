@@ -4,13 +4,7 @@ use sqlx::PgConnection;
 
 use super::SloveneWordModel;
 use crate::{
-    entities::{
-        self,
-        EnglishWordModel,
-        InternalSloveneWordReducedModel,
-        InternalWordModel,
-        WordLanguage,
-    },
+    entities::{InternalSloveneWordReducedModel, InternalWordModel, WordLanguage, WordMutation},
     QueryError,
     QueryResult,
 };
@@ -110,23 +104,10 @@ impl SloveneWordMutation {
         database_connection: &mut PgConnection,
         slovene_word_id: SloveneWordId,
     ) -> QueryResult<bool> {
-        // TODO refactor this and EnglishWordMutation::delete to forward to EnglishWord::delete
-        let word_uuid = slovene_word_id.into_uuid();
-
-        let query_result = sqlx::query!(
-            "DELETE FROM kolomoni.word \
-                WHERE id = $1",
-            word_uuid
+        WordMutation::delete(
+            database_connection,
+            slovene_word_id.into_word_id(),
         )
-        .execute(database_connection)
-        .await?;
-
-        if query_result.rows_affected() > 1 {
-            return Err(QueryError::database_inconsistency(
-                "more than one row was affected when deleting an english word",
-            ));
-        }
-
-        Ok(query_result.rows_affected() == 1)
+        .await
     }
 }

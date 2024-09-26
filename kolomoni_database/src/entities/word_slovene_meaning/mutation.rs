@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use chrono::Utc;
 use kolomoni_core::id::{SloveneWordId, SloveneWordMeaningId};
 use sqlx::{PgConnection, Postgres, QueryBuilder};

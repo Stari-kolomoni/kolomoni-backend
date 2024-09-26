@@ -3,17 +3,13 @@
 use actix_web::web::Data;
 use kolomoni_auth::{ArgonHasher, JsonWebTokenManager};
 use kolomoni_configuration::Configuration;
-use kolomoni_database::mutation::ArgonHasher;
-use kolomoni_search::{ChangeEvent, KolomoniSearchEngine, SearchResults};
-use miette::{Context, IntoDiagnostic, Result};
-use sea_orm::{prelude::Uuid, DatabaseConnection};
 use sqlx::PgPool;
-use tokio::sync::mpsc;
 
-use crate::connect_and_set_up_database;
+
 
 
 // TODO needs to be reworked to be more general (a cache layer), then connect search into it, or maybe even setup this whole thing to be decoupled by using db triggers or something
+/*
 /// A dictionary search engine.
 ///
 /// Handles searching, seeding and incrementally updating the internal index and cache.
@@ -118,7 +114,7 @@ impl KolomoniSearch {
             .into_diagnostic()
             .wrap_err("Failed to send \"category removed\" event.")
     }
-}
+} */
 
 
 
@@ -143,16 +139,17 @@ pub struct ApplicationStateInner {
 
     /// Authentication token manager (JSON Web Token).
     pub jwt_manager: JsonWebTokenManager,
-
-    pub search: KolomoniSearch,
+    // TODO
+    // pub search: KolomoniSearch,
 }
 
 impl ApplicationStateInner {
     pub async fn new(configuration: Configuration) -> Result<Self> {
-        let hasher = ArgonHasher::new(&configuration)?;
+        let hasher = ArgonHasher::new(&configuration.secrets.hash_salt)?;
         let database = connect_and_set_up_database(&configuration).await?;
         let jwt_manager = JsonWebTokenManager::new(&configuration.json_web_token.secret);
 
+        /*
         let search = {
             let engine = KolomoniSearchEngine::new(&configuration).await?;
             let sender = engine.change_event_sender();
@@ -161,14 +158,14 @@ impl ApplicationStateInner {
                 engine,
                 change_sender: sender,
             }
-        };
+        }; */
 
         Ok(Self {
             configuration,
             hasher,
             database,
             jwt_manager,
-            search,
+            // search,
         })
     }
 }

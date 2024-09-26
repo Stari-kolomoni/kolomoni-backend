@@ -3,6 +3,7 @@ use std::str::FromStr;
 use actix_web::{web, Scope};
 use english::english_dictionary_router;
 use kolomoni_core::api_models::Category;
+use slovene::slovene_dictionary_router;
 use sqlx::types::Uuid;
 
 use self::{
@@ -36,8 +37,7 @@ pub fn parse_string_into_uuid(potential_uuid: &str) -> Result<Uuid, APIError> {
 #[rustfmt::skip]
 pub fn dictionary_router() -> Scope {
     web::scope("/dictionary")
-        // TODO
-        // .service(slovene_dictionary_router())
+        .service(slovene_dictionary_router())
         .service(english_dictionary_router())
         // DEPRECATED
         // .service(suggested_translations_router())

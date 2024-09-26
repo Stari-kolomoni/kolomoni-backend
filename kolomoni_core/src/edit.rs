@@ -1,5 +1,3 @@
-use std::u8;
-
 use chrono::{DateTime, Utc};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use serde_with::serde_as;

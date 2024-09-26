@@ -15,10 +15,8 @@ use kolomoni_core::{
     id::UserId,
 };
 use kolomoni_database::entities;
-use serde::Deserialize;
 use sqlx::{types::Uuid, Acquire};
 use tracing::info;
-use utoipa::ToSchema;
 
 use crate::{
     api::{

@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
-use crate::traits::ResolvableConfiguration;
+use crate::traits::Resolve;
+
 
 pub(super) type UnresolvedSecretsConfiguration = SecretsConfiguration;
 
@@ -10,10 +11,10 @@ pub struct SecretsConfiguration {
     pub hash_salt: String,
 }
 
-impl ResolvableConfiguration for UnresolvedSecretsConfiguration {
+impl Resolve for UnresolvedSecretsConfiguration {
     type Resolved = SecretsConfiguration;
 
-    fn resolve(self) -> miette::Result<Self::Resolved> {
-        Ok(self)
+    fn resolve(self) -> Self::Resolved {
+        self
     }
 }

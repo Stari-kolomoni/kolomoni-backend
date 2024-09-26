@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
-use crate::traits::ResolvableConfiguration;
+use crate::traits::Resolve;
+
 
 pub(crate) type UnresolvedJsonWebTokenConfiguration = JsonWebTokenConfiguration;
 
@@ -11,10 +12,10 @@ pub struct JsonWebTokenConfiguration {
     pub secret: String,
 }
 
-impl ResolvableConfiguration for UnresolvedJsonWebTokenConfiguration {
+impl Resolve for UnresolvedJsonWebTokenConfiguration {
     type Resolved = JsonWebTokenConfiguration;
 
-    fn resolve(self) -> miette::Result<Self::Resolved> {
-        Ok(self)
+    fn resolve(self) -> Self::Resolved {
+        self
     }
 }

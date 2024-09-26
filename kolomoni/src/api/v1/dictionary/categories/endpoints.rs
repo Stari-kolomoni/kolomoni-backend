@@ -1,13 +1,19 @@
 use actix_http::StatusCode;
-use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use futures_util::StreamExt;
 use kolomoni_auth::Permission;
-use kolomoni_core::id::CategoryId;
+use kolomoni_core::{
+    api_models::{
+        CategoriesResponse,
+        CategoryCreationRequest,
+        CategoryCreationResponse,
+        CategoryResponse,
+        CategoryUpdateRequest,
+    },
+    id::CategoryId,
+};
 use kolomoni_database::entities::{self, CategoryValuesToUpdate, NewCategory};
-use serde::{Deserialize, Serialize};
 use sqlx::Acquire;
-use utoipa::ToSchema;
-use uuid::Uuid;
 
 use crate::{
     api::{
@@ -15,69 +21,15 @@ use crate::{
         macros::ContextlessResponder,
         openapi,
         traits::IntoApiModel,
-        v1::dictionary::Category,
+        v1::dictionary::parse_string_into_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    impl_json_response_builder,
     json_error_response_with_reason,
     obtain_database_connection,
-    require_permission_OLD,
     require_permission_with_optional_authentication,
-    require_user_authentication,
+    require_user_authentication_and_permission,
     state::ApplicationState,
 };
-
-
-
-
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
-#[schema(
-    example = json!({
-        "slovene_name": "Dejavnosti in spopad",
-        "english_name": "Activities and Combat",
-    })
-)]
-pub struct CategoryCreationRequest {
-    pub parent_category_id: Option<Uuid>,
-    pub slovene_name: String,
-    pub english_name: String,
-}
-
-
-#[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
-#[schema(
-    example = json!({
-        "category": {
-            "id": 1,
-            "slovene_name": "Dejavnosti in spopad",
-            "english_name": "Activities and Combat",
-            "created_at": "2023-06-27T20:34:27.217273Z",
-            "last_modified_at": "2023-06-27T20:34:27.217273Z",
-        }
-    })
-)]
-pub struct CategoryCreationResponse {
-    pub category: Category,
-}
-
-impl_json_response_builder!(CategoryCreationResponse);
-
-
-impl IntoApiModel for entities::CategoryModel {
-    type ApiModel = Category;
-
-    fn into_api_model(self) -> Self::ApiModel {
-        Category {
-            id: self.id,
-            english_name: self.english_name,
-            slovene_name: self.slovene_name,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-        }
-    }
-}
 
 
 
@@ -104,9 +56,9 @@ impl IntoApiModel for entities::CategoryModel {
             status = 409,
             description = "This english-slovene word combination already exists as a category."
         ),
-        openapi::response::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::response::FailedAuthenticationResponses<openapi::response::RequiresCategoryCreate>,
-        openapi::response::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::CategoryCreate>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -121,10 +73,9 @@ pub async fn create_category(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_user_authentication!(authentication);
-    require_permission_OLD!(
+    let authenticated_user = require_user_authentication_and_permission!(
         &mut transaction,
-        authenticated_user,
+        authentication,
         Permission::CategoryCreate
     );
 
@@ -187,16 +138,6 @@ pub async fn create_category(
 
 
 
-#[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
-pub struct CategoriesResponse {
-    pub categories: Vec<Category>,
-}
-
-impl_json_response_builder!(CategoriesResponse);
-
-
-
 /// List all word categories
 ///
 /// This endpoint will list all word categories.
@@ -213,7 +154,7 @@ impl_json_response_builder!(CategoriesResponse);
             description = "The category list.",
             body = CategoriesResponse,
         ),
-        openapi::InternalServerErrorResponse,
+        openapi::response::InternalServerError,
     )
 )]
 #[get("")]
@@ -247,24 +188,6 @@ pub async fn get_all_categories(
 
 
 
-#[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
-#[schema(
-    example = json!({
-        "category": {
-            "id": 1,
-            "slovene_name": "Dejavnosti in spopad",
-            "english_name": "Activities and Combat",
-        }
-    })
-)]
-pub struct CategoryResponse {
-    pub category: Category,
-}
-
-impl_json_response_builder!(CategoryResponse);
-
-
 /// Get category
 ///
 /// This endpoint will return information about a single category.
@@ -273,13 +196,14 @@ impl_json_response_builder!(CategoryResponse);
 /// This endpoint does not require authentication.
 #[utoipa::path(
     get,
-    path = "/dictionary/category/{category_id}",
+    path = "/dictionary/category/{category_uuid}",
     tag = "dictionary:category",
     params(
         (
-            "category_id" = i32,
+            "category_uuid" = String,
             Path,
-            description = "ID of the category."
+            format = Uuid,
+            description = "UUID of the category."
         )
     ),
     responses(
@@ -292,14 +216,14 @@ impl_json_response_builder!(CategoryResponse);
             status = 404,
             description = "Category does not exist."
         ),
-        openapi::InternalServerErrorResponse,
+        openapi::response::InternalServerError,
     )
 )]
-#[get("/{category_id}")]
+#[get("/{category_uuid}")]
 pub async fn get_specific_category(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid,)>,
+    parameters: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
 
@@ -310,7 +234,9 @@ pub async fn get_specific_category(
     );
 
 
-    let target_category_id = CategoryId::new(parameters.into_inner().0);
+    let target_category_id = CategoryId::new(parse_string_into_uuid(
+        parameters.into_inner().0.as_str(),
+    )?);
 
 
     let category =
@@ -329,32 +255,6 @@ pub async fn get_specific_category(
 
 
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
-#[schema(
-    example = json!({
-        "slovene_name": "Dejavnosti in spopad",
-        "english_name": "Activities and Combat",
-    })
-)]
-pub struct CategoryUpdateRequest {
-    /// # Interpreting the double option
-    /// To distinguish from an unset and a null JSON value, this field is a
-    /// double option. `None` indicates the field was not present
-    /// (i.e. that the parent category should not change as part of this update),
-    /// while `Some(None)` indicates it was set to `null`
-    /// (i.e. that the parent category should be cleared).
-    ///
-    /// See also: [`serde_with::rust::double_option`].
-    #[serde(default, with = "::serde_with::rust::double_option")]
-    pub new_parent_category_id: Option<Option<Uuid>>,
-
-    pub new_slovene_name: Option<String>,
-
-    pub new_english_name: Option<String>,
-}
-
-
 
 /// Update category
 ///
@@ -364,13 +264,14 @@ pub struct CategoryUpdateRequest {
 /// This endpoint requires authentication and the `category:update` permission.
 #[utoipa::path(
     patch,
-    path = "/dictionary/category/{category_id}",
+    path = "/dictionary/category/{category_uuid}",
     tag = "dictionary:category",
     params(
         (
-            "category_id" = i32,
+            "category_uuid" = String,
             Path,
-            description = "ID of the category to update."
+            format = Uuid,
+            description = "UUID of the category to update."
         )
     ),
     responses(
@@ -387,18 +288,18 @@ pub struct CategoryUpdateRequest {
             status = 409,
             description = "The update would create a conflict with another category."
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresCategoryUpdate>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::CategoryUpdate>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
     )
 )]
-#[patch("/{category_id}")]
+#[patch("/{category_uuid}")]
 pub async fn update_specific_category(
     state: ApplicationState,
-    parameters: web::Path<(Uuid,)>,
+    parameters: web::Path<(String,)>,
     authentication: UserAuthenticationExtractor,
     request_body: web::Json<CategoryUpdateRequest>,
 ) -> EndpointResult {
@@ -406,15 +307,17 @@ pub async fn update_specific_category(
     let mut transaction = database_connection.begin().await?;
 
 
-    let authenticated_user = require_user_authentication!(authentication);
-    require_permission_OLD!(
+    let authenticated_user = require_user_authentication_and_permission!(
         &mut transaction,
-        authenticated_user,
+        authentication,
         Permission::CategoryUpdate
     );
 
 
-    let target_category_id = CategoryId::new(parameters.into_inner().0);
+    let target_category_id = CategoryId::new(parse_string_into_uuid(
+        parameters.into_inner().0.as_str(),
+    )?);
+
     let request_body = request_body.into_inner();
 
 
@@ -531,13 +434,14 @@ pub async fn update_specific_category(
 /// This endpoint requires authentication and the `category:delete` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/category/{category_id}",
+    path = "/dictionary/category/{category_uuid}",
     tag = "dictionary:category",
     params(
         (
-            "category_id" = i32,
+            "category_uuid" = String,
             Path,
-            description = "ID of the category to delete."
+            format = Uuid,
+            description = "UUID of the category to delete."
         )
     ),
     responses(
@@ -549,31 +453,32 @@ pub async fn update_specific_category(
             status = 404,
             description = "Category does not exist."
         ),
-        openapi::FailedAuthenticationResponses<openapi::RequiresCategoryDelete>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::FailedAuthentication<openapi::response::requires::CategoryDelete>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
     )
 )]
-#[delete("/{category_id}")]
+#[delete("/{category_uuid}")]
 pub async fn delete_specific_category(
     state: ApplicationState,
-    parameters: web::Path<(Uuid,)>,
     authentication: UserAuthenticationExtractor,
+    parameters: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_user_authentication!(authentication);
-    require_permission_OLD!(
+    require_user_authentication_and_permission!(
         &mut transaction,
-        authenticated_user,
+        authentication,
         Permission::CategoryDelete
     );
 
 
-    let target_category_id = CategoryId::new(parameters.into_inner().0);
+    let target_category_id = CategoryId::new(parse_string_into_uuid(
+        parameters.into_inner().0.as_str(),
+    )?);
 
 
 
@@ -853,7 +758,7 @@ pub async fn unlink_word_from_category(
         .map_err(APIError::InternalGenericError)?
         .ok_or_else(|| {
             APIError::internal_error_with_reason(
-                "BUG: Word dissapeared between category removal and index update.",
+                "BUG: Word disappeared between category removal and index update.",
             )
         })?;
 
@@ -879,15 +784,3 @@ pub async fn unlink_word_from_category(
 
 
  */
-
-#[rustfmt::skip]
-pub fn categories_router() -> Scope {
-    web::scope("/category")
-        .service(create_category)
-        .service(get_all_categories)
-        .service(get_specific_category)
-        .service(update_specific_category)
-        .service(delete_specific_category)
-        // .service(link_word_to_category)
-        // .service(unlink_word_from_category)
-}

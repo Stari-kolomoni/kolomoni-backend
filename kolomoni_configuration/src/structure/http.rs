@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
-use crate::traits::ResolvableConfiguration;
+use crate::traits::Resolve;
+
 
 pub(crate) type UnresolvedHttpConfiguration = HttpConfiguration;
 
@@ -14,10 +15,10 @@ pub struct HttpConfiguration {
     pub port: usize,
 }
 
-impl ResolvableConfiguration for UnresolvedHttpConfiguration {
+impl Resolve for UnresolvedHttpConfiguration {
     type Resolved = HttpConfiguration;
 
-    fn resolve(self) -> miette::Result<Self::Resolved> {
-        Ok(self)
+    fn resolve(self) -> Self::Resolved {
+        self
     }
 }

@@ -1,29 +1,17 @@
 use std::{
     collections::HashMap,
-    env::current_dir,
     path::{Path, PathBuf},
 };
 
-use miette::{miette, Context, IntoDiagnostic, Result};
 
 
 /// Returns the default configuration filepath, which is at
 /// `{current directory}/data/configuration.toml`.
-pub fn get_default_configuration_file_path() -> Result<PathBuf> {
-    let mut configuration_filepath = current_dir()
-        .into_diagnostic()
-        .wrap_err_with(|| miette!("Could not get the current directory."))?;
-    configuration_filepath.push("data/configuration.toml");
-
-    if !configuration_filepath.exists() {
-        panic!("Could not find configuration.toml in data directory.");
-    }
-
-    Ok(configuration_filepath)
+pub fn get_default_configuration_file_path() -> PathBuf {
+    PathBuf::from("./data/configuration.toml")
 }
 
 #[must_use = "function returns the modified path"]
-#[allow(dead_code)]
 pub fn replace_placeholders_in_path(
     original_path: &Path,
     placeholders: HashMap<&'static str, String>,

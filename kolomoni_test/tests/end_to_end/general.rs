@@ -1,4 +1,4 @@
-use kolomoni::api::v1::ping::PingResponse;
+use kolomoni::api::v1::health::PingResponse;
 use kolomoni_test_util::prelude::*;
 
 #[tokio::test]

@@ -149,7 +149,7 @@ impl WordId {
     }
 
     #[inline]
-    pub const fn into_inner(self) -> Uuid {
+    pub const fn into_uuid(self) -> Uuid {
         self.0
     }
 }

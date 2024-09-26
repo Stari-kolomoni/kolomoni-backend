@@ -1,10 +1,10 @@
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
-use miette::{miette, Context, IntoDiagnostic, Result};
 use serde::Deserialize;
 use tracing_subscriber::EnvFilter;
 
-use crate::traits::ResolvableConfiguration;
+use crate::{traits::TryResolve, LoggingConfigurationError, MissingLoggingDirectoryCreationError};
+
 
 #[derive(Deserialize, Clone, Debug)]
 pub(super) struct UnresolvedLoggingConfiguration {
@@ -24,18 +24,29 @@ pub struct LoggingConfiguration {
     pub log_file_output_directory: PathBuf,
 }
 
-impl ResolvableConfiguration for UnresolvedLoggingConfiguration {
+
+impl TryResolve for UnresolvedLoggingConfiguration {
     type Resolved = LoggingConfiguration;
+    type Error = LoggingConfigurationError;
 
-    fn resolve(self) -> Result<Self::Resolved> {
+    fn try_resolve(self) -> Result<Self::Resolved, Self::Error> {
         // Validate the file and console level filters.
-        EnvFilter::try_new(&self.console_output_level_filter)
-            .into_diagnostic()
-            .wrap_err_with(|| miette!("Failed to parse field console_output_level_filter"))?;
+        EnvFilter::try_new(&self.console_output_level_filter).map_err(|error| {
+            LoggingConfigurationError::InvalidTracingFilter {
+                invalid_filter: self.console_output_level_filter.clone(),
+                kind: Cow::from("console output"),
+                error,
+            }
+        })?;
 
-        EnvFilter::try_new(&self.log_file_output_level_filter)
-            .into_diagnostic()
-            .wrap_err_with(|| miette!("Failed to parse field log_file_output_level_filter"))?;
+        EnvFilter::try_new(&self.log_file_output_level_filter).map_err(|error| {
+            LoggingConfigurationError::InvalidTracingFilter {
+                invalid_filter: self.log_file_output_level_filter.clone(),
+                kind: Cow::from("log file output"),
+                error,
+            }
+        })?;
+
 
         let log_file_output_directory = PathBuf::from(self.log_file_output_directory);
 
@@ -47,14 +58,34 @@ impl ResolvableConfiguration for UnresolvedLoggingConfiguration {
     }
 }
 
+
 impl LoggingConfiguration {
+    pub fn create_logging_directory_if_missing(
+        &self,
+    ) -> Result<(), MissingLoggingDirectoryCreationError> {
+        if self.log_file_output_directory.exists() && !self.log_file_output_directory.is_dir() {
+            return Err(
+                MissingLoggingDirectoryCreationError::NotADirectory {
+                    path: self.log_file_output_directory.clone(),
+                },
+            );
+        }
+
+        std::fs::create_dir_all(&self.log_file_output_directory).map_err(|error| {
+            MissingLoggingDirectoryCreationError::UnableToCreateDirectory {
+                directory_path: self.log_file_output_directory.clone(),
+                error,
+            }
+        })
+    }
+
     pub fn console_output_level_filter(&self) -> EnvFilter {
-        // PANIC SAFETY: This is safe because we checked that the input is valid in `resolve`.
+        // PANIC SAFETY: This is safe because we checked that the input is valid in `try_resolve`.
         EnvFilter::try_new(&self.console_output_level_filter).unwrap()
     }
 
     pub fn log_file_output_level_filter(&self) -> EnvFilter {
-        // PANIC SAFETY: This is safe because we checked that the input is valid in `resolve`.
+        // PANIC SAFETY: This is safe because we checked that the input is valid in `try_resolve`.
         EnvFilter::try_new(&self.log_file_output_level_filter).unwrap()
     }
 }

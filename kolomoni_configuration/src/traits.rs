@@ -1,24 +1,50 @@
-use miette::Result;
-
-/// Represents a configuration that can be validated or resolved.
-pub trait ResolvableConfiguration {
+/// Usually implemented on a configuration type that can be validated or resolved *infallibly*.
+pub trait Resolve {
     type Resolved;
 
-    /// Resolve the configuration into its `Resolved` type.
-    /// If the resolution / validation fails, you may return `Err` to indicate
-    /// that the configuration is invalid.
-    fn resolve(self) -> Result<Self::Resolved>;
+    /// Resolve the configuration into its [`Self::Resolved`] type.
+    fn resolve(self) -> Self::Resolved;
+}
+
+/// Usually implemented on a configuration type that can be validated or resolved,
+/// but where that process can fail (for infallible conversion, see [`Resolve`]).
+pub trait TryResolve {
+    type Resolved;
+    type Error;
+
+    /// Attempt to resolve the configuration into its [`Self::Resolved`] type.
+    ///
+    /// If the validation / conversion into the resolved type fails,
+    /// an err `Err` should be returned to indicate that.
+    fn try_resolve(self) -> Result<Self::Resolved, Self::Error>;
 }
 
 
-/// Represents a configuration that can be validated or resolved,
-/// but where that process requires some additional context.
-pub trait ResolvableConfigurationWithContext {
+
+/// Usually implemented on a configuration type that can be validated or resolved *infallibly*
+/// (and where that process requires some additional user-provided context).
+pub trait ResolveWithContext<'r> {
     type Context;
     type Resolved;
 
-    /// Resolve the configuration into its `Resolved` type.
-    /// If the resolution / validation fails, you may return `Err` to indicate
-    /// that the configuration is invalid.
-    fn resolve(self, context: Self::Context) -> Result<Self::Resolved>;
+    /// Resolve the configuration into its [`Self::Resolved`] type
+    /// using some `context`.
+    fn resolve_with_context(self, context: Self::Context) -> Self::Resolved;
+}
+
+/// Usually implemented on a configuration type that can be validated or resolved
+/// (and where that process requires some additional user-provided context),
+/// but where that process can fail (for infallible conversion, see [`Resolve`]).
+pub trait TryResolveWithContext {
+    type Context;
+    type Resolved;
+    type Error;
+
+    /// Attempt to resolve the configuration into its [`Self::Resolved`] type
+    /// using some `context`.
+    ///
+    /// If the validation / conversion into the resolved type fails,
+    /// an err `Err` should be returned to indicate that.
+    fn try_resolve_with_context(self, context: Self::Context)
+        -> Result<Self::Resolved, Self::Error>;
 }

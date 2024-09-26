@@ -15,13 +15,13 @@ base_data_directory_path = "./data"
 ###
 [logging]
 # The console log output level.
-# This value can be overriden with the RUST_LOG environment variable.
+# This value can be overridden with the RUST_LOG environment variable.
 # 
 # For more details about setting up this logging level and a guide on more granular settings, 
 # see <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives>).
 console_output_level_filter = "debug,sqlx=warn,hyper=warn,reqwest=warn,tantivy=info"
 # The log file output level.
-# This value is not overriden by the RUST_LOG environment variable.
+# This value is not overridden by the RUST_LOG environment variable.
 # 
 # For more details about setting up this logging level and a guide on more granular settings, 
 # see <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives>).
@@ -49,16 +49,35 @@ port = 8866
 # PostgreSQL database-related configuration.
 ###
 [database]
-# Host where the database resides.
+
+[database.for_api]
+# Host where the database resides, or a Unix socket on which the database socket is available.
 host= "127.0.0.1"
-# Post the database is listening on.
+# Database port.
 port = 5432
-# Login username.
-username = "postgres"
+# User to login as.
+username = "kolomoni_backend"
 # Login password.
-password = "postgres"
-# Database name.
-database_name = "starikolomoni"
+password = "kolomoni_backend"
+# Database to connect to.
+database_name = "stari_kolomoni"
+# The maximum number of prepared statements to store in the cache.
+statement_cache_capacity = 250
+
+
+[database.for_migration_at_api_runtime]
+# Host where the database resides, or a Unix socket on which the database socket is available.
+host= "127.0.0.1"
+# Database port.
+port = 5432
+# User to login as.
+username = "kolomoni_migrator"
+# User password.
+password = "kolomoni_migrator"
+# Database to connect to.
+database_name = "stari_kolomoni"
+# The maximum number of prepared statements to store in the cache.
+statement_cache_capacity = 250
 
 
 

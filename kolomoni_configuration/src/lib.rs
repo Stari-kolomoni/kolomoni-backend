@@ -23,8 +23,10 @@
 
 #![allow(rustdoc::private_intra_doc_links)]
 
+mod error;
 mod structure;
 mod traits;
 mod utilities;
 
+pub use error::*;
 pub use structure::*;

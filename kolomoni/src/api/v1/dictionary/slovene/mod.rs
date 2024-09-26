@@ -1,15 +1,12 @@
 use actix_web::{web, Scope};
-use meaning::slovene_word_meaning_router;
-use word::slovene_word_router;
 
 
+mod endpoints;
+pub use endpoints::*;
+mod model_impls;
 
-pub mod meaning;
-pub mod word;
 
-
-
-// TODO Links.
+// TODO Word meaning links.
 
 
 #[rustfmt::skip]

@@ -3,7 +3,7 @@ use kolomoni_core::id::EnglishWordId;
 use sqlx::PgConnection;
 
 use crate::{
-    entities::{self, WordLanguage},
+    entities::{self, WordLanguage, WordMutation},
     QueryError,
     QueryResult,
 };
@@ -102,22 +102,10 @@ impl EnglishWordMutation {
         database_connection: &mut PgConnection,
         english_word_id: EnglishWordId,
     ) -> QueryResult<bool> {
-        let word_uuid = english_word_id.into_uuid();
-
-        let query_result = sqlx::query!(
-            "DELETE FROM kolomoni.word \
-                WHERE id = $1",
-            word_uuid
+        WordMutation::delete(
+            database_connection,
+            english_word_id.into_word_id(),
         )
-        .execute(database_connection)
-        .await?;
-
-        if query_result.rows_affected() > 1 {
-            return Err(QueryError::database_inconsistency(
-                "more than one row was affected when deleting an english word",
-            ));
-        }
-
-        Ok(query_result.rows_affected() == 1)
+        .await
     }
 }

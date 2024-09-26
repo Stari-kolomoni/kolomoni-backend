@@ -1,102 +1,31 @@
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
-use chrono::{DateTime, Utc};
 use kolomoni_auth::Permission;
-use kolomoni_core::id::{CategoryId, EnglishWordId, EnglishWordMeaningId};
+use kolomoni_core::{
+    api_models::{
+        EnglishWordMeaningUpdateRequest,
+        EnglishWordMeaningUpdatedResponse,
+        EnglishWordMeaningsResponse,
+        NewEnglishWordMeaningCreatedResponse,
+        NewEnglishWordMeaningRequest,
+    },
+    id::{EnglishWordId, EnglishWordMeaningId},
+};
 use kolomoni_database::entities::{self, EnglishWordMeaningUpdate, NewEnglishWordMeaning};
-use serde::{Deserialize, Serialize};
 use sqlx::{types::Uuid, Acquire};
-use utoipa::ToSchema;
 
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
         traits::IntoApiModel,
-        v1::dictionary::slovene::meaning::ShallowSloveneWordMeaning,
     },
     authentication::UserAuthenticationExtractor,
-    impl_json_response_builder,
     obtain_database_connection,
-    require_permission_OLD,
     require_permission_with_optional_authentication,
+    require_user_authentication_and_permission,
     state::ApplicationState,
 };
 
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct ShallowEnglishWordMeaning {
-    pub meaning_id: EnglishWordMeaningId,
-
-    pub disambiguation: Option<String>,
-
-    pub abbreviation: Option<String>,
-
-    pub description: Option<String>,
-
-    pub categories: Vec<CategoryId>,
-
-    pub created_at: DateTime<Utc>,
-
-    pub last_modified_at: DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct EnglishWordMeaning {
-    pub meaning_id: EnglishWordMeaningId,
-
-    pub disambiguation: Option<String>,
-
-    pub abbreviation: Option<String>,
-
-    pub description: Option<String>,
-
-    pub created_at: DateTime<Utc>,
-
-    pub last_modified_at: DateTime<Utc>,
-}
-
-impl IntoApiModel for entities::EnglishWordMeaningModel {
-    type ApiModel = EnglishWordMeaning;
-
-    fn into_api_model(self) -> Self::ApiModel {
-        Self::ApiModel {
-            meaning_id: self.id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-        }
-    }
-}
-
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct EnglishWordMeaningWithCategoriesAndTranslations {
-    pub meaning_id: EnglishWordMeaningId,
-
-    pub disambiguation: Option<String>,
-
-    pub abbreviation: Option<String>,
-
-    pub description: Option<String>,
-
-    pub created_at: DateTime<Utc>,
-
-    pub last_modified_at: DateTime<Utc>,
-
-    pub categories: Vec<CategoryId>,
-
-    pub translates_into: Vec<ShallowSloveneWordMeaning>,
-}
-
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct EnglishWordMeaningsResponse {
-    pub meanings: Vec<EnglishWordMeaningWithCategoriesAndTranslations>,
-}
-
-impl_json_response_builder!(EnglishWordMeaningsResponse);
 
 
 
@@ -135,24 +64,6 @@ pub async fn get_all_english_word_meanings(
 }
 
 
-// TODO could be nice to submit initial categories with this as well?
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct NewEnglishWordMeaningRequest {
-    pub disambiguation: Option<String>,
-
-    pub abbreviation: Option<String>,
-
-    pub description: Option<String>,
-}
-
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct NewEnglishWordMeaningCreatedResponse {
-    pub meaning: EnglishWordMeaning,
-}
-
-impl_json_response_builder!(NewEnglishWordMeaningCreatedResponse);
-
 
 
 #[post("")]
@@ -165,7 +76,7 @@ pub async fn create_english_word_meaning(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    require_permission_OLD!(
+    require_user_authentication_and_permission!(
         &mut transaction,
         authentication,
         Permission::WordUpdate
@@ -197,25 +108,6 @@ pub async fn create_english_word_meaning(
 }
 
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct EnglishWordMeaningUpdateRequest {
-    #[serde(default, with = "::serde_with::rust::double_option")]
-    pub disambiguation: Option<Option<String>>,
-
-    #[serde(default, with = "::serde_with::rust::double_option")]
-    pub abbreviation: Option<Option<String>>,
-
-    #[serde(default, with = "::serde_with::rust::double_option")]
-    pub description: Option<Option<String>>,
-}
-
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct EnglishWordMeaningUpdatedResponse {
-    pub meaning: EnglishWordMeaningWithCategoriesAndTranslations,
-}
-
-impl_json_response_builder!(EnglishWordMeaningUpdatedResponse);
 
 
 #[patch("/{english_word_meaning_id}")]
@@ -228,7 +120,7 @@ pub async fn update_english_word_meaning(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    require_permission_OLD!(
+    require_user_authentication_and_permission!(
         &mut transaction,
         authentication,
         Permission::WordUpdate
@@ -297,6 +189,7 @@ pub async fn update_english_word_meaning(
 
 
 
+
 #[delete("/{english_word_meaning_id}")]
 pub async fn delete_english_word_meaning(
     state: ApplicationState,
@@ -306,7 +199,7 @@ pub async fn delete_english_word_meaning(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    require_permission_OLD!(
+    require_user_authentication_and_permission!(
         &mut transaction,
         authentication,
         Permission::WordUpdate
@@ -325,6 +218,7 @@ pub async fn delete_english_word_meaning(
         )
     };
 
+    // TODO we don't verify english word ID validity here, is that okay?
 
     let successfully_deleted_meaning = entities::EnglishWordMeaningMutation::delete(
         &mut transaction,
@@ -343,6 +237,7 @@ pub async fn delete_english_word_meaning(
 
     Ok(HttpResponse::Ok().finish())
 }
+
 
 
 

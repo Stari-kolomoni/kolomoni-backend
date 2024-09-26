@@ -1,11 +1,11 @@
 use actix_web::{web, Scope};
-use meaning::english_word_meaning_router;
-use word::english_word_router;
 
-pub mod meaning;
-pub mod word;
+mod endpoints;
+pub use endpoints::*;
+mod model_impls;
 
-// TODO Links.
+
+// TODO Word meaning links.
 
 
 #[rustfmt::skip]

@@ -25,6 +25,8 @@ use crate::{
     state::ApplicationState,
 };
 
+// TODO this module needs to be removed
+
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct TranslationSuggestionRequest {

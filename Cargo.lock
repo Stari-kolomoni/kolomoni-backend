@@ -1439,8 +1439,8 @@ name = "kolomoni_configuration"
 version = "0.1.0"
 dependencies = [
  "dunce",
- "miette",
  "serde",
+ "thiserror",
  "toml",
  "tracing-subscriber",
 ]

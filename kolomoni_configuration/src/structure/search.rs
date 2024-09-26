@@ -1,10 +1,14 @@
 use std::path::{Path, PathBuf};
 
-use miette::{miette, Context, IntoDiagnostic, Result};
 use serde::Deserialize;
 
 use super::base_paths::BasePathsConfiguration;
-use crate::{traits::ResolvableConfigurationWithContext, utilities::replace_placeholders_in_path};
+use crate::{
+    traits::ResolveWithContext,
+    utilities::replace_placeholders_in_path,
+    MissingSearchIndexDirectoryCreationError,
+};
+
 
 #[derive(Debug, Deserialize)]
 pub(super) struct UnresolvedSearchConfiguration {
@@ -16,32 +20,40 @@ pub struct SearchConfiguration {
     pub search_index_directory_path: PathBuf,
 }
 
-impl ResolvableConfigurationWithContext for UnresolvedSearchConfiguration {
+
+impl<'r> ResolveWithContext<'r> for UnresolvedSearchConfiguration {
     type Resolved = SearchConfiguration;
-    type Context = BasePathsConfiguration;
+    type Context = &'r BasePathsConfiguration;
 
-
-    fn resolve(self, context: Self::Context) -> Result<Self::Resolved> {
+    fn resolve_with_context(self, context: Self::Context) -> Self::Resolved {
         let search_index_directory_path = replace_placeholders_in_path(
             Path::new(&self.search_index_directory_path),
             context.placeholders(),
         );
 
-        if search_index_directory_path.exists() && !search_index_directory_path.is_dir() {
-            return Err(miette!(
-                "Search index directory path exists, but is not a directory!"
-            ));
-        }
-
-        if !search_index_directory_path.is_dir() {
-            std::fs::create_dir_all(&search_index_directory_path)
-                .into_diagnostic()
-                .wrap_err("Failed to create missing search index directory.")?;
-        }
-
-
-        Ok(SearchConfiguration {
+        Self::Resolved {
             search_index_directory_path,
+        }
+    }
+}
+
+impl SearchConfiguration {
+    pub fn create_search_index_directory_if_missing(
+        &self,
+    ) -> Result<(), MissingSearchIndexDirectoryCreationError> {
+        if self.search_index_directory_path.exists() && !self.search_index_directory_path.is_dir() {
+            return Err(
+                MissingSearchIndexDirectoryCreationError::NotADirectory {
+                    path: self.search_index_directory_path.clone(),
+                },
+            );
+        }
+
+        std::fs::create_dir_all(&self.search_index_directory_path).map_err(|error| {
+            MissingSearchIndexDirectoryCreationError::UnableToCreateDirectory {
+                directory_path: self.search_index_directory_path.clone(),
+                error,
+            }
         })
     }
 }

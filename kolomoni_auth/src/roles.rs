@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt::Display};
+use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
@@ -115,6 +115,12 @@ impl RoleSet {
         Self {
             roles: HashSet::with_capacity(0),
         }
+    }
+
+    pub fn from_roles(roles: &[Role]) -> Self {
+        let roles = roles.iter().copied().collect();
+
+        Self::from_role_hash_set(roles)
     }
 
     /// Initialize a role set from a [`HashSet`] of [`Role`]s.

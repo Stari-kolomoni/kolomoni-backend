@@ -1,12 +1,13 @@
 use actix_http::StatusCode;
 use actix_web::{delete, post, web, HttpResponse, Scope};
 use kolomoni_auth::Permission;
-use kolomoni_core::id::{EnglishWordMeaningId, SloveneWordMeaningId};
+use kolomoni_core::{
+    api_models::{TranslationCreationRequest, TranslationDeletionRequest},
+    id::{EnglishWordMeaningId, SloveneWordMeaningId},
+};
 use kolomoni_database::entities;
-use serde::{Deserialize, Serialize};
 use sqlx::Acquire;
-use utoipa::ToSchema;
-use uuid::Uuid;
+use tracing::info;
 
 use crate::{
     api::{
@@ -16,17 +17,11 @@ use crate::{
     authentication::UserAuthenticationExtractor,
     json_error_response_with_reason,
     obtain_database_connection,
-    require_permission_OLD,
-    require_user_authentication,
+    require_user_authentication_and_permission,
     state::ApplicationState,
 };
 
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct TranslationCreationRequest {
-    pub english_word_meaning_id: Uuid,
-    pub slovene_word_meaning_id: Uuid,
-}
 
 
 /// Create a new translation
@@ -61,9 +56,9 @@ pub struct TranslationCreationRequest {
             body = ErrorReasonResponse,
             example = json!({ "reason": "The translation already exists." })
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresTranslationCreate>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::TranslationCreate>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -72,16 +67,15 @@ pub struct TranslationCreationRequest {
 #[post("")]
 pub async fn create_translation(
     state: ApplicationState,
-    authentication: UserAuthenticationExtractor,
+    authentication_extractor: UserAuthenticationExtractor,
     request_body: web::Json<TranslationCreationRequest>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_user_authentication!(authentication);
-    require_permission_OLD!(
+    let authenticated_user = require_user_authentication_and_permission!(
         &mut transaction,
-        authenticated_user,
+        authentication_extractor,
         Permission::TranslationCreate
     );
 
@@ -110,7 +104,7 @@ pub async fn create_translation(
 
     if !slovene_word_exists {
         return Err(APIError::client_error(
-            "The provided slovene word does not exist.",
+            "The provided slovene word meaning does not exist.",
         ));
     }
 
@@ -161,14 +155,6 @@ pub async fn create_translation(
 
 
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct TranslationDeletionRequest {
-    pub english_word_meaning_id: Uuid,
-    pub slovene_word_meaning_id: Uuid,
-}
-
-
-
 /// Delete a translation
 ///
 /// This endpoint will remove a translation relationship
@@ -199,9 +185,9 @@ pub struct TranslationDeletionRequest {
             status = 404,
             description = "The translation relationship does not exist.",
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::FailedAuthenticationResponses<openapi::RequiresTranslationDelete>,
-        openapi::InternalServerErrorResponse,
+        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::FailedAuthentication<openapi::response::requires::TranslationDelete>,
+        openapi::response::InternalServerError,
     ),
     security(
         ("access_token" = [])
@@ -210,16 +196,15 @@ pub struct TranslationDeletionRequest {
 #[delete("")]
 pub async fn delete_translation(
     state: ApplicationState,
-    authentication: UserAuthenticationExtractor,
+    authentication_extractor: UserAuthenticationExtractor,
     request_body: web::Json<TranslationDeletionRequest>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_user_authentication!(authentication);
-    require_permission_OLD!(
+    let authenticated_user = require_user_authentication_and_permission!(
         &mut transaction,
-        authenticated_user,
+        authentication_extractor,
         Permission::TranslationDelete
     );
 
@@ -281,6 +266,13 @@ pub async fn delete_translation(
     }
 
 
+    info!(
+        operator = %authenticated_user.user_id(),
+        "Deleted translation relationship: {} <-> {}",
+        english_word_meaning_id, slovene_word_meaning_id
+    );
+
+
 
     /* TODO pending cache layer rewrite
     // Signals to the search engine that both words have been updated.
@@ -298,6 +290,8 @@ pub async fn delete_translation(
 
     Ok(HttpResponse::Ok().finish())
 }
+
+
 
 
 #[rustfmt::skip]

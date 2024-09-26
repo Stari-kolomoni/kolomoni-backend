@@ -2,31 +2,146 @@
 //! the `with_test_facilities` feature flag is enabled.
 
 use actix_web::{post, web, HttpResponse, Scope};
-use kolomoni_auth::{Role, DEFAULT_USER_ROLE};
-use kolomoni_database::{mutation, query};
-use kolomoni_migrations::Migrator;
-use miette::{Context, IntoDiagnostic, Result};
-use sea_orm::DatabaseConnection;
-use sea_orm_migration::MigratorTrait;
+use kolomoni_auth::{Role, RoleSet, DEFAULT_USER_ROLE};
+use kolomoni_core::id::UserId;
+use kolomoni_database::entities;
+use kolomoni_migrations::{
+    core::{
+        errors::{MigrationApplyError, MigrationRollbackError, StatusError},
+        identifier::MigrationIdentifier,
+        migrations::MigrationsWithStatusOptions,
+    },
+    migrations,
+};
 use serde::{Deserialize, Serialize};
+use sqlx::{postgres::PgConnectOptions, Acquire, ConnectOptions, PgConnection};
+use thiserror::Error;
 use tracing::{info, warn};
+use uuid::Uuid;
 
 use crate::{
     api::errors::{APIError, EndpointResult},
+    obtain_database_connection,
     state::ApplicationState,
 };
 
-pub async fn drop_database_and_reapply_migrations(
-    database_connection: &DatabaseConnection,
-) -> Result<()> {
-    warn!("Dropping the entire database and reapplying all migrations.");
 
-    Migrator::fresh(database_connection)
-        .await
-        .into_diagnostic()
-        .wrap_err("Failed to drop database and reapply migrations.")?;
+#[derive(Debug, Error)]
+pub enum RollbackAndReapplyError {
+    #[error("failed to get migration status")]
+    StatusError {
+        #[from]
+        #[source]
+        error: StatusError,
+    },
 
-    info!("Database reset.");
+    #[error("migration {} does not have a rollback script", .migration)]
+    MissingRollbackScript { migration: MigrationIdentifier },
+
+    #[error("database error encountered")]
+    DatabaseError {
+        #[from]
+        #[source]
+        error: sqlx::Error,
+    },
+
+    #[error("failed to rollback migration {}", .migration)]
+    MigrationRollbackError {
+        #[source]
+        error: MigrationRollbackError,
+
+        migration: MigrationIdentifier,
+    },
+
+    #[error("failed to apply migration {}", .migration)]
+    MigrationApplyError {
+        #[source]
+        error: MigrationApplyError,
+
+        migration: MigrationIdentifier,
+    },
+}
+
+
+pub async fn rollback_and_reapply_non_privileged_migrations(
+    migrator_user_connection_options: &PgConnectOptions,
+) -> Result<(), RollbackAndReapplyError> {
+    warn!("Rolling back and reapplying all non-privileged migrations.");
+
+    let migrator = migrations::manager();
+
+
+    info!("Fetching migration status.");
+
+    let all_migrations = migrator
+        .migrations_with_status_with_fallback(
+            Some(migrator_user_connection_options),
+            MigrationsWithStatusOptions::strict(),
+        )
+        .await?;
+
+    // Ignores leading privileged migrations.
+    let migrations_to_rollback_and_reapply = Vec::from_iter(
+        all_migrations
+            .into_iter()
+            .skip_while(|migration| migration.configuration().run_as_privileged_user),
+    );
+
+    // Ensures all filtered migration scripts actually have a rollback script.
+    for migration in &migrations_to_rollback_and_reapply {
+        if !migration.has_rollback_script() {
+            return Err(RollbackAndReapplyError::MissingRollbackScript {
+                migration: migration.identifier().to_owned(),
+            });
+        }
+    }
+
+    info!(
+        "Will rollback and reapply {} migrations.",
+        migrations_to_rollback_and_reapply.len()
+    );
+
+    info!("Connecting to database as migrator...");
+
+
+    let mut database_connection = migrator_user_connection_options.connect().await?;
+
+    for migration_to_roll_back in migrations_to_rollback_and_reapply.iter().rev() {
+        info!(
+            "Rolling back migration {}...",
+            migration_to_roll_back.identifier()
+        );
+
+        migration_to_roll_back
+            .execute_down(&mut database_connection)
+            .await
+            .map_err(
+                |error| RollbackAndReapplyError::MigrationRollbackError {
+                    error,
+                    migration: migration_to_roll_back.identifier().to_owned(),
+                },
+            )?;
+    }
+
+    for migration_to_apply in &migrations_to_rollback_and_reapply {
+        info!(
+            "Applying migration {}...",
+            migration_to_apply.identifier()
+        );
+
+        migration_to_apply
+            .execute_up(&mut database_connection)
+            .await
+            .map_err(
+                |error| RollbackAndReapplyError::MigrationApplyError {
+                    error,
+                    migration: migration_to_apply.identifier().to_owned(),
+                },
+            )?;
+    }
+
+
+    info!("All migrations rolled back and reapplied.");
 
     Ok(())
 }
@@ -35,9 +150,12 @@ pub async fn drop_database_and_reapply_migrations(
 pub async fn reset_server(state: ApplicationState) -> EndpointResult {
     warn!("Resetting database.");
 
+    todo!();
+
+    /*
     drop_database_and_reapply_migrations(&state.database)
         .await
-        .map_err(APIError::InternalGenericError)?;
+        .map_err(APIError::InternalGenericError)?; */
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -45,7 +163,7 @@ pub async fn reset_server(state: ApplicationState) -> EndpointResult {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct GiveFullUserPermissionsRequest {
-    pub user_id: i32,
+    pub user_id: Uuid,
 }
 
 #[post("/give-user-full-permissions")]
@@ -53,68 +171,78 @@ pub async fn give_full_permissions_to_user(
     state: ApplicationState,
     request_body: web::Json<GiveFullUserPermissionsRequest>,
 ) -> EndpointResult {
-    let target_user_id = request_body.user_id;
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
+    let target_user_id = UserId::new(request_body.user_id);
+
 
     warn!(
         "Giving full permissions to user {}.",
         target_user_id
     );
 
-    mutation::UserRoleMutation::add_roles_to_user(
-        &state.database,
+    entities::UserRoleMutation::add_roles_to_user(
+        &mut transaction,
         target_user_id,
-        &[Role::User, Role::Administrator],
+        RoleSet::from_roles(&[Role::User, Role::Administrator]),
     )
-    .await
-    .map_err(APIError::InternalGenericError)?;
+    .await?;
+
+
+    transaction.commit().await?;
+
 
     Ok(HttpResponse::Ok().finish())
 }
 
 
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct ResetUserRolesRequest {
-    pub user_id: i32,
+    pub user_id: Uuid,
 }
+
 
 #[post("/reset-user-roles-to-normal")]
 pub async fn reset_user_roles_to_starting_user_roles(
     state: ApplicationState,
     request_body: web::Json<ResetUserRolesRequest>,
 ) -> EndpointResult {
-    let target_user_id = request_body.user_id;
+    let mut database_connection = obtain_database_connection!(state);
+    let mut transaction = database_connection.begin().await?;
+
+    let target_user_id = UserId::new(request_body.user_id);
+
 
     warn!(
         "Resetting user {} to starting roles.",
         target_user_id
     );
 
-    let previous_role_set = query::UserRoleQuery::user_roles(&state.database, target_user_id)
-        .await
-        .map_err(APIError::InternalGenericError)?;
+    let current_roles_of_user =
+        entities::UserRoleQuery::roles_for_user(&mut transaction, target_user_id).await?;
 
-    mutation::UserRoleMutation::remove_roles_from_user(
-        &state.database,
-        target_user_id,
-        &previous_role_set
-            .into_roles()
-            .into_iter()
-            .collect::<Vec<_>>(),
-    )
-    .await
-    .map_err(APIError::InternalGenericError)?;
 
-    mutation::UserRoleMutation::add_roles_to_user(
-        &state.database,
+    entities::UserRoleMutation::remove_roles_from_user(
+        &mut transaction,
         target_user_id,
-        &[DEFAULT_USER_ROLE],
+        current_roles_of_user,
     )
-    .await
-    .map_err(APIError::InternalGenericError)?;
+    .await?;
+
+    entities::UserRoleMutation::add_roles_to_user(
+        &mut transaction,
+        target_user_id,
+        RoleSet::from_roles(&[DEFAULT_USER_ROLE]),
+    )
+    .await?;
 
 
     Ok(HttpResponse::Ok().finish())
 }
+
+
 
 
 #[rustfmt::skip]

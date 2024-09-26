@@ -1,109 +1,33 @@
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
-use chrono::{DateTime, Utc};
 use kolomoni_auth::Permission;
 use kolomoni_core::{
-    api_models::Category,
-    id::{CategoryId, SloveneWordId, SloveneWordMeaningId},
+    api_models::{
+        NewSloveneWordMeaningCreatedResponse,
+        NewSloveneWordMeaningRequest,
+        SloveneWordMeaningUpdateRequest,
+        SloveneWordMeaningUpdatedResponse,
+        SloveneWordMeaningsResponse,
+    },
+    id::{SloveneWordId, SloveneWordMeaningId},
 };
 use kolomoni_database::entities::{self, NewSloveneWordMeaning, SloveneWordMeaningUpdate};
-use serde::{Deserialize, Serialize};
 use sqlx::Acquire;
-use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::word::SloveneWordMeaningWithCategoriesAndTranslations;
 use crate::{
     api::{
         errors::{APIError, EndpointResult},
         macros::ContextlessResponder,
         traits::IntoApiModel,
-        v1::dictionary::english::meaning::ShallowEnglishWordMeaning,
+        v1::dictionary::parse_string_into_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    impl_json_response_builder,
     obtain_database_connection,
-    require_permission_OLD,
     require_permission_with_optional_authentication,
+    require_user_authentication_and_permission,
     state::ApplicationState,
 };
 
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct ShallowSloveneWordMeaning {
-    pub meaning_id: SloveneWordMeaningId,
-
-    pub disambiguation: Option<String>,
-
-    pub abbreviation: Option<String>,
-
-    pub description: Option<String>,
-
-    pub categories: Vec<CategoryId>,
-
-    pub created_at: DateTime<Utc>,
-
-    pub last_modified_at: DateTime<Utc>,
-}
-
-// TODO refactor these names, this one is the same as ShallowSloveneWordMeaning, but without categories
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct SloveneWordMeaning {
-    pub meaning_id: SloveneWordMeaningId,
-
-    pub disambiguation: Option<String>,
-
-    pub abbreviation: Option<String>,
-
-    pub description: Option<String>,
-
-    pub created_at: DateTime<Utc>,
-
-    pub last_modified_at: DateTime<Utc>,
-}
-
-impl IntoApiModel for entities::SloveneWordMeaningModel {
-    type ApiModel = SloveneWordMeaning;
-
-    fn into_api_model(self) -> Self::ApiModel {
-        Self::ApiModel {
-            meaning_id: self.id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-        }
-    }
-}
-
-
-/*
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct SloveneWordMeaningWithCategoriesAndTranslations {
-    pub meaning_id: SloveneWordMeaningId,
-
-    pub disambiguation: Option<String>,
-
-    pub abbreviation: Option<String>,
-
-    pub description: Option<String>,
-
-    pub created_at: DateTime<Utc>,
-
-    pub last_modified_at: DateTime<Utc>,
-
-    pub categories: Vec<CategoryId>,
-
-    pub translates_into: Vec<ShallowEnglishWordMeaning>,
-} */
-
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct SloveneWordMeaningsResponse {
-    pub meanings: Vec<SloveneWordMeaningWithCategoriesAndTranslations>,
-}
-
-impl_json_response_builder!(SloveneWordMeaningsResponse);
 
 
 
@@ -111,7 +35,7 @@ impl_json_response_builder!(SloveneWordMeaningsResponse);
 pub async fn get_all_slovene_word_meanings(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid,)>,
+    parameters: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
 
@@ -122,7 +46,9 @@ pub async fn get_all_slovene_word_meanings(
     );
 
 
-    let target_slovene_word_id = SloveneWordId::new(parameters.into_inner().0);
+    let target_slovene_word_id = SloveneWordId::new(parse_string_into_uuid(
+        parameters.into_inner().0.as_str(),
+    )?);
 
 
     let slovene_word_meanings = entities::SloveneWordMeaningQuery::get_all_by_slovene_word_id(
@@ -142,44 +68,28 @@ pub async fn get_all_slovene_word_meanings(
 
 
 
-// TODO could be nice to submit initial categories with this as well? (see also english version of this)
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct NewSloveneWordMeaningRequest {
-    pub disambiguation: Option<String>,
-
-    pub abbreviation: Option<String>,
-
-    pub description: Option<String>,
-}
-
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct NewSloveneWordMeaningCreatedResponse {
-    pub meaning: SloveneWordMeaning,
-}
-
-impl_json_response_builder!(NewSloveneWordMeaningCreatedResponse);
-
-
 
 #[post("")]
 pub async fn create_slovene_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid,)>,
+    parameters: web::Path<(String,)>,
     request_data: web::Json<NewSloveneWordMeaningRequest>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    require_permission_OLD!(
+    require_user_authentication_and_permission!(
         &mut transaction,
         authentication,
         Permission::WordUpdate
     );
 
 
-    let target_slovene_word_id = SloveneWordId::new(parameters.into_inner().0);
+    let target_slovene_word_id = SloveneWordId::new(parse_string_into_uuid(
+        parameters.into_inner().0.as_str(),
+    )?);
+
     let new_word_meaning_data = request_data.into_inner();
 
 
@@ -206,39 +116,19 @@ pub async fn create_slovene_word_meaning(
 }
 
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct SloveneWordMeaningUpdateRequest {
-    #[serde(default, with = "::serde_with::rust::double_option")]
-    pub disambiguation: Option<Option<String>>,
-
-    #[serde(default, with = "::serde_with::rust::double_option")]
-    pub abbreviation: Option<Option<String>>,
-
-    #[serde(default, with = "::serde_with::rust::double_option")]
-    pub description: Option<Option<String>>,
-}
-
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct SloveneWordMeaningUpdatedResponse {
-    pub meaning: SloveneWordMeaningWithCategoriesAndTranslations,
-}
-
-impl_json_response_builder!(SloveneWordMeaningUpdatedResponse);
-
 
 
 #[patch("/{slovene_word_meaning_id}")]
 pub async fn update_slovene_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid, Uuid)>,
+    parameters: web::Path<(String, String)>,
     request_data: web::Json<SloveneWordMeaningUpdateRequest>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    require_permission_OLD!(
+    require_user_authentication_and_permission!(
         &mut transaction,
         authentication,
         Permission::WordUpdate
@@ -249,8 +139,10 @@ pub async fn update_slovene_word_meaning(
     let (target_slovene_word_id, target_slovene_word_meaning_id) = {
         let url_parameters = parameters.into_inner();
 
-        let target_slovene_word_id = SloveneWordId::new(url_parameters.0);
-        let target_slovene_word_meaning_id = SloveneWordMeaningId::new(url_parameters.1);
+        let target_slovene_word_id =
+            SloveneWordId::new(parse_string_into_uuid(url_parameters.0.as_str())?);
+        let target_slovene_word_meaning_id =
+            SloveneWordMeaningId::new(parse_string_into_uuid(url_parameters.1.as_str())?);
 
         (
             target_slovene_word_id,
@@ -308,16 +200,17 @@ pub async fn update_slovene_word_meaning(
 
 
 
+
 #[delete("/{slovene_word_meaning_id}")]
 pub async fn delete_slovene_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid, Uuid)>,
+    parameters: web::Path<(String, String)>,
 ) -> EndpointResult {
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    require_permission_OLD!(
+    require_user_authentication_and_permission!(
         &mut transaction,
         authentication,
         Permission::WordUpdate
@@ -327,8 +220,10 @@ pub async fn delete_slovene_word_meaning(
     let (target_slovene_word_id, target_slovene_word_meaning_id) = {
         let url_parameters = parameters.into_inner();
 
-        let target_slovene_word_id = SloveneWordId::new(url_parameters.0);
-        let target_slovene_word_meaning_id = SloveneWordMeaningId::new(url_parameters.1);
+        let target_slovene_word_id =
+            SloveneWordId::new(parse_string_into_uuid(url_parameters.0.as_str())?);
+        let target_slovene_word_meaning_id =
+            SloveneWordMeaningId::new(parse_string_into_uuid(url_parameters.1.as_str())?);
 
         (
             target_slovene_word_id,
