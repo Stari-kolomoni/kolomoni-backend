@@ -11,6 +11,7 @@ publish = false
 
 [workspace]
 members = [
+    "kolomoni_api_client",
     "kolomoni_auth",
     "kolomoni_configuration",
     "kolomoni_core",
@@ -73,6 +74,7 @@ chrono = "^0.4.38"
 
 # TODO We'll have to bump this at some point, I think the blocker was with actix-web using this version of `http`.
 http = "^0.2.12"
+url = "^2.5.2"
 
 mime = "^0.3.17"
 uuid = { version = "^1.8.0", features = ["v7", "serde"] }

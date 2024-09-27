@@ -22,7 +22,7 @@ pub struct Category {
 
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
 #[schema(
     example = json!({
         "slovene_name": "Dejavnosti in spopad",
@@ -38,7 +38,7 @@ pub struct CategoryCreationRequest {
 
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 #[schema(
     example = json!({
         "category": {
@@ -57,7 +57,7 @@ pub struct CategoryCreationResponse {
 
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 pub struct CategoriesResponse {
     pub categories: Vec<Category>,
 }
@@ -65,7 +65,7 @@ pub struct CategoriesResponse {
 
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 #[schema(
     example = json!({
         "category": {
@@ -81,7 +81,7 @@ pub struct CategoryResponse {
 
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
 #[schema(
     example = json!({
         "slovene_name": "Dejavnosti in spopad",

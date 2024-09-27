@@ -10,7 +10,7 @@ use crate::id::UserId;
 
 /// User login information.
 #[derive(Deserialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
 #[schema(
     example = json!({
         "username": "sample_user",
@@ -75,7 +75,10 @@ pub struct UserLoginRefreshResponse {
 ///
 /// This works because the `refresh_token` has a longer expiration time.
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde_impls_for_client_on_models",
+    derive(serde::Deserialize)
+)]
 #[schema(
     example = json!({
         "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1Y\
@@ -106,7 +109,7 @@ pub struct UserLoginResponse {
 ///
 /// TODO needs updated example
 #[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 #[schema(example = json!({
     "id": 1,
     "username": "janeznovak",
@@ -142,7 +145,7 @@ pub struct UserInfo {
 ///
 /// This struct is used as a response in the public API.
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 #[schema(example = json!({
     "user": {
         "id": 1,
@@ -164,7 +167,7 @@ pub struct UserInfoResponse {
 ///
 /// This struct is used as a request in the public API.
 #[derive(Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
 #[schema(
     example = json!({
         "new_display_name": "Janez Novak Veliki"
@@ -183,14 +186,14 @@ pub struct UserDisplayNameChangeRequest {
 ///
 /// This struct is used as a response in the public API.
 #[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 pub struct UserDisplayNameChangeResponse {
     pub user: UserInfo,
 }
 
 
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 #[schema(
     example = json!({
         "role_names": [
@@ -210,7 +213,7 @@ pub struct UserRolesResponse {
 ///
 /// This struct is used as a response in the public API.
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 #[schema(
     example = json!({
         "permissions": [
@@ -229,7 +232,10 @@ pub struct UserPermissionsResponse {
 
 /// List of registered users.
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde_impls_for_client_on_models",
+    derive(serde::Deserialize)
+)]
 #[schema(example = json!({
     "users": [
         {
@@ -256,7 +262,7 @@ pub struct RegisteredUsersListResponse {
     "display_name": "Janez Novak",
     "password": "perica_reže_raci_rep"
 }))]
-#[cfg_attr(feature = "more_serde_impls", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(serde::Serialize))]
 pub struct UserRegistrationRequest {
     /// Username to register as (not the same as the display name).
     pub username: String,
@@ -274,7 +280,10 @@ pub struct UserRegistrationRequest {
 /// API-serializable response upon successful user registration.
 /// Contains the newly-created user's information.
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde_impls_for_client_on_models",
+    derive(serde::Deserialize)
+)]
 #[schema(
     example = json!({
         "user": {
@@ -294,7 +303,7 @@ pub struct UserRegistrationResponse {
 
 
 #[derive(Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(serde::Serialize))]
 #[schema(
     example = json!({
         "roles_to_add": ["administrator"]
@@ -306,7 +315,7 @@ pub struct UserRoleAddRequest {
 
 
 #[derive(Deserialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(serde::Serialize))]
 #[schema(
     example = json!({
         "roles_to_remove": ["administrator"]

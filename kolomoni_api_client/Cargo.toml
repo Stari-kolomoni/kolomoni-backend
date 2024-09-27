@@ -1,0 +1,15 @@
+[package]
+name = "kolomoni_api_client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kolomoni_core = { path = "../kolomoni_core", features = ["serde_impls_for_client_on_models"] }
+# kolomoni_auth = { path = "../kolomoni_auth" }
+
+serde = { workspace = true }
+
+thiserror = { workspace = true }
+
+reqwest = { workspace = true, features = ["zstd", "json"]}
+url = { workspace = true }

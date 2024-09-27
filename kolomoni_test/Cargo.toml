@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-kolomoni_core = { path = "../kolomoni_core", features = ["more_serde_impls"] }
+kolomoni_core = { path = "../kolomoni_core", features = ["serde_impls_for_client_on_models"] }
 kolomoni_test_util = { path = "../kolomoni_test_util" }
 
 tokio = { workspace = true }

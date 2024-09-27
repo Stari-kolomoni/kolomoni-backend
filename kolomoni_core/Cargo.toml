@@ -16,6 +16,8 @@ utoipa = { workspace = true }
 
 [features]
 # Implements Deserialize on API response models and Serialize on 
-# API request models, allowing us to write e.g. test code that 
-# handles both constructing API requests and parsing API responses.
-more_serde_impls = []
+# request models, allowing us to write clients for the API.
+#
+# `kolomoni` (the server), for obvious reasons, doesn't need this feature, 
+# but for `kolomoni_api_client` for example does.
+serde_impls_for_client_on_models = []

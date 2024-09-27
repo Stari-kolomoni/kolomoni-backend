@@ -48,28 +48,28 @@ pub struct EnglishWordWithMeanings {
 
 
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 pub struct EnglishWordsResponse {
     pub english_words: Vec<EnglishWordWithMeanings>,
 }
 
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
-#[cfg_attr(feature = "more_serde_impls", derive(Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
 pub struct EnglishWordFilters {
     pub last_modified_after: Option<DateTime<Utc>>,
 }
 
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
 pub struct EnglishWordsListRequest {
     pub filters: Option<EnglishWordFilters>,
 }
 
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Serialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
 #[schema(
     example = json!({
         "lemma": "adventurer"
@@ -81,7 +81,7 @@ pub struct EnglishWordCreationRequest {
 
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 #[schema(
     example = json!({
         "word": {
@@ -98,7 +98,7 @@ pub struct EnglishWordCreationResponse {
 
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
-#[cfg_attr(feature = "more_serde_impls", derive(Deserialize))]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 pub struct EnglishWordInfoResponse {
     pub word: EnglishWordWithMeanings,
 }
