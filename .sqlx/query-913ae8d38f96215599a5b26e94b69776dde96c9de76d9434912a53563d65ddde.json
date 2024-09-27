@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE kolomoni.word_slovene SET lemma = $1 WHERE word_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "913ae8d38f96215599a5b26e94b69776dde96c9de76d9434912a53563d65ddde"
+}

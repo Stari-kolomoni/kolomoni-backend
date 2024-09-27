@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO kolomoni.word_slovene_meaning (word_meaning_id, disambiguation, abbreviation, description, created_at, last_modified_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING word_meaning_id, disambiguation, abbreviation, description, created_at, last_modified_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "word_meaning_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "disambiguation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "abbreviation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_modified_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "f230b4df9aad52104698cdff56775dba6eef978d5b091f4eeaf71254b845278c"
+}

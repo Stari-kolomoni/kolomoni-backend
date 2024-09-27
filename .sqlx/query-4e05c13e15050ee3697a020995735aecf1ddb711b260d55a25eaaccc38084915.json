@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS( SELECT 1 FROM kolomoni.role_permission INNER JOIN kolomoni.user_role ON role_permission.role_id = user_role.role_id WHERE user_role.user_id = $1 AND role_permission.permission_id = $2 )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4e05c13e15050ee3697a020995735aecf1ddb711b260d55a25eaaccc38084915"
+}

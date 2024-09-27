@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM kolomoni.word_english_meaning WHERE word_meaning_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dd0c507891d10a886e881ddd885ad613b2a3fd130794fb9e043454e43e836546"
+}

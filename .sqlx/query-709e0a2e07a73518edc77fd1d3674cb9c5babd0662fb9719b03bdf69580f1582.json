@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT wsm.word_meaning_id as \"word_meaning_id\", wsm.disambiguation as \"disambiguation\", wsm.abbreviation as \"abbreviation\", wsm.description as \"description\", wsm.created_at as \"created_at\", wsm.last_modified_at as \"last_modified_at\", coalesce( json_agg(categories) FILTER (WHERE categories.category_id IS NOT NULL), '[]'::json ) as \"categories\", coalesce( json_agg(translates_into) FILTER (WHERE translates_into.translated_at IS NOT NULL), '[]'::json ) as \"translates_into\" FROM kolomoni.word_slovene_meaning as wsm INNER JOIN kolomoni.word_meaning as wm ON wsm.word_meaning_id = wm.id LEFT JOIN LATERAL ( SELECT wec.category_id as \"category_id\" FROM kolomoni.word_meaning_category wec WHERE wec.word_meaning_id = wsm.word_meaning_id ) categories ON TRUE LEFT JOIN LATERAL ( SELECT wem.word_meaning_id  as \"meaning_id\", wem.description      as \"description\", wem.disambiguation   as \"disambiguation\", wem.abbreviation     as \"abbreviation\", wem.created_at       as \"created_at\", wem.last_modified_at as \"last_modified_at\", coalesce( json_agg(categories_on_translated) FILTER (WHERE categories_on_translated.category_id IS NOT NULL), '[]'::json ) as \"categories\", translated_at, translated_by FROM kolomoni.word_meaning_translation wmt INNER JOIN kolomoni.word_english_meaning as wem ON wmt.english_word_meaning_id = wem.word_meaning_id LEFT JOIN LATERAL ( SELECT wec_t.category_id as \"category_id\" FROM kolomoni.word_meaning_category wec_t WHERE wec_t.word_meaning_id = wem.word_meaning_id ) categories_on_translated ON TRUE WHERE wmt.slovene_word_meaning_id = wm.id GROUP BY wem.word_meaning_id, wem.description, wem.disambiguation, wem.abbreviation, wem.created_at, wem.last_modified_at, wmt.translated_at, wmt.translated_by ) translates_into ON TRUE WHERE wm.word_id = $1 AND wm.id = $2 GROUP BY wsm.word_meaning_id, wsm.disambiguation, wsm.abbreviation, wsm.description, wsm.created_at, wsm.last_modified_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "word_meaning_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "disambiguation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "abbreviation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_modified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "categories",
+        "type_info": "Json"
+      },
+      {
+        "ordinal": 7,
+        "name": "translates_into",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "709e0a2e07a73518edc77fd1d3674cb9c5babd0662fb9719b03bdf69580f1582"
+}

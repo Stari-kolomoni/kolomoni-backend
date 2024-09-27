@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM kolomoni.user_role WHERE user_id = $1 AND role_id = ANY($2::integer[]) RETURNING (SELECT DISTINCT role_id FROM kolomoni.user_role WHERE user_id = $1) as \"role_id!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role_id!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f19f58631329647176e6679cb5438795ef99591c7f08ce44d4ff9865dab33019"
+}

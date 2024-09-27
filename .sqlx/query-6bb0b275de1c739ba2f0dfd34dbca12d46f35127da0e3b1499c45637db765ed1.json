@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS ( SELECT 1 FROM kolomoni.word_slovene WHERE word_id = $1 )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6bb0b275de1c739ba2f0dfd34dbca12d46f35127da0e3b1499c45637db765ed1"
+}

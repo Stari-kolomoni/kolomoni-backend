@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO kolomoni.word_english (word_id, lemma) VALUES ($1, $2) RETURNING word_id, lemma",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "word_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "lemma",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "546c75c31481e4326e4e2080317b6eaf9f505a6669a061251dc0ddde25849754"
+}

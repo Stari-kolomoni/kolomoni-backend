@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS ( SELECT 1 FROM kolomoni.word_slovene WHERE lemma = $1 )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b88d6a3e0ec41459157c9bae31b9c400fdae8c34d8ef3898baa4e86698d81415"
+}

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT word_id, lemma, created_at, last_modified_at FROM kolomoni.word_english INNER JOIN kolomoni.word ON word.id = word_english.word_id\n                    WHERE last_modified_at >= $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "word_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "lemma",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_modified_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "690db5e3225e3aaf706618a9232a000ba359cb7bc752b1e54d909cadb57a3d71"
+}

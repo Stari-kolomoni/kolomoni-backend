@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT role_permission.permission_id as \"permission_id\" FROM kolomoni.role_permission INNER JOIN kolomoni.user_role ON role_permission.role_id = user_role.role_id WHERE user_role.user_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "permission_id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5ca4f52fe01fd3f5e57d989f86522ba4348a2519b5ba572ae6502d9dd7798358"
+}
