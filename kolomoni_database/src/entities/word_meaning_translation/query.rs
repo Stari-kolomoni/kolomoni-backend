@@ -12,10 +12,10 @@ impl WordMeaningTranslationQuery {
         slovene_word_meaning_id: SloveneWordMeaningId,
     ) -> QueryResult<bool> {
         let exists = sqlx::query_scalar!(
-            "SELECT EXISTS (\
+            "SELECT EXISTS ( \
                 SELECT 1 FROM kolomoni.word_meaning_translation \
-                    WHERE english_word_meaning_id = $1
-                        AND slovene_word_meaning_id = $2
+                    WHERE english_word_meaning_id = $1 \
+                        AND slovene_word_meaning_id = $2 \
             )",
             english_word_meaning_id.into_uuid(),
             slovene_word_meaning_id.into_uuid(),

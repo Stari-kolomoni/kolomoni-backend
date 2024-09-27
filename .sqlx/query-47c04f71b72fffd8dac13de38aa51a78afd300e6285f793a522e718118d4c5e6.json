@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT EXISTS (SELECT 1 FROM kolomoni.word_meaning WHERE id = $1 AND word_id = $2 )",
+  "query": "SELECT EXISTS ( SELECT 1 FROM kolomoni.word_meaning WHERE id = $1 AND word_id = $2 )",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       null
     ]
   },
-  "hash": "86e1cccf6414a68626bd7549fc14daa8a480bd6803a6037dd80e6c9c5290f9a2"
+  "hash": "47c04f71b72fffd8dac13de38aa51a78afd300e6285f793a522e718118d4c5e6"
 }

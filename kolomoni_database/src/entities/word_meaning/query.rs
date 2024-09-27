@@ -12,7 +12,7 @@ impl WordMeaningQuery {
         word_meaning_id: WordMeaningId,
     ) -> QueryResult<bool> {
         let exists = sqlx::query_scalar!(
-            "SELECT EXISTS (\
+            "SELECT EXISTS ( \
                 SELECT 1 \
                     FROM kolomoni.word_meaning \
                     WHERE id = $1 AND word_id = $2 \

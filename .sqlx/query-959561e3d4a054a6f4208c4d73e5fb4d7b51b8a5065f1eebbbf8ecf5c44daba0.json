@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ws.word_id as \"word_id\", ws.lemma as \"lemma\", w.created_at as \"created_at\", w.last_modified_at as \"last_modified_at\", coalesce( json_agg(meanings) FILTER (WHERE meanings.word_meaning_id IS NOT NULL), '[]'::json ) as \"meanings!\" FROM kolomoni.word_slovene as ws INNER JOIN kolomoni.word as w ON ws.word_id =  w.id LEFT JOIN LATERAL ( SELECT wsm.word_meaning_id as \"word_meaning_id\", wsm.disambiguation as \"disambiguation\", wsm.abbreviation as \"abbreviation\", wsm.description as \"description\", wsm.created_at as \"created_at\", wsm.last_modified_at as \"last_modified_at\", coalesce( json_agg(categories) FILTER (WHERE categories.category_id IS NOT NULL), '[]'::json ) as \"categories\", coalesce( json_agg(translates_into) FILTER (WHERE translates_into.translated_at IS NOT NULL), '[]'::json ) as \"translates_into\" FROM kolomoni.word_slovene_meaning as wsm INNER JOIN kolomoni.word_meaning as wm ON wsm.word_meaning_id = wm.id LEFT JOIN LATERAL ( SELECT wec.category_id as \"category_id\" FROM kolomoni.word_meaning_category wec WHERE wec.word_meaning_id = wsm.word_meaning_id ) categories ON TRUE LEFT JOIN LATERAL ( SELECT wem.word_meaning_id  as \"meaning_id\", wem.description      as \"description\", wem.disambiguation   as \"disambiguation\", wem.abbreviation     as \"abbreviation\", wem.created_at       as \"created_at\", wem.last_modified_at as \"last_modified_at\", coalesce( json_agg(categories_on_translated) FILTER (WHERE categories_on_translated.category_id IS NOT NULL), '[]'::json ) as \"categories\", translated_at, translated_by FROM kolomoni.word_meaning_translation wmt INNER JOIN kolomoni.word_english_meaning as wem ON wmt.english_word_meaning_id = wem.word_meaning_id LEFT JOIN LATERAL ( SELECT wec_t.category_id as \"category_id\" FROM kolomoni.word_meaning_category wec_t WHERE wec_t.word_meaning_id = wem.word_meaning_id ) categories_on_translated ON TRUE WHERE wmt.slovene_word_meaning_id = wm.id GROUP BY wem.word_meaning_id, wem.description, wem.disambiguation, wem.abbreviation, wem.created_at, wem.last_modified_at, wmt.translated_at, wmt.translated_by ) translates_into ON TRUE WHERE wm.word_id = ws.word_id GROUP BY wsm.word_meaning_id, wsm.disambiguation, wsm.abbreviation, wsm.description, wsm.created_at, wsm.last_modified_at ) meanings ON TRUE GROUP BY ws.word_id, ws.lemma, w.created_at, w.last_modified_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "word_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "lemma",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_modified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "meanings!",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "959561e3d4a054a6f4208c4d73e5fb4d7b51b8a5065f1eebbbf8ecf5c44daba0"
+}

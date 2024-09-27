@@ -45,12 +45,12 @@ impl UserMutation {
         let newly_created_user = sqlx::query_as!(
             super::InternalUserModel,
             "INSERT INTO kolomoni.user \
-                (id, username, display_name, hashed_password, \
-                joined_at, last_active_at, last_modified_at) \
-            VALUES ($1, $2, $3, $4, $5, $6, $7) \
-            RETURNING \
-                id, username, display_name, hashed_password, \
-                joined_at, last_active_at, last_modified_at",
+                    (id, username, display_name, hashed_password, \
+                    joined_at, last_active_at, last_modified_at) \
+                VALUES ($1, $2, $3, $4, $5, $6, $7) \
+                RETURNING \
+                    id, username, display_name, hashed_password, \
+                    joined_at, last_active_at, last_modified_at",
             user_model.id,
             user_model.username,
             user_model.display_name,
@@ -73,13 +73,13 @@ impl UserMutation {
         let updated_user_model = sqlx::query_as!(
             super::InternalUserModel,
             "UPDATE kolomoni.user \
-            SET \
-                display_name = $1, \
-                last_modified_at = $2 \
-            WHERE id = $3 \
-            RETURNING \
-                id, username, display_name, hashed_password, \
-                joined_at, last_active_at, last_modified_at",
+                SET \
+                    display_name = $1, \
+                    last_modified_at = $2 \
+                WHERE id = $3 \
+                RETURNING \
+                    id, username, display_name, hashed_password, \
+                    joined_at, last_active_at, last_modified_at",
             new_display_name,
             Utc::now(),
             user_id.into_uuid()

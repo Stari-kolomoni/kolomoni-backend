@@ -35,10 +35,10 @@ impl UserQuery {
         let optional_intermediate_model = sqlx::query_as!(
             super::InternalUserModel,
             "SELECT \
-                id, username, display_name, hashed_password, \
-                joined_at, last_modified_at, last_active_at \
-            FROM kolomoni.user \
-            WHERE id = $1",
+                    id, username, display_name, hashed_password, \
+                    joined_at, last_modified_at, last_active_at \
+                FROM kolomoni.user \
+                WHERE id = $1",
             user_id.into_uuid()
         )
         .fetch_optional(connection)
@@ -57,10 +57,10 @@ impl UserQuery {
         let optional_intermediate_model = sqlx::query_as!(
             super::InternalUserModel,
             "SELECT \
-                id, username, display_name, hashed_password, \
-                joined_at, last_modified_at, last_active_at \
-            FROM kolomoni.user \
-            WHERE username = $1",
+                    id, username, display_name, hashed_password, \
+                    joined_at, last_modified_at, last_active_at \
+                FROM kolomoni.user \
+                WHERE username = $1",
             username.as_ref()
         )
         .fetch_optional(connection)
@@ -146,9 +146,9 @@ impl UserQuery {
         let user_stream = sqlx::query_as!(
             super::InternalUserModel,
             "SELECT \
-                id, username, display_name, hashed_password, \
-                joined_at, last_modified_at, last_active_at \
-            FROM kolomoni.user"
+                    id, username, display_name, hashed_password, \
+                    joined_at, last_modified_at, last_active_at \
+                FROM kolomoni.user"
         )
         .fetch(connection);
 

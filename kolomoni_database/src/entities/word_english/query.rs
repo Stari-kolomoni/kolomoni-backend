@@ -115,9 +115,9 @@ impl EnglishWordQuery {
         let intermediate_extended_model = sqlx::query_as!(
             super::InternalEnglishWordWithMeaningsModel,
             "SELECT \
-                    we.word_id         as \"word_id\", \
-                    we.lemma           as \"lemma\", \
-                    w.created_at       as \"created_at\", \
+                    we.word_id as \"word_id\", \
+                    we.lemma as \"lemma\", \
+                    w.created_at as \"created_at\", \
                     w.last_modified_at as \"last_modified_at\", \
                     coalesce( \
                         json_agg(meanings) \
@@ -245,9 +245,9 @@ impl EnglishWordQuery {
         let intermediate_extended_model = sqlx::query_as!(
             super::InternalEnglishWordWithMeaningsModel,
             "SELECT \
-                    we.word_id         as \"word_id\", \
-                    we.lemma           as \"lemma\", \
-                    w.created_at       as \"created_at\", \
+                    we.word_id as \"word_id\", \
+                    we.lemma as \"lemma\", \
+                    w.created_at as \"created_at\", \
                     w.last_modified_at as \"last_modified_at\", \
                     coalesce( \
                         json_agg(meanings) \
@@ -359,7 +359,7 @@ impl EnglishWordQuery {
                 "SELECT word_id, lemma, created_at, last_modified_at \
                     FROM kolomoni.word_english \
                     INNER JOIN kolomoni.word \
-                        ON word.id = word_english.word_id
+                        ON word.id = word_english.word_id \
                     WHERE last_modified_at >= $1",
                 only_modified_after
             )
@@ -389,9 +389,9 @@ impl EnglishWordQuery {
             let internal_words_with_meanings_stream = sqlx::query_as!(
                 super::InternalEnglishWordWithMeaningsModel,
                 "SELECT \
-                        we.word_id         as \"word_id\", \
-                        we.lemma           as \"lemma\", \
-                        w.created_at       as \"created_at\", \
+                        we.word_id as \"word_id\", \
+                        we.lemma as \"lemma\", \
+                        w.created_at as \"created_at\", \
                         w.last_modified_at as \"last_modified_at\", \
                         coalesce( \
                             json_agg(meanings) \
@@ -485,9 +485,9 @@ impl EnglishWordQuery {
             let internal_words_with_meanings_stream = sqlx::query_as!(
                 super::InternalEnglishWordWithMeaningsModel,
                 "SELECT \
-                        we.word_id         as \"word_id\", \
-                        we.lemma           as \"lemma\", \
-                        w.created_at       as \"created_at\", \
+                        we.word_id as \"word_id\", \
+                        we.lemma as \"lemma\", \
+                        w.created_at as \"created_at\", \
                         w.last_modified_at as \"last_modified_at\", \
                         coalesce( \
                             json_agg(meanings) \

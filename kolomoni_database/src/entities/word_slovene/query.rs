@@ -118,9 +118,9 @@ impl SloveneWordQuery {
         let internal_word_with_meanings = sqlx::query_as!(
             super::InternalSloveneWordWithMeaningsModel,
             "SELECT \
-                    ws.word_id         as \"word_id\", \
-                    ws.lemma           as \"lemma\", \
-                    w.created_at       as \"created_at\", \
+                    ws.word_id as \"word_id\", \
+                    ws.lemma as \"lemma\", \
+                    w.created_at as \"created_at\", \
                     w.last_modified_at as \"last_modified_at\", \
                     coalesce( \
                         json_agg(meanings) \
@@ -248,9 +248,9 @@ impl SloveneWordQuery {
         let internal_word_with_meanings = sqlx::query_as!(
             super::InternalSloveneWordWithMeaningsModel,
             "SELECT \
-                    ws.word_id         as \"word_id\", \
-                    ws.lemma           as \"lemma\", \
-                    w.created_at       as \"created_at\", \
+                    ws.word_id as \"word_id\", \
+                    ws.lemma as \"lemma\", \
+                    w.created_at as \"created_at\", \
                     w.last_modified_at as \"last_modified_at\", \
                     coalesce( \
                         json_agg(meanings) \
@@ -373,9 +373,9 @@ impl SloveneWordQuery {
             let internal_words_with_meanings_stream = sqlx::query_as!(
                 super::InternalSloveneWordWithMeaningsModel,
                 "SELECT \
-                        ws.word_id         as \"word_id\", \
-                        ws.lemma           as \"lemma\", \
-                        w.created_at       as \"created_at\", \
+                        ws.word_id as \"word_id\", \
+                        ws.lemma as \"lemma\", \
+                        w.created_at as \"created_at\", \
                         w.last_modified_at as \"last_modified_at\", \
                         coalesce( \
                             json_agg(meanings) \
@@ -469,9 +469,9 @@ impl SloveneWordQuery {
             let internal_words_with_meanings_stream = sqlx::query_as!(
                 super::InternalSloveneWordWithMeaningsModel,
                 "SELECT \
-                        ws.word_id         as \"word_id\", \
-                        ws.lemma           as \"lemma\", \
-                        w.created_at       as \"created_at\", \
+                        ws.word_id as \"word_id\", \
+                        ws.lemma as \"lemma\", \
+                        w.created_at as \"created_at\", \
                         w.last_modified_at as \"last_modified_at\", \
                         coalesce( \
                             json_agg(meanings) \
