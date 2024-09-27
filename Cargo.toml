@@ -127,10 +127,6 @@ features = [
 
 
 
-[lib]
-name = "kolomoni"
-path = "./kolomoni/src/lib.rs"
-
 [[bin]]
 name = "kolomoni"
 path = "./kolomoni/src/main.rs"

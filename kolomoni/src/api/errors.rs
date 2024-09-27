@@ -273,7 +273,7 @@ impl APIError {
         S: Into<Cow<'static, str>>,
     {
         Self::OtherClientError {
-            reason: Cow::from(reason.into()),
+            reason: reason.into(),
         }
     }
 
@@ -289,13 +289,14 @@ impl APIError {
     /// Initialize a new API error, clarifying that the user is missing
     /// some set of permissions.
     #[inline]
-    #[allow(dead_code)]
+    #[allow(unused)]
     pub const fn missing_specific_permissions(permissions: Vec<Permission>) -> Self {
         Self::NotEnoughPermissions {
             missing_permission: Some(permissions),
         }
     }
 
+    #[allow(unused)]
     pub fn internal_error<E>(error: E) -> Self
     where
         E: std::error::Error + 'static,
@@ -305,6 +306,7 @@ impl APIError {
         }
     }
 
+    #[allow(unused)]
     pub fn internal_database_error(error: sqlx::Error) -> Self {
         Self::InternalDatabaseError { error }
     }

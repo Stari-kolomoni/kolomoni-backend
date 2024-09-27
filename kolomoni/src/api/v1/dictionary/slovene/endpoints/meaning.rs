@@ -12,7 +12,6 @@ use kolomoni_core::{
 };
 use kolomoni_database::entities::{self, NewSloveneWordMeaning, SloveneWordMeaningUpdate};
 use sqlx::Acquire;
-use uuid::Uuid;
 
 use crate::{
     api::{
@@ -230,6 +229,18 @@ pub async fn delete_slovene_word_meaning(
             target_slovene_word_meaning_id,
         )
     };
+
+    let word_to_meaning_relationship_exists =
+        entities::SloveneWordMeaningQuery::exists_by_meaning_and_word_id(
+            &mut transaction,
+            target_slovene_word_id,
+            target_slovene_word_meaning_id,
+        )
+        .await?;
+
+    if !word_to_meaning_relationship_exists {
+        return Err(APIError::not_found());
+    }
 
 
     let successfully_deleted_meaning = entities::SloveneWordMeaningMutation::delete(

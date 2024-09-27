@@ -3,6 +3,7 @@
 
 use actix_web::{post, web, HttpResponse, Scope};
 use kolomoni_auth::{Role, RoleSet, DEFAULT_USER_ROLE};
+use kolomoni_configuration::{Configuration, ForMigrationAtApiRuntimeDatabaseConfiguration};
 use kolomoni_core::id::UserId;
 use kolomoni_database::entities;
 use kolomoni_migrations::{
@@ -63,7 +64,33 @@ pub enum RollbackAndReapplyError {
 }
 
 
-pub async fn rollback_and_reapply_non_privileged_migrations(
+fn construct_database_migrator_connection_options(
+    database_configuration: &ForMigrationAtApiRuntimeDatabaseConfiguration,
+) -> PgConnectOptions {
+    let mut connection_options = PgConnectOptions::new_without_pgpass()
+        .application_name(&format!(
+            "stari-kolomoni-backend-test_v{}",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .statement_cache_capacity(
+            database_configuration
+                .statement_cache_capacity
+                .unwrap_or(200),
+        )
+        .host(&database_configuration.host)
+        .port(database_configuration.port)
+        .username(&database_configuration.username)
+        .database(&database_configuration.database_name);
+
+    if let Some(password) = &database_configuration.password {
+        connection_options = connection_options.password(password.as_str());
+    }
+
+    connection_options
+}
+
+
+async fn rollback_and_reapply_non_privileged_migrations(
     migrator_user_connection_options: &PgConnectOptions,
 ) -> Result<(), RollbackAndReapplyError> {
     warn!("Rolling back and reapplying all non-privileged migrations.");
@@ -150,12 +177,14 @@ pub async fn rollback_and_reapply_non_privileged_migrations(
 pub async fn reset_server(state: ApplicationState) -> EndpointResult {
     warn!("Resetting database.");
 
-    todo!();
 
-    /*
-    drop_database_and_reapply_migrations(&state.database)
+    let migrator_connection_options = construct_database_migrator_connection_options(
+        &state.configuration.database.for_migration_at_api_runtime,
+    );
+
+    rollback_and_reapply_non_privileged_migrations(&migrator_connection_options)
         .await
-        .map_err(APIError::InternalGenericError)?; */
+        .map_err(|error| APIError::internal_error(error))?;
 
     Ok(HttpResponse::Ok().finish())
 }

@@ -82,7 +82,7 @@ pub async fn get_all_english_words(
 
 
     let word_query_options = request_body
-        .map(|options| {
+        .and_then(|options| {
             options
                 .into_inner()
                 .filters
@@ -90,7 +90,6 @@ pub async fn get_all_english_words(
                     only_words_modified_after: filter_options.last_modified_after,
                 })
         })
-        .flatten()
         .unwrap_or_default();
 
     let mut words_with_meanings_stream =

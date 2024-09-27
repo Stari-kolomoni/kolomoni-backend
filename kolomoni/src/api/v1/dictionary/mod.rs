@@ -2,7 +2,6 @@ use std::str::FromStr;
 
 use actix_web::{web, Scope};
 use english::english_dictionary_router;
-use kolomoni_core::api_models::Category;
 use slovene::slovene_dictionary_router;
 use sqlx::types::Uuid;
 
@@ -15,7 +14,6 @@ use crate::api::errors::APIError;
 
 pub mod categories;
 pub mod english;
-// TODO
 pub mod slovene;
 // TODO
 // pub mod search;

@@ -2,7 +2,13 @@ use kolomoni_core::id::{EnglishWordId, EnglishWordMeaningId};
 use sqlx::PgConnection;
 
 use super::EnglishWordMeaningModelWithCategoriesAndTranslations;
-use crate::{IntoExternalModel, QueryError, QueryResult, TryIntoStronglyTypedInternalModel};
+use crate::{
+    entities::WordMeaningQuery,
+    IntoExternalModel,
+    QueryError,
+    QueryResult,
+    TryIntoStronglyTypedInternalModel,
+};
 
 pub struct EnglishWordMeaningQuery;
 
@@ -210,5 +216,18 @@ impl EnglishWordMeaningQuery {
         .await?;
 
         Ok(exists.unwrap_or(false))
+    }
+
+    pub async fn exists_by_meaning_and_word_id(
+        database_connection: &mut PgConnection,
+        english_word_id: EnglishWordId,
+        english_word_meaning_id: EnglishWordMeaningId,
+    ) -> QueryResult<bool> {
+        WordMeaningQuery::exists_by_meaning_and_word_id(
+            database_connection,
+            english_word_id.into_word_id(),
+            english_word_meaning_id.into_word_meaning_id(),
+        )
+        .await
     }
 }

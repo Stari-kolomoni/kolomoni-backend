@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use actix_web::{delete, get, http::StatusCode, patch, post, web, HttpResponse};
+use itertools::Itertools;
 use kolomoni_auth::{Permission, Role, RoleSet};
 use kolomoni_core::{
     api_models::{
@@ -283,7 +284,11 @@ async fn get_specific_user_effective_permissions(
 
 
     Ok(UserPermissionsResponse {
-        permissions: requested_user_permission_set.permission_names(),
+        permissions: requested_user_permission_set
+            .permission_names()
+            .into_iter()
+            .map_into()
+            .collect(),
     }
     .into_response())
 }

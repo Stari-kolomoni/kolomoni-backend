@@ -73,7 +73,7 @@ pub async fn create_category(
     let mut database_connection = obtain_database_connection!(state);
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_user_authentication_and_permission!(
+    require_user_authentication_and_permission!(
         &mut transaction,
         authentication,
         Permission::CategoryCreate
@@ -307,7 +307,7 @@ pub async fn update_specific_category(
     let mut transaction = database_connection.begin().await?;
 
 
-    let authenticated_user = require_user_authentication_and_permission!(
+    require_user_authentication_and_permission!(
         &mut transaction,
         authentication,
         Permission::CategoryUpdate
@@ -346,7 +346,7 @@ pub async fn update_specific_category(
     let would_conflict_by_slovene_name = if let Some(new_slovene_name) =
         request_body.new_slovene_name.as_ref()
     {
-        entities::CategoryQuery::exists_by_slovene_name(&mut transaction, &new_slovene_name).await?
+        entities::CategoryQuery::exists_by_slovene_name(&mut transaction, new_slovene_name).await?
     } else {
         false
     };
@@ -363,7 +363,7 @@ pub async fn update_specific_category(
     let would_conflict_by_english_name = if let Some(new_english_name) =
         request_body.new_english_name.as_ref()
     {
-        entities::CategoryQuery::exists_by_english_name(&mut transaction, &new_english_name).await?
+        entities::CategoryQuery::exists_by_english_name(&mut transaction, new_english_name).await?
     } else {
         false
     };

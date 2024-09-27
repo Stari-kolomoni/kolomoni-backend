@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -219,7 +221,7 @@ pub struct UserRolesResponse {
     })
 )]
 pub struct UserPermissionsResponse {
-    pub permissions: Vec<&'static str>,
+    pub permissions: Vec<Cow<'static, str>>,
 }
 
 

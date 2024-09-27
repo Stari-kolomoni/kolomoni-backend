@@ -219,7 +219,7 @@ where
 #[macro_export]
 macro_rules! obtain_database_connection {
     ($state:expr) => {
-        $state.database.acquire().await?
+        $state.database_pool.acquire().await?
     };
 }
 
@@ -554,7 +554,7 @@ macro_rules! require_permission_with_optional_authentication {
 ///     # todo!();
 /// }
 /// ```
-///
+/// TODO migrate useful parts of the documentation to the new macros, then remove this macro
 #[macro_export]
 #[deprecated]
 macro_rules! require_permission_OLD {
@@ -618,44 +618,4 @@ macro_rules! require_user_authentication_and_permission {
             $required_permission
         )
     }};
-}
-
-#[deprecated]
-#[macro_export]
-macro_rules! require_permissionOLD2 {
-    ($database_connection:expr, on authentication extractor $authentication_extractor:expr, $required_permission:expr) => {
-        if let Some(authenticated_user) = $authentication_extractor.authenticated_user() {
-            require_permission!(
-                $database_connection,
-                authenticated_user,
-                $required_permission
-            )
-        } else {
-            if !$authentication_extractor.is_permission_granted_to_all($required_permission) {
-                return Err(
-                    $crate::api::errors::APIError::missing_specific_permission($required_permission),
-                );
-            }
-        }
-
-        if !$authentication_extractor
-            .transitively_has_permission($database_connection, $required_permission)
-            .await?
-        {
-            return Err(
-                $crate::api::errors::APIError::missing_specific_permission($required_permission),
-            );
-        }
-    };
-
-    ($database_connection:expr, on user $authenticated_user:expr, $required_permission:expr) => {
-        if !$authenticated_user
-            .transitively_has_permission($database_connection, $required_permission)
-            .await?
-        {
-            return Err(
-                $crate::api::errors::APIError::missing_specific_permission($required_permission),
-            );
-        }
-    };
 }

@@ -1,9 +1,12 @@
 //! Application-wide state (shared between endpoint functions).
 
 use actix_web::web::Data;
-use kolomoni_auth::{ArgonHasher, JsonWebTokenManager};
+use kolomoni_auth::{ArgonHasher, ArgonHasherError, JsonWebTokenManager};
 use kolomoni_configuration::Configuration;
 use sqlx::PgPool;
+use thiserror::Error;
+
+use crate::establish_database_connection_pool;
 
 
 
@@ -117,6 +120,24 @@ impl KolomoniSearch {
 } */
 
 
+#[derive(Debug, Error)]
+pub enum ApplicationStateError {
+    #[error("failed to initialize password hasher")]
+    FailedToInitializePasswordHasher {
+        #[from]
+        #[source]
+        error: ArgonHasherError,
+    },
+
+    #[error("unable to connect to database")]
+    UnableToConnectToDatabase {
+        #[from]
+        #[source]
+        error: sqlx::Error,
+    },
+}
+
+
 
 /// Central application state.
 ///
@@ -129,13 +150,14 @@ impl KolomoniSearch {
 /// <https://actix.rs/docs/application#shared-mutable-state>.
 pub struct ApplicationStateInner {
     /// The configuration that this server was loaded with.
+    #[allow(unused)]
     pub configuration: Configuration,
 
     /// Password hasher helper struct.
     pub hasher: ArgonHasher,
 
     /// PostgreSQL database connection pool.
-    pub database: PgPool,
+    pub database_pool: PgPool,
 
     /// Authentication token manager (JSON Web Token).
     pub jwt_manager: JsonWebTokenManager,
@@ -144,9 +166,12 @@ pub struct ApplicationStateInner {
 }
 
 impl ApplicationStateInner {
-    pub async fn new(configuration: Configuration) -> Result<Self> {
+    pub async fn new(configuration: Configuration) -> Result<Self, ApplicationStateError> {
         let hasher = ArgonHasher::new(&configuration.secrets.hash_salt)?;
-        let database = connect_and_set_up_database(&configuration).await?;
+
+        let database_pool =
+            establish_database_connection_pool(&configuration.database.for_api).await?;
+
         let jwt_manager = JsonWebTokenManager::new(&configuration.json_web_token.secret);
 
         /*
@@ -163,7 +188,7 @@ impl ApplicationStateInner {
         Ok(Self {
             configuration,
             hasher,
-            database,
+            database_pool,
             jwt_manager,
             // search,
         })

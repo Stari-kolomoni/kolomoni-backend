@@ -218,7 +218,19 @@ pub async fn delete_english_word_meaning(
         )
     };
 
-    // TODO we don't verify english word ID validity here, is that okay?
+
+    let word_to_meaning_relationship_exists =
+        entities::EnglishWordMeaningQuery::exists_by_meaning_and_word_id(
+            &mut transaction,
+            target_english_word_id,
+            target_english_word_meaning_id,
+        )
+        .await?;
+
+    if !word_to_meaning_relationship_exists {
+        return Err(APIError::not_found());
+    }
+
 
     let successfully_deleted_meaning = entities::EnglishWordMeaningMutation::delete(
         &mut transaction,

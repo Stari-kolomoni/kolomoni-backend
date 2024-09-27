@@ -235,7 +235,7 @@ impl WordMeaningId {
     }
 
     #[inline]
-    pub fn into_inner(self) -> Uuid {
+    pub fn into_uuid(self) -> Uuid {
         self.0
     }
 }

@@ -3,7 +3,7 @@ use sqlx::PgConnection;
 
 use super::SloveneWordMeaningModelWithCategoriesAndTranslations;
 use crate::{
-    entities::SloveneWordMeaningModelWithWeaklyTypedCategoriesAndTranslations,
+    entities::{SloveneWordMeaningModelWithWeaklyTypedCategoriesAndTranslations, WordMeaningQuery},
     IntoExternalModel,
     QueryError,
     QueryResult,
@@ -218,5 +218,18 @@ impl SloveneWordMeaningQuery {
         .await?;
 
         Ok(exists.unwrap_or(false))
+    }
+
+    pub async fn exists_by_meaning_and_word_id(
+        database_connection: &mut PgConnection,
+        slovene_word_id: SloveneWordId,
+        slovene_word_meaning_id: SloveneWordMeaningId,
+    ) -> QueryResult<bool> {
+        WordMeaningQuery::exists_by_meaning_and_word_id(
+            database_connection,
+            slovene_word_id.into_word_id(),
+            slovene_word_meaning_id.into_word_meaning_id(),
+        )
+        .await
     }
 }

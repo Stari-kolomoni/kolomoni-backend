@@ -1,4 +1,5 @@
 use actix_web::{get, http::StatusCode, patch, web};
+use itertools::Itertools;
 use kolomoni_auth::Permission;
 use kolomoni_core::api_models::{
     UserDisplayNameChangeRequest,
@@ -241,7 +242,11 @@ async fn get_current_user_effective_permissions(
 
 
     Ok(UserPermissionsResponse {
-        permissions: user_permissions.permission_names(),
+        permissions: user_permissions
+            .permission_names()
+            .into_iter()
+            .map_into()
+            .collect(),
     }
     .into_response())
 }

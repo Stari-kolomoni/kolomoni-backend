@@ -1539,7 +1539,7 @@ name = "kolomoni_openapi"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "kolomoni",
+ "kolomoni_core",
  "miette",
  "tracing",
  "tracing-actix-web",
@@ -1553,7 +1553,7 @@ name = "kolomoni_test"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "kolomoni",
+ "kolomoni_core",
  "kolomoni_test_util",
  "tokio",
 ]
@@ -1568,9 +1568,9 @@ dependencies = [
  "actix-web",
  "bytes",
  "http 0.2.12",
- "kolomoni",
  "kolomoni_auth",
  "kolomoni_configuration",
+ "kolomoni_core",
  "kolomoni_database",
  "miette",
  "reqwest",

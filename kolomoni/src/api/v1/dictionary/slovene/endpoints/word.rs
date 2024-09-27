@@ -35,7 +35,6 @@ use crate::{
     json_error_response_with_reason,
     obtain_database_connection,
     require_permission_with_optional_authentication,
-    require_user_authentication,
     require_user_authentication_and_permission,
     state::ApplicationState,
 };
@@ -83,7 +82,7 @@ pub async fn get_all_slovene_words(
 
 
     let word_query_options = request_body
-        .map(|options| {
+        .and_then(|options| {
             options
                 .into_inner()
                 .filters
@@ -91,7 +90,6 @@ pub async fn get_all_slovene_words(
                     only_words_modified_after: filter_options.last_modified_after,
                 })
         })
-        .flatten()
         .unwrap_or_default();
 
 
@@ -345,7 +343,7 @@ pub async fn get_specific_slovene_word_by_lemma(
 
     let potential_slovene_word = entities::SloveneWordQuery::get_by_exact_lemma_with_meanings(
         &mut database_connection,
-        &target_word_lemma,
+        target_word_lemma,
     )
     .await?;
 
