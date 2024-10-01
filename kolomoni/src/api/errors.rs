@@ -2,44 +2,428 @@
 //! and ways to have those errors automatically turned into correct
 //! HTTP error responses when returned as `Err(error)` from those functions.
 
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::fmt::{Display, Formatter};
 
-use actix_web::body::BoxBody;
-use actix_web::http::StatusCode;
+use actix_http::header::{HeaderName, HeaderValue};
+use actix_web::body::{BoxBody, MessageBody};
+use actix_web::http::{header, StatusCode};
 use actix_web::{HttpResponse, ResponseError};
-use itertools::Itertools;
-use kolomoni_auth::{JWTCreationError, Permission};
+use chrono::{DateTime, Utc};
+use kolomoni_auth::{JWTCreationError, Permission, Role};
 use kolomoni_database::entities::UserQueryError;
 use kolomoni_database::QueryError;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
 use utoipa::ToSchema;
 
-use super::macros::{KolomoniResponseBuilderJSONError, KolomoniResponseBuilderLMAError};
+use super::macros::construct_last_modified_header_value;
 use crate::authentication::AuthenticatedUserError;
 
 
-/// Simple JSON-encodable response containing a single field: a `reason`.
-///
-/// This is useful for specifying reasons when returning a HTTP status code
-/// with an error.
-#[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(serde::Deserialize))]
-pub struct ErrorReasonResponse {
-    /// Error reason.
-    pub reason: String,
+/// Pertains to all endpoints under:
+/// - `/dictionary/english`, and
+/// - `/dictionary/slovene`
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[serde(tag = "word-error-type")]
+#[non_exhaustive]
+pub enum WordErrorReason {
+    #[serde(rename = "word-with-given-lemma-already-exists")]
+    WordWithGivenLemmaAlreadyExists,
+
+    #[serde(rename = "word-not-found")]
+    WordNotFound,
+
+    #[serde(rename = "identical-word-meaning-already-exists")]
+    IdenticalWordMeaningAlreadyExists,
+
+    #[serde(rename = "word-meaning-not-found")]
+    WordMeaningNotFound,
 }
 
-impl ErrorReasonResponse {
-    /// Initialize an [`ErrorReasonResponse`] with a custom error message.
-    pub fn custom_reason<M: Into<String>>(reason: M) -> Self {
+impl WordErrorReason {
+    pub const fn word_with_given_lemma_already_exists() -> Self {
+        Self::WordWithGivenLemmaAlreadyExists
+    }
+
+    pub const fn word_not_found() -> Self {
+        Self::WordNotFound
+    }
+
+    pub const fn identical_word_meaning_already_exists() -> Self {
+        Self::IdenticalWordMeaningAlreadyExists
+    }
+
+    pub const fn word_meaning_not_found() -> Self {
+        Self::WordMeaningNotFound
+    }
+}
+
+
+/// Pertains to all endpoints under `/dictionary/translation`
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[serde(tag = "translation-error-type")]
+#[non_exhaustive]
+pub enum TranslationsErrorReason {
+    #[serde(rename = "english-word-meaning-not-found")]
+    EnglishWordMeaningNotFound,
+
+    #[serde(rename = "slovene-word-meaning-not-found")]
+    SloveneWordMeaningNotFound,
+
+    #[serde(rename = "translation-relationship-not-found")]
+    TranslationRelationshipNotFound,
+
+    #[serde(rename = "translation-relationship-already-exists")]
+    TranslationRelationshipAlreadyExists,
+}
+
+impl TranslationsErrorReason {
+    pub const fn english_word_meaning_not_found() -> Self {
+        Self::EnglishWordMeaningNotFound
+    }
+
+    pub const fn slovene_word_meaning_not_found() -> Self {
+        Self::SloveneWordMeaningNotFound
+    }
+
+    pub const fn translation_relationship_not_found() -> Self {
+        Self::TranslationRelationshipNotFound
+    }
+
+    pub const fn translation_relationship_already_exists() -> Self {
+        Self::TranslationRelationshipAlreadyExists
+    }
+}
+
+
+
+/// Pertains to all endpoints under `/login`.
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[serde(tag = "login-error-type")]
+#[non_exhaustive]
+pub enum LoginErrorReason {
+    #[serde(rename = "invalid-login-credentials")]
+    InvalidLoginCredentials,
+
+    #[serde(rename = "expired-refresh-token")]
+    ExpiredRefreshToken,
+
+    /// Not in the sense that is has expired or that it is *not* a refresh token,
+    /// but in the sense that the given JWT couldn't be parsed or decoded.
+    #[serde(rename = "invalid-refresh-json-web-token")]
+    InvalidRefreshJsonWebToken,
+
+    /// Expected a refresh token, but got an access JWT instead.
+    #[serde(rename = "not-a-refresh-token")]
+    NotARefreshToken,
+}
+
+impl LoginErrorReason {
+    pub const fn invalid_login_credentials() -> Self {
+        Self::InvalidLoginCredentials
+    }
+
+    pub const fn expired_refresh_token() -> Self {
+        Self::ExpiredRefreshToken
+    }
+
+    pub const fn invalid_refresh_json_web_token() -> Self {
+        Self::InvalidRefreshJsonWebToken
+    }
+
+    pub const fn not_a_refresh_token() -> Self {
+        Self::NotARefreshToken
+    }
+}
+
+
+/// Pertains to all endpoints under `/users`.
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[serde(tag = "users-error-type")]
+#[non_exhaustive]
+pub enum UsersErrorReason {
+    /*
+     * General user-related errors
+     */
+    #[serde(rename = "user-not-found")]
+    UserNotFound,
+
+    /*
+     * Registration errors
+     */
+    #[serde(rename = "username-already-exists")]
+    UsernameAlreadyExists,
+
+    /*
+     * Registration / user modification errors
+     */
+    #[serde(rename = "display-name-already-exists")]
+    DisplayNameAlreadyExists,
+
+    /*
+     * User modification errors
+     */
+    #[serde(rename = "cannot-modify-your-own-account")]
+    CannotModifyYourOwnAccount,
+
+    #[serde(rename = "invalid-role-name")]
+    InvalidRoleName { role_name: String },
+
+    #[serde(rename = "unable-to-give-out-unowned-role")]
+    UnableToGiveOutUnownedRole { role: Role },
+
+    #[serde(rename = "unable-to-take-away-unowned-role")]
+    UnableToTakeAwayUnownedRole { role: Role },
+}
+
+impl UsersErrorReason {
+    pub const fn user_not_found() -> Self {
+        Self::UserNotFound
+    }
+
+    pub const fn username_already_exists() -> Self {
+        Self::UsernameAlreadyExists
+    }
+
+    pub const fn display_name_already_exists() -> Self {
+        Self::DisplayNameAlreadyExists
+    }
+
+    pub const fn cannot_modify_your_own_account() -> Self {
+        Self::CannotModifyYourOwnAccount
+    }
+
+    pub fn invalid_role_name(role_name: String) -> Self {
+        // To avoid resending a huge chunk of data
+        // if the "wrong" role name is something large.
+        if role_name.len() > 120 {
+            return Self::InvalidRoleName {
+                role_name: "[redacted]".to_string(),
+            };
+        }
+
+        Self::InvalidRoleName { role_name }
+    }
+
+    pub const fn unable_to_give_out_unowned_role(role: Role) -> Self {
+        Self::UnableToGiveOutUnownedRole { role }
+    }
+
+    pub const fn unable_to_take_away_unowned_role(role: Role) -> Self {
+        Self::UnableToTakeAwayUnownedRole { role }
+    }
+}
+
+
+// TODO
+/// Pertains to all endpoints under `/dictionary/category`.
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[serde(tag = "category-error-type")]
+#[non_exhaustive]
+pub enum CategoryErrorReason {
+    #[serde(rename = "category-not-found")]
+    CategoryNotFound,
+
+    /*
+     * Category creation/update errors
+     */
+    /// This error is returned when:
+    /// - attempting to create a category where the provided
+    ///   slovene category name is already present on another category,
+    /// - attempting to set an existing category's slovene name to
+    ///   one that is already present on another category.
+    #[serde(rename = "slovene-name-already-exists")]
+    SloveneNameAlreadyExists,
+
+    /// This error is returned when:
+    /// - attempting to create a category where the provided
+    ///   english category name is already present on another category,
+    /// - attempting to set an existing category's english name to
+    ///   one that is already present on another category.
+    #[serde(rename = "english-name-already-exists")]
+    EnglishNameAlreadyExists,
+
+    /*
+     * Category update errors
+     */
+    /// This error is returned when:
+    /// - calling the category update endpoint with the request
+    ///   body not indicating any fields to update (no fields present).
+    #[serde(rename = "no-fields-to-update")]
+    NoFieldsToUpdate,
+}
+
+impl CategoryErrorReason {
+    pub const fn category_not_found() -> Self {
+        Self::CategoryNotFound
+    }
+
+    pub const fn slovene_name_already_exists() -> Self {
+        Self::SloveneNameAlreadyExists
+    }
+
+    pub const fn english_name_already_exists() -> Self {
+        Self::EnglishNameAlreadyExists
+    }
+
+    pub const fn no_fields_to_update() -> Self {
+        Self::NoFieldsToUpdate
+    }
+}
+
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[serde(tag = "type", content = "data")]
+#[non_exhaustive]
+pub enum ErrorReason {
+    /*
+     * General
+     */
+    #[serde(rename = "missing-authentication")]
+    MissingAuthentication,
+
+    #[serde(rename = "missing-permissions")]
+    MissingPermissions { permissions: Vec<Permission> },
+
+    /// Request is missing a JSON body.
+    #[serde(rename = "missing-json-body")]
+    MissingJsonBody,
+
+    #[serde(rename = "invalid-json-body")]
+    InvalidJsonBody { reason: InvalidJsonBodyReason },
+
+    #[serde(rename = "invalid-uuid-format")]
+    InvalidUuidFormat,
+
+    /*
+     * Category-related
+     */
+    #[serde(rename = "category")]
+    CategoryErrorReason(CategoryErrorReason),
+
+    /*
+     * `/login` endpoint-related
+     */
+    #[serde(rename = "login")]
+    LoginErrorReason(LoginErrorReason),
+
+    /*
+     * `/users` endpoint-related
+     */
+    #[serde(rename = "users")]
+    UsersErrorReason(UsersErrorReason),
+
+    /*
+     * `/dictionary/translation`-endpoint related
+     */
+    #[serde(rename = "translations")]
+    TranslationErrorReason(TranslationsErrorReason),
+
+    /// Pertains to all endpoints under:
+    /// - `/dictionary/english`, and
+    /// - `/dictionary/slovene`
+    #[serde(rename = "word")]
+    WordErrorReason(WordErrorReason),
+
+    /*
+     * Other
+     */
+    #[serde(rename = "other")]
+    Other { reason: Cow<'static, str> },
+}
+
+impl ErrorReason {
+    pub const fn missing_authentication() -> Self {
+        Self::MissingAuthentication
+    }
+
+    pub fn missing_permission(permission: Permission) -> Self {
+        Self::MissingPermissions {
+            permissions: vec![permission],
+        }
+    }
+
+    pub const fn missing_json_body() -> Self {
+        Self::MissingJsonBody
+    }
+
+    pub const fn invalid_json_body(reason: InvalidJsonBodyReason) -> Self {
+        Self::InvalidJsonBody { reason }
+    }
+
+    pub const fn invalid_uuid_format() -> Self {
+        Self::InvalidUuidFormat
+    }
+}
+
+impl From<CategoryErrorReason> for ErrorReason {
+    fn from(value: CategoryErrorReason) -> Self {
+        Self::CategoryErrorReason(value)
+    }
+}
+
+impl From<LoginErrorReason> for ErrorReason {
+    fn from(value: LoginErrorReason) -> Self {
+        Self::LoginErrorReason(value)
+    }
+}
+
+impl From<UsersErrorReason> for ErrorReason {
+    fn from(value: UsersErrorReason) -> Self {
+        Self::UsersErrorReason(value)
+    }
+}
+
+impl From<TranslationsErrorReason> for ErrorReason {
+    fn from(value: TranslationsErrorReason) -> Self {
+        Self::TranslationErrorReason(value)
+    }
+}
+
+impl From<WordErrorReason> for ErrorReason {
+    fn from(value: WordErrorReason) -> Self {
+        Self::WordErrorReason(value)
+    }
+}
+
+
+
+/// Simple JSON-encodable response containing a strongly-typed error reason
+/// (see [`ErrorReason`]).
+///
+/// This is useful when responding with a HTTP status code
+/// where the precise error reason is ambiguous.
+/// For example, on a missing permission error and a `403 Forbidden`,
+/// we can use this to specify what precise permission the caller needs.
+///
+/// This can be used on the frontend to enrich error displays.
+#[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+#[cfg_attr(feature = "with_test_facilities", derive(serde::Deserialize))]
+pub struct ErrorResponseWithReason {
+    pub reason: ErrorReason,
+}
+
+impl ErrorResponseWithReason {
+    pub fn new<R>(reason: R) -> Self
+    where
+        R: Into<ErrorReason>,
+    {
         Self {
             reason: reason.into(),
         }
     }
 
+    /*
+    /// Initialize an [`ErrorReasonResponse`] with a custom error message.
+    pub fn custom_reason<M: Into<String>>(reason: M) -> Self {
+        Self {
+            reason: reason.into(),
+        }
+    } */
+
+    /*
     /// Initialize an [`ErrorReasonResponse`] with a message about a missing `Authorization` header.
     pub fn not_authenticated() -> Self {
         Self {
@@ -83,12 +467,29 @@ impl ErrorReasonResponse {
                 ),
             }
         }
-    }
+    } */
+}
+
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InvalidJsonBodyReason {
+    /// Signals an IO / syntax / EOF error while parsing.
+    #[serde(rename = "not-json")]
+    NotJson,
+
+    #[serde(rename = "invalid-data")]
+    InvalidData,
+
+    #[serde(rename = "too-large")]
+    TooLarge,
 }
 
 
 
 /// General-purpose Stari Kolomoni API error type.
+///
+/// TODO needs documentation rework
 ///
 /// Use this type alongside an [`EndpointResult`] return type in your actix endpoint handlers
 /// to allow you to easily
@@ -199,7 +600,13 @@ impl ErrorReasonResponse {
 /// }
 /// ```
 #[derive(Debug, Error)]
-pub enum APIError {
+pub enum EndpointError {
+    /*
+     * Client errors.
+     *
+     * Reasons are exposed as a HTTP status code + optionally a JSON body.
+     */
+    /*
     /// User is not authenticated
     /// (missing `Authorization: Bearer <token>` HTTP header).
     NotAuthenticated,
@@ -209,19 +616,69 @@ pub enum APIError {
     NotEnoughPermissions {
         missing_permission: Option<Vec<Permission>>,
     },
-
     /// Resource could not be found. If `Some`, this describes the reason for a 404.
     NotFound {
-        reason_response: Option<ErrorReasonResponse>,
+        reason: Option<ErrorResponseWithReason>,
     },
 
     /// Bad client request with a reason; will produce a `400 Bad Request`.
     /// The `reason` will also be sent along in the response.
     OtherClientError { reason: Cow<'static, str> },
+    */
+    /* DEPRECATED
+    /// This "error variant" exists on this type only for purposes of control flow,
+    /// so that e.g. [`parse_uuid`] can propagate its UUID parsing error upwards,
+    /// including the ability to respond with an [`ErrorReason`] body (or some other response).
+    ///
+    /// **This is not intended to be used directly by endpoints.**
+    ///
+    ///
+    /// [`parse_uuid`]: crate::api::v1::dictionary::parse_uuid
+    NoErrorButRespondWith { response: EndpointResponseBuilder }, */
 
+    /*
+     * Client errors.
+     *
+     * Specific status codes and included JSON bodies are specific to each error.
+     * Avoid using this as much as possible, and use the
+     *
+     * ```rust,no_run
+     * # fn hello_world() -> EndpointResult {
+     * // ...
+     * return EndpointResponseBuilder::ok()
+     *      .with_error_response(todo!())
+     *      .build;
+     * # }
+     * ```
+     *
+     * pattern instead.
+     */
+    /// The endpoint expected a JSON body, but there was either:
+    /// - no JSON body sent with the request,
+    /// - or there was an incorrect `Content-Type` header (expected: `application/json`).
+    MissingJsonBody,
+
+    /// Invalid JSON body, either due to a deserialization error,
+    /// or because the body is too large.
+    InvalidJsonBody {
+        reason: InvalidJsonBodyReason,
+    },
+
+    InvalidUuidFormat {
+        #[source]
+        error: uuid::Error,
+    },
+
+    /*
+     * Server errors.
+     *
+     * Reasons are not shown externally.
+     */
     /// Internal error with a string reason.
     /// Triggers a `500 Internal Server Error` (**reason doesn't leak through the API**).
-    InternalErrorWithReason { reason: Cow<'static, str> },
+    InternalErrorWithReason {
+        reason: Cow<'static, str>,
+    },
 
     /// Internal error, constructed from a boxed [`Error`].
     /// Triggers a `500 Internal Server Error` (**error doesn't leak through the API**).
@@ -238,15 +695,18 @@ pub enum APIError {
         #[source]
         error: sqlx::Error,
     },
+
+    InvalidDatabaseState {
+        problem: Cow<'static, str>,
+    },
 }
 
-impl APIError {
+impl EndpointError {
+    /*
     /// Initialize a new not found API error without a specific reason.
     #[inline]
     pub const fn not_found() -> Self {
-        Self::NotFound {
-            reason_response: None,
-        }
+        Self::NotFound { reason: None }
     }
 
     /// Initialize a new not found API error with a specific reason.
@@ -254,7 +714,7 @@ impl APIError {
     #[inline]
     pub fn not_found_with_reason<M: Into<String>>(reason: M) -> Self {
         Self::NotFound {
-            reason_response: Some(ErrorReasonResponse::custom_reason(reason)),
+            reason: Some(ErrorResponseWithReason::custom_reason(reason)),
         }
     }
 
@@ -275,8 +735,9 @@ impl APIError {
         Self::OtherClientError {
             reason: reason.into(),
         }
-    }
+    } */
 
+    /*
     /// Initialize a new API error, clarifying that the user is missing
     /// some permission.
     #[inline]
@@ -294,6 +755,14 @@ impl APIError {
         Self::NotEnoughPermissions {
             missing_permission: Some(permissions),
         }
+    } */
+
+    pub const fn missing_json_body() -> Self {
+        Self::MissingJsonBody
+    }
+
+    pub const fn invalid_json_body(reason: InvalidJsonBodyReason) -> Self {
+        Self::InvalidJsonBody { reason }
     }
 
     #[allow(unused)]
@@ -323,120 +792,102 @@ impl APIError {
             reason: reason.into(),
         }
     }
+
+    #[inline]
+    pub fn invalid_database_state<S>(problem: S) -> Self
+    where
+        S: Into<Cow<'static, str>>,
+    {
+        Self::InvalidDatabaseState {
+            problem: problem.into(),
+        }
+    }
 }
 
-impl Display for APIError {
+impl Display for EndpointError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            APIError::NotAuthenticated => write!(f, "No authentication."),
-            APIError::NotEnoughPermissions { missing_permission } => match missing_permission {
-                Some(missing_permission) => {
-                    if missing_permission.len() == 1 {
-                        write!(
-                            f,
-                            "User doesn't have the required permission: {}",
-                            // PANIC SAFETY: We just checked that length is 1.
-                            missing_permission.first().unwrap().name()
-                        )
-                    } else {
-                        write!(
-                            f,
-                            "User doesn't have the required permissions: {}",
-                            missing_permission
-                                .iter()
-                                .map(|permission| permission.name())
-                                .join(", ")
-                        )
-                    }
+            Self::MissingJsonBody => {
+                write!(f, "Expected a JSON body.")
+            }
+            Self::InvalidJsonBody { reason } => match reason {
+                InvalidJsonBodyReason::NotJson => {
+                    write!(f, "Invalid JSON body: not JSON.")
                 }
-                None => write!(f, "User doesn't have enough permissions."),
-            },
-            APIError::NotFound { reason_response } => match reason_response {
-                Some(reason) => {
-                    write!(f, "Resource not found: {}", reason.reason)
+                InvalidJsonBodyReason::InvalidData => {
+                    write!(f, "Invalid JSON body: invalid data.")
                 }
-                None => {
-                    write!(f, "Resource not found.")
+                InvalidJsonBodyReason::TooLarge => {
+                    write!(f, "Invalid JSON body: too large.")
                 }
             },
-            APIError::OtherClientError { reason } => write!(f, "Client error: {}", reason),
-            APIError::InternalErrorWithReason { reason } => write!(
+            Self::InvalidUuidFormat { error } => {
+                write!(f, "Invalid UUID format: {}.", error)
+            }
+            Self::InternalErrorWithReason { reason } => write!(
                 f,
                 "Internal server error (with reason): {reason}."
             ),
-            APIError::InternalGenericError { error } => {
+            Self::InternalGenericError { error } => {
                 write!(f, "Internal server error (generic): {error:?}")
             }
-            APIError::InternalDatabaseError { error } => {
+            Self::InternalDatabaseError { error } => {
                 write!(
                     f,
                     "Internal server error (database error): {error}."
+                )
+            }
+            Self::InvalidDatabaseState { problem: reason } => {
+                write!(
+                    f,
+                    "Inconsistent internal database state: {}",
+                    reason
                 )
             }
         }
     }
 }
 
-impl ResponseError for APIError {
+impl ResponseError for EndpointError {
+    /// In reality, because we implemented error_response below,
+    /// this function will never be called (status codes from error_response will be used).
+    /// (see [`ResponseError::status_code`]).
     fn status_code(&self) -> StatusCode {
         match self {
-            APIError::NotAuthenticated => StatusCode::UNAUTHORIZED,
-            APIError::NotEnoughPermissions { .. } => StatusCode::FORBIDDEN,
-            APIError::NotFound { .. } => StatusCode::NOT_FOUND,
-            APIError::OtherClientError { .. } => StatusCode::BAD_REQUEST,
-            APIError::InternalErrorWithReason { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            APIError::InternalGenericError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            APIError::InternalDatabaseError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::MissingJsonBody => StatusCode::BAD_REQUEST,
+            Self::InvalidJsonBody { .. } => StatusCode::BAD_GATEWAY,
+            Self::InvalidUuidFormat { .. } => StatusCode::BAD_REQUEST,
+            Self::InternalErrorWithReason { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InternalGenericError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InternalDatabaseError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InvalidDatabaseState { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
     fn error_response(&self) -> HttpResponse<BoxBody> {
-        match self {
-            APIError::NotAuthenticated => {
-                HttpResponse::Unauthorized().json(ErrorReasonResponse::not_authenticated())
-            }
-            APIError::NotEnoughPermissions { missing_permission } => match missing_permission {
-                Some(missing_permissions) => HttpResponse::Forbidden().json(
-                    ErrorReasonResponse::missing_specific_permissions(missing_permissions),
-                ),
-                None => HttpResponse::Forbidden().json(ErrorReasonResponse::missing_permissions()),
-            },
-            APIError::NotFound { reason_response } => match reason_response {
-                Some(reason_response) => HttpResponse::NotFound().json(reason_response),
-                None => HttpResponse::NotFound().finish(),
-            },
-            APIError::OtherClientError { reason } => {
-                HttpResponse::BadRequest().json(ErrorReasonResponse {
-                    reason: reason.to_string(),
-                })
-            }
-            APIError::InternalErrorWithReason { reason } => {
-                error!(error = %reason, "Internal database error (custom reason).");
+        // TODO Find a way to log certain types of these errors (maybe via tracing?)
 
-                HttpResponse::InternalServerError().finish()
-            }
-            APIError::InternalGenericError { error } => {
-                error!(
-                    error = ?error,
-                    "Internal server error (generic)."
-                );
+        let fallibly_built_response = match self {
+            Self::MissingJsonBody => EndpointResponseBuilder::bad_request()
+                .with_error_reason(ErrorReason::missing_json_body())
+                .build(),
+            Self::InvalidJsonBody { reason } => EndpointResponseBuilder::bad_request()
+                .with_error_reason(ErrorReason::invalid_json_body(*reason))
+                .build(),
+            Self::InvalidUuidFormat { .. } => EndpointResponseBuilder::bad_request().build(),
+            Self::InternalErrorWithReason { .. } => EndpointResponseBuilder::bad_request().build(),
+            Self::InternalGenericError { .. } => EndpointResponseBuilder::bad_request().build(),
+            Self::InternalDatabaseError { .. } => EndpointResponseBuilder::bad_request().build(),
+            Self::InvalidDatabaseState { .. } => EndpointResponseBuilder::bad_request().build(),
+        };
 
-                HttpResponse::InternalServerError().finish()
-            }
-            APIError::InternalDatabaseError { error } => {
-                error!(
-                    error = ?error,
-                    "Internal server error (database error).",
-                );
 
-                HttpResponse::InternalServerError().finish()
-            }
-        }
+        fallibly_built_response.unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
     }
 }
 
 
-impl From<QueryError> for APIError {
+impl From<QueryError> for EndpointError {
     fn from(value: QueryError) -> Self {
         match value {
             QueryError::SqlxError { error } => Self::InternalDatabaseError { error },
@@ -448,7 +899,7 @@ impl From<QueryError> for APIError {
     }
 }
 
-impl From<UserQueryError> for APIError {
+impl From<UserQueryError> for EndpointError {
     fn from(value: UserQueryError) -> Self {
         match value {
             UserQueryError::SqlxError { error } => Self::InternalDatabaseError { error },
@@ -463,7 +914,7 @@ impl From<UserQueryError> for APIError {
     }
 }
 
-impl From<AuthenticatedUserError> for APIError {
+impl From<AuthenticatedUserError> for EndpointError {
     fn from(value: AuthenticatedUserError) -> Self {
         match value {
             AuthenticatedUserError::QueryError { error } => Self::from(error),
@@ -471,7 +922,7 @@ impl From<AuthenticatedUserError> for APIError {
     }
 }
 
-impl From<JWTCreationError> for APIError {
+impl From<JWTCreationError> for EndpointError {
     fn from(value: JWTCreationError) -> Self {
         match value {
             JWTCreationError::JWTError { error } => Self::InternalGenericError {
@@ -481,7 +932,9 @@ impl From<JWTCreationError> for APIError {
     }
 }
 
-impl From<KolomoniResponseBuilderJSONError> for APIError {
+/*
+//  TODO what is this for?
+impl From<KolomoniResponseBuilderJSONError> for EndpointError {
     fn from(value: KolomoniResponseBuilderJSONError) -> Self {
         match value {
             KolomoniResponseBuilderJSONError::JsonError { error } => Self::InternalGenericError {
@@ -491,12 +944,148 @@ impl From<KolomoniResponseBuilderJSONError> for APIError {
     }
 }
 
-impl From<KolomoniResponseBuilderLMAError> for APIError {
+//  TODO what is this for?
+impl From<KolomoniResponseBuilderLMAError> for EndpointError {
     fn from(value: KolomoniResponseBuilderLMAError) -> Self {
         match value {
             KolomoniResponseBuilderLMAError::JsonError { error } => Self::InternalGenericError {
                 error: Box::new(error),
             },
+        }
+    }
+} */
+
+
+
+
+#[derive(Debug, Error)]
+pub enum EndpointResponseBuilderError {
+    #[error("failed to serialize value as JSON")]
+    JsonSerializationError {
+        #[from]
+        #[source]
+        error: serde_json::Error,
+    },
+}
+
+
+
+pub struct EndpointResponseBuilder {
+    status_code: StatusCode,
+
+    body: Option<Result<Vec<u8>, serde_json::Error>>,
+
+    additional_headers: Vec<(HeaderName, HeaderValue)>,
+}
+
+impl EndpointResponseBuilder {
+    pub fn new(status_code: StatusCode) -> Self {
+        Self {
+            status_code,
+            body: None,
+            additional_headers: Vec::with_capacity(1),
+        }
+    }
+
+    #[inline]
+    pub fn ok() -> Self {
+        Self::new(StatusCode::OK)
+    }
+
+    #[inline]
+    pub fn bad_request() -> Self {
+        Self::new(StatusCode::BAD_REQUEST)
+    }
+
+    #[inline]
+    pub fn forbidden() -> Self {
+        Self::new(StatusCode::FORBIDDEN)
+    }
+
+    #[inline]
+    pub fn conflict() -> Self {
+        Self::new(StatusCode::CONFLICT)
+    }
+
+    #[inline]
+    pub fn not_found() -> Self {
+        Self::new(StatusCode::NOT_FOUND)
+    }
+
+    #[inline]
+    pub fn not_modified() -> Self {
+        Self::new(StatusCode::NOT_MODIFIED)
+    }
+
+    pub fn with_json_body<D, S>(mut self, data: D) -> Self
+    where
+        S: Serialize,
+        D: Borrow<S>,
+    {
+        let body = serde_json::to_vec(data.borrow());
+
+        self.additional_headers.push((
+            header::CONTENT_TYPE,
+            HeaderValue::from_static(mime::APPLICATION_JSON.as_ref()),
+        ));
+
+        Self {
+            status_code: self.status_code,
+            body: Some(body),
+            additional_headers: self.additional_headers,
+        }
+    }
+
+    pub fn with_error_reason<R>(self, reason: R) -> Self
+    where
+        R: Into<ErrorReason>,
+    {
+        self.with_json_body(reason.into())
+    }
+
+    pub fn with_last_modified_at(mut self, last_modified_at: &DateTime<Utc>) -> Self {
+        self.additional_headers.push((
+            header::LAST_MODIFIED,
+            construct_last_modified_header_value(last_modified_at),
+        ));
+
+        Self {
+            status_code: self.status_code,
+            body: self.body,
+            additional_headers: self.additional_headers,
+        }
+    }
+
+    pub fn build(self) -> Result<HttpResponse<BoxBody>, EndpointError> {
+        let optional_body = match self.body {
+            Some(body_or_error) => match body_or_error {
+                Ok(body) => Some(body),
+                Err(serialization_error) => {
+                    return Err(EndpointError::internal_error(serialization_error))
+                }
+            },
+            None => None,
+        };
+
+
+        let mut response_builder = HttpResponse::build(self.status_code);
+
+        for (header_name, header_value) in self.additional_headers {
+            response_builder.insert_header((header_name, header_value));
+        }
+
+
+        match optional_body {
+            Some(body) => response_builder
+                .message_body(body.boxed())
+                // This will, however, never produce an error (`type Error = Infallible`),
+                // see <https://docs.rs/actix-web/4.9.0/actix_web/body/trait.MessageBody.html#impl-MessageBody-for-Vec%3Cu8%3E>.
+                .map_err(EndpointError::internal_error),
+            None => response_builder
+                .message_body(().boxed())
+                // This will, however, never produce an error (`type Error = Infallible`),
+                // see <https://docs.rs/actix-web/4.9.0/actix_web/body/trait.MessageBody.html#impl-MessageBody-for-()>.
+                .map_err(EndpointError::internal_error),
         }
     }
 }
@@ -513,4 +1102,4 @@ impl From<KolomoniResponseBuilderLMAError> for APIError {
 /// uses and will likely be the most common body type.
 ///
 /// See documentation for [`APIError`] for more info.
-pub type EndpointResult<Body = BoxBody> = Result<HttpResponse<Body>, APIError>;
+pub type EndpointResult<Body = BoxBody> = Result<HttpResponse<Body>, EndpointError>;

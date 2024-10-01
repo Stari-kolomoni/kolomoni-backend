@@ -1,5 +1,4 @@
-use actix_http::StatusCode;
-use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
+use actix_web::{delete, get, patch, post, web, Scope};
 use futures_util::StreamExt;
 use kolomoni_auth::Permission;
 use kolomoni_core::{
@@ -24,15 +23,12 @@ use tracing::info;
 
 use crate::{
     api::{
-        errors::{APIError, EndpointResult},
-        macros::ContextlessResponder,
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult, WordErrorReason},
         openapi,
         traits::IntoApiModel,
-        v1::dictionary::parse_string_into_uuid,
+        v1::dictionary::parse_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    json_error_response_with_reason,
-    obtain_database_connection,
     require_permission_with_optional_authentication,
     require_user_authentication_and_permission,
     state::ApplicationState,
@@ -71,7 +67,7 @@ pub async fn get_all_english_words(
     authentication: UserAuthenticationExtractor,
     request_body: Option<web::Json<EnglishWordsListRequest>>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -90,7 +86,7 @@ pub async fn get_all_english_words(
                     only_words_modified_after: filter_options.last_modified_after,
                 })
         })
-        .unwrap_or_default();
+        .unwrap_or_else(EnglishWordsQueryOptions::new_without_filters);
 
     let mut words_with_meanings_stream =
         entities::EnglishWordQuery::get_all_english_words_with_meanings(
@@ -107,7 +103,9 @@ pub async fn get_all_english_words(
     }
 
 
-    Ok(EnglishWordsResponse { english_words }.into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(EnglishWordsResponse { english_words })
+        .build()
 }
 
 
@@ -152,7 +150,7 @@ pub async fn create_english_word(
     authentication: UserAuthenticationExtractor,
     creation_request: web::Json<EnglishWordCreationRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     let authenticated_user = require_user_authentication_and_permission!(
         &mut database_connection,
@@ -171,10 +169,9 @@ pub async fn create_english_word(
     .await?;
 
     if word_lemma_already_exists {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "An english word with the given lemma already exists."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(WordErrorReason::word_with_given_lemma_already_exists())
+            .build();
     }
 
 
@@ -202,11 +199,12 @@ pub async fn create_english_word(
         .map_err(APIError::InternalGenericError)?; */
 
 
-    Ok(EnglishWordCreationResponse {
-        // A newly-created word can not have any meanings yet.
-        word: newly_created_word.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(EnglishWordCreationResponse {
+            // A newly-created word can not have any meanings yet.
+            word: newly_created_word.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -257,7 +255,7 @@ pub async fn get_english_word_by_id(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -266,9 +264,7 @@ pub async fn get_english_word_by_id(
     );
 
 
-    let target_english_word_id = EnglishWordId::new(parse_string_into_uuid(
-        &parameters.into_inner().0,
-    )?);
+    let target_english_word_id = parse_uuid::<EnglishWordId>(parameters.into_inner().0)?;
 
 
     let potential_english_word = entities::EnglishWordQuery::get_by_id_with_meanings(
@@ -278,14 +274,17 @@ pub async fn get_english_word_by_id(
     .await?;
 
     let Some(english_word) = potential_english_word else {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
     };
 
 
-    Ok(EnglishWordInfoResponse {
-        word: english_word.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(EnglishWordInfoResponse {
+            word: english_word.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -332,7 +331,7 @@ pub async fn get_english_word_by_lemma(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -351,14 +350,17 @@ pub async fn get_english_word_by_lemma(
     .await?;
 
     let Some(english_word) = potential_english_word else {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
     };
 
 
-    Ok(EnglishWordInfoResponse {
-        word: english_word.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(EnglishWordInfoResponse {
+            word: english_word.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -416,7 +418,7 @@ pub async fn update_specific_english_word(
     parameters: web::Path<(String,)>,
     request_data: web::Json<EnglishWordUpdateRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -426,9 +428,7 @@ pub async fn update_specific_english_word(
     );
 
 
-    let target_word_uuid = EnglishWordId::new(parse_string_into_uuid(
-        &parameters.into_inner().0,
-    )?);
+    let target_word_uuid = parse_uuid::<EnglishWordId>(parameters.into_inner().0)?;
 
     let request_data = request_data.into_inner();
 
@@ -438,7 +438,9 @@ pub async fn update_specific_english_word(
         entities::EnglishWordQuery::exists_by_id(&mut transaction, target_word_uuid).await?;
 
     if !target_word_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
     }
 
 
@@ -454,7 +456,7 @@ pub async fn update_specific_english_word(
     if !updated_successfully {
         transaction.rollback().await?;
 
-        return Err(APIError::internal_error_with_reason(
+        return Err(EndpointError::internal_error_with_reason(
             "Failed to update english word.",
         ));
     }
@@ -465,7 +467,7 @@ pub async fn update_specific_english_word(
         entities::EnglishWordQuery::get_by_id_with_meanings(&mut transaction, target_word_uuid)
             .await?
             .ok_or_else(|| {
-                APIError::internal_error_with_reason(
+                EndpointError::internal_error_with_reason(
                     "Database inconsistency: word did not exist after being updated.",
                 )
             })?;
@@ -482,11 +484,11 @@ pub async fn update_specific_english_word(
         .await
         .map_err(APIError::InternalGenericError)?; */
 
-
-    Ok(EnglishWordInfoResponse {
-        word: updated_word.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(EnglishWordInfoResponse {
+            word: updated_word.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -537,7 +539,7 @@ pub async fn delete_english_word(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -547,16 +549,16 @@ pub async fn delete_english_word(
     );
 
 
-    let target_word_uuid = EnglishWordId::new(parse_string_into_uuid(
-        &parameters.into_inner().0,
-    )?);
+    let target_word_uuid = parse_uuid::<EnglishWordId>(parameters.into_inner().0)?;
 
 
     let target_word_exists =
         entities::EnglishWordQuery::exists_by_id(&mut transaction, target_word_uuid).await?;
 
     if !target_word_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
     }
 
 
@@ -564,7 +566,7 @@ pub async fn delete_english_word(
         entities::EnglishWordMutation::delete(&mut transaction, target_word_uuid).await?;
 
     if !has_been_deleted {
-        return Err(APIError::internal_error_with_reason(
+        return Err(EndpointError::internal_error_with_reason(
             "database inconsistency: failed to delete english word that \
             just existed in the same transaction",
         ));
@@ -580,7 +582,7 @@ pub async fn delete_english_word(
         .map_err(APIError::InternalGenericError)?;
     */
 
-    Ok(HttpResponse::Ok().finish())
+    EndpointResponseBuilder::ok().build()
 }
 
 

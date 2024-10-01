@@ -1,5 +1,4 @@
-use actix_http::StatusCode;
-use actix_web::{delete, get, patch, post, web, HttpResponse};
+use actix_web::{delete, get, patch, post, web};
 use futures_util::StreamExt;
 use kolomoni_auth::Permission;
 use kolomoni_core::{
@@ -17,15 +16,12 @@ use sqlx::Acquire;
 
 use crate::{
     api::{
-        errors::{APIError, EndpointResult},
-        macros::ContextlessResponder,
+        errors::{CategoryErrorReason, EndpointError, EndpointResponseBuilder, EndpointResult},
         openapi,
         traits::IntoApiModel,
-        v1::dictionary::parse_string_into_uuid,
+        v1::dictionary::parse_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    json_error_response_with_reason,
-    obtain_database_connection,
     require_permission_with_optional_authentication,
     require_user_authentication_and_permission,
     state::ApplicationState,
@@ -70,7 +66,7 @@ pub async fn create_category(
     authentication: UserAuthenticationExtractor,
     request_body: web::Json<CategoryCreationRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -90,10 +86,9 @@ pub async fn create_category(
     .await?;
 
     if category_exists_by_slovene_name {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "Category with given slovene name already exists."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(CategoryErrorReason::slovene_name_already_exists())
+            .build();
     }
 
     let category_exists_by_english_name = entities::CategoryQuery::exists_by_english_name(
@@ -103,10 +98,9 @@ pub async fn create_category(
     .await?;
 
     if category_exists_by_english_name {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "Category with given english name already exists."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(CategoryErrorReason::english_name_already_exists())
+            .build();
     }
 
 
@@ -128,11 +122,11 @@ pub async fn create_category(
         .await
         .map_err(APIError::InternalGenericError)?; */
 
-
-    Ok(CategoryCreationResponse {
-        category: newly_created_category.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(CategoryCreationResponse {
+            category: newly_created_category.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -162,7 +156,7 @@ pub async fn get_all_categories(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -182,7 +176,9 @@ pub async fn get_all_categories(
     }
 
 
-    Ok(CategoriesResponse { categories }.into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(CategoriesResponse { categories })
+        .build()
 }
 
 
@@ -225,7 +221,7 @@ pub async fn get_specific_category(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -234,23 +230,24 @@ pub async fn get_specific_category(
     );
 
 
-    let target_category_id = CategoryId::new(parse_string_into_uuid(
-        parameters.into_inner().0.as_str(),
-    )?);
+    let target_category_id = parse_uuid::<CategoryId>(parameters.into_inner().0)?;
 
 
     let category =
         entities::CategoryQuery::get_by_id(&mut database_connection, target_category_id).await?;
 
     let Some(category) = category else {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(CategoryErrorReason::category_not_found())
+            .build();
     };
 
 
-    Ok(CategoryResponse {
-        category: category.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(CategoryResponse {
+            category: category.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -303,7 +300,7 @@ pub async fn update_specific_category(
     authentication: UserAuthenticationExtractor,
     request_body: web::Json<CategoryUpdateRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
 
@@ -314,9 +311,7 @@ pub async fn update_specific_category(
     );
 
 
-    let target_category_id = CategoryId::new(parse_string_into_uuid(
-        parameters.into_inner().0.as_str(),
-    )?);
+    let target_category_id = parse_uuid::<CategoryId>(parameters.into_inner().0)?;
 
     let request_body = request_body.into_inner();
 
@@ -326,11 +321,9 @@ pub async fn update_specific_category(
         && request_body.new_english_name.is_none();
 
     if has_no_fields_to_update {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::BAD_REQUEST,
-            "Client should provide at least one category field to update; \
-            providing none on this endpoint is invalid."
-        ));
+        return EndpointResponseBuilder::bad_request()
+            .with_error_reason(CategoryErrorReason::no_fields_to_update())
+            .build();
     }
 
 
@@ -338,7 +331,9 @@ pub async fn update_specific_category(
         entities::CategoryQuery::exists_by_id(&mut transaction, target_category_id).await?;
 
     if !target_category_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(CategoryErrorReason::category_not_found())
+            .build();
     };
 
 
@@ -352,10 +347,9 @@ pub async fn update_specific_category(
     };
 
     if would_conflict_by_slovene_name {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "Updated category would conflict with an existing category by its slovene name."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(CategoryErrorReason::slovene_name_already_exists())
+            .build();
     }
 
 
@@ -369,10 +363,9 @@ pub async fn update_specific_category(
     };
 
     if would_conflict_by_english_name {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "Updated category would conflict with an existing category by its english name."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(CategoryErrorReason::english_name_already_exists())
+            .build();
     }
 
 
@@ -391,9 +384,9 @@ pub async fn update_specific_category(
     .await?;
 
     if !successfully_updated {
-        return Err(APIError::internal_error_with_reason(
-            "database inconsistency: failed to update a category \
-            that existed in a previous call inside the same transaction",
+        return Err(EndpointError::invalid_database_state(
+            "failed to update a category that existed \
+             in a previous call inside the same transaction",
         ));
     }
 
@@ -402,9 +395,9 @@ pub async fn update_specific_category(
         entities::CategoryQuery::get_by_id(&mut transaction, target_category_id).await?;
 
     let Some(target_category_after_update) = target_category_after_update else {
-        return Err(APIError::internal_error_with_reason(
-            "database inconsistency: failed to fetch a category \
-            that was just updated in a previous call inside the same transaction",
+        return Err(EndpointError::invalid_database_state(
+            "failed to fetch a category that was just updated \
+             in a previous call inside the same transaction",
         ));
     };
 
@@ -417,10 +410,11 @@ pub async fn update_specific_category(
         .map_err(APIError::InternalGenericError)?; */
 
 
-    Ok(CategoryResponse {
-        category: target_category_after_update.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(CategoryResponse {
+            category: target_category_after_update.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -466,7 +460,7 @@ pub async fn delete_specific_category(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -476,17 +470,16 @@ pub async fn delete_specific_category(
     );
 
 
-    let target_category_id = CategoryId::new(parse_string_into_uuid(
-        parameters.into_inner().0.as_str(),
-    )?);
-
+    let target_category_id = parse_uuid::<CategoryId>(parameters.into_inner().0)?;
 
 
     let target_category_exists =
         entities::CategoryQuery::exists_by_id(&mut transaction, target_category_id).await?;
 
     if !target_category_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(CategoryErrorReason::category_not_found())
+            .build();
     }
 
 
@@ -494,9 +487,9 @@ pub async fn delete_specific_category(
         entities::CategoryMutation::delete(&mut transaction, target_category_id).await?;
 
     if !successfully_deleted {
-        return Err(APIError::internal_error_with_reason(
-            "database inconsistency: failed to delete a category that \
-            previously existed in the same transaction",
+        return Err(EndpointError::invalid_database_state(
+            "failed to delete a category that \
+             just existed in the same transaction",
         ));
     }
 
@@ -509,7 +502,7 @@ pub async fn delete_specific_category(
         .map_err(APIError::InternalGenericError)?; */
 
 
-    Ok(HttpResponse::Ok().finish())
+    EndpointResponseBuilder::ok().build()
 }
 
 

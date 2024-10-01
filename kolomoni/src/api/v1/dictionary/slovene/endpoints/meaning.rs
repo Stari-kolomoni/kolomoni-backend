@@ -1,4 +1,4 @@
-use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
+use actix_web::{delete, get, patch, post, web, Scope};
 use kolomoni_auth::Permission;
 use kolomoni_core::{
     api_models::{
@@ -15,13 +15,11 @@ use sqlx::Acquire;
 
 use crate::{
     api::{
-        errors::{APIError, EndpointResult},
-        macros::ContextlessResponder,
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult, WordErrorReason},
         traits::IntoApiModel,
-        v1::dictionary::parse_string_into_uuid,
+        v1::dictionary::parse_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    obtain_database_connection,
     require_permission_with_optional_authentication,
     require_user_authentication_and_permission,
     state::ApplicationState,
@@ -36,7 +34,7 @@ pub async fn get_all_slovene_word_meanings(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -45,10 +43,7 @@ pub async fn get_all_slovene_word_meanings(
     );
 
 
-    let target_slovene_word_id = SloveneWordId::new(parse_string_into_uuid(
-        parameters.into_inner().0.as_str(),
-    )?);
-
+    let target_slovene_word_id = parse_uuid::<SloveneWordId>(parameters.into_inner().0)?;
 
     let slovene_word_meanings = entities::SloveneWordMeaningQuery::get_all_by_slovene_word_id(
         &mut database_connection,
@@ -56,13 +51,15 @@ pub async fn get_all_slovene_word_meanings(
     )
     .await?;
 
-    Ok(SloveneWordMeaningsResponse {
-        meanings: slovene_word_meanings
-            .into_iter()
-            .map(|meaning| meaning.into_api_model())
-            .collect(),
-    }
-    .into_response())
+
+    EndpointResponseBuilder::ok()
+        .with_json_body(SloveneWordMeaningsResponse {
+            meanings: slovene_word_meanings
+                .into_iter()
+                .map(|meaning| meaning.into_api_model())
+                .collect(),
+        })
+        .build()
 }
 
 
@@ -75,7 +72,7 @@ pub async fn create_slovene_word_meaning(
     parameters: web::Path<(String,)>,
     request_data: web::Json<NewSloveneWordMeaningRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -85,9 +82,7 @@ pub async fn create_slovene_word_meaning(
     );
 
 
-    let target_slovene_word_id = SloveneWordId::new(parse_string_into_uuid(
-        parameters.into_inner().0.as_str(),
-    )?);
+    let target_slovene_word_id = parse_uuid::<SloveneWordId>(parameters.into_inner().0)?;
 
     let new_word_meaning_data = request_data.into_inner();
 
@@ -108,10 +103,11 @@ pub async fn create_slovene_word_meaning(
     transaction.commit().await?;
 
 
-    Ok(NewSloveneWordMeaningCreatedResponse {
-        meaning: newly_created_meaning.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(NewSloveneWordMeaningCreatedResponse {
+            meaning: newly_created_meaning.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -124,7 +120,7 @@ pub async fn update_slovene_word_meaning(
     parameters: web::Path<(String, String)>,
     request_data: web::Json<SloveneWordMeaningUpdateRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -135,19 +131,11 @@ pub async fn update_slovene_word_meaning(
 
 
 
-    let (target_slovene_word_id, target_slovene_word_meaning_id) = {
-        let url_parameters = parameters.into_inner();
+    let url_parameters = parameters.into_inner();
 
-        let target_slovene_word_id =
-            SloveneWordId::new(parse_string_into_uuid(url_parameters.0.as_str())?);
-        let target_slovene_word_meaning_id =
-            SloveneWordMeaningId::new(parse_string_into_uuid(url_parameters.1.as_str())?);
+    let target_slovene_word_id = parse_uuid::<SloveneWordId>(url_parameters.0)?;
+    let target_slovene_word_meaning_id = parse_uuid::<SloveneWordMeaningId>(url_parameters.1)?;
 
-        (
-            target_slovene_word_id,
-            target_slovene_word_meaning_id,
-        )
-    };
 
     let new_word_meaning_data = request_data.into_inner();
 
@@ -169,7 +157,9 @@ pub async fn update_slovene_word_meaning(
 
     // When zero rows are affected by the query, that means there is no such slovene word meaning.
     if !successfully_updated_meaning {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
     }
 
 
@@ -182,19 +172,20 @@ pub async fn update_slovene_word_meaning(
     .await?;
 
     let Some(updated_meaning) = updated_meaning else {
-        return Err(APIError::internal_error_with_reason(
-            "database inconsistency: after updating a slovene word meaning \
-            we could not fetch the exact same meaning",
+        return Err(EndpointError::invalid_database_state(
+            "after having just updated a slovene word meaning, we could not fetch \
+             the full (exact same) meaning inside the same transaction",
         ));
     };
 
     transaction.commit().await?;
 
 
-    Ok(SloveneWordMeaningUpdatedResponse {
-        meaning: updated_meaning.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(SloveneWordMeaningUpdatedResponse {
+            meaning: updated_meaning.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -206,7 +197,7 @@ pub async fn delete_slovene_word_meaning(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String, String)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -216,19 +207,11 @@ pub async fn delete_slovene_word_meaning(
     );
 
 
-    let (target_slovene_word_id, target_slovene_word_meaning_id) = {
-        let url_parameters = parameters.into_inner();
+    let url_parameters = parameters.into_inner();
 
-        let target_slovene_word_id =
-            SloveneWordId::new(parse_string_into_uuid(url_parameters.0.as_str())?);
-        let target_slovene_word_meaning_id =
-            SloveneWordMeaningId::new(parse_string_into_uuid(url_parameters.1.as_str())?);
+    let target_slovene_word_id = parse_uuid::<SloveneWordId>(url_parameters.0)?;
+    let target_slovene_word_meaning_id = parse_uuid::<SloveneWordMeaningId>(url_parameters.1)?;
 
-        (
-            target_slovene_word_id,
-            target_slovene_word_meaning_id,
-        )
-    };
 
     let word_to_meaning_relationship_exists =
         entities::SloveneWordMeaningQuery::exists_by_meaning_and_word_id(
@@ -239,7 +222,9 @@ pub async fn delete_slovene_word_meaning(
         .await?;
 
     if !word_to_meaning_relationship_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
     }
 
 
@@ -250,14 +235,17 @@ pub async fn delete_slovene_word_meaning(
     .await?;
 
     if !successfully_deleted_meaning {
-        return Err(APIError::not_found());
+        return Err(EndpointError::invalid_database_state(
+            "after having just checked that a slovene word meaning exists, we could not \
+             delete it inside the same transaction",
+        ));
     }
 
 
     transaction.commit().await?;
 
 
-    Ok(HttpResponse::Ok().finish())
+    EndpointResponseBuilder::ok().build()
 }
 
 // TODO next up: refactor names and structure, then look at aligning the utoipa docs with the actual endpoints again

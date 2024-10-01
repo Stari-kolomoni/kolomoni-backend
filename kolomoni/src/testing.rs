@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
-    api::errors::{APIError, EndpointResult},
+    api::errors::{EndpointError, EndpointResult},
     obtain_database_connection,
     state::ApplicationState,
 };
@@ -179,12 +179,12 @@ pub async fn reset_server(state: ApplicationState) -> EndpointResult {
 
 
     let migrator_connection_options = construct_database_migrator_connection_options(
-        &state.configuration.database.for_migration_at_api_runtime,
+        &state.configuration().database.for_migration_at_api_runtime,
     );
 
     rollback_and_reapply_non_privileged_migrations(&migrator_connection_options)
         .await
-        .map_err(|error| APIError::internal_error(error))?;
+        .map_err(|error| EndpointError::internal_error(error))?;
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -200,7 +200,7 @@ pub async fn give_full_permissions_to_user(
     state: ApplicationState,
     request_body: web::Json<GiveFullUserPermissionsRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     let target_user_id = UserId::new(request_body.user_id);
@@ -238,7 +238,7 @@ pub async fn reset_user_roles_to_starting_user_roles(
     state: ApplicationState,
     request_body: web::Json<ResetUserRolesRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     let target_user_id = UserId::new(request_body.user_id);

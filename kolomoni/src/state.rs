@@ -3,7 +3,7 @@
 use actix_web::web::Data;
 use kolomoni_auth::{ArgonHasher, ArgonHasherError, JsonWebTokenManager};
 use kolomoni_configuration::Configuration;
-use sqlx::PgPool;
+use sqlx::{pool::PoolConnection, Acquire, PgPool, Postgres, Transaction};
 use thiserror::Error;
 
 use crate::establish_database_connection_pool;
@@ -151,16 +151,16 @@ pub enum ApplicationStateError {
 pub struct ApplicationStateInner {
     /// The configuration that this server was loaded with.
     #[allow(unused)]
-    pub configuration: Configuration,
+    configuration: Configuration,
 
     /// Password hasher helper struct.
-    pub hasher: ArgonHasher,
+    hasher: ArgonHasher,
 
     /// PostgreSQL database connection pool.
-    pub database_pool: PgPool,
+    database_pool: PgPool,
 
     /// Authentication token manager (JSON Web Token).
-    pub jwt_manager: JsonWebTokenManager,
+    jwt_manager: JsonWebTokenManager,
     // TODO
     // pub search: KolomoniSearch,
 }
@@ -192,6 +192,24 @@ impl ApplicationStateInner {
             jwt_manager,
             // search,
         })
+    }
+
+    pub async fn acquire_database_connection(
+        &self,
+    ) -> Result<PoolConnection<Postgres>, sqlx::Error> {
+        self.database_pool.acquire().await
+    }
+
+    pub fn configuration(&self) -> &Configuration {
+        &self.configuration
+    }
+
+    pub fn hasher(&self) -> &ArgonHasher {
+        &self.hasher
+    }
+
+    pub fn jwt_manager(&self) -> &JsonWebTokenManager {
+        &self.jwt_manager
     }
 }
 

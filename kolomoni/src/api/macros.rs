@@ -1,14 +1,9 @@
 //! Macros to avoid repeating code (JSON response builders, authentication-related macros).
 
-use actix_web::body::{BoxBody, MessageBody};
-use actix_web::http::header::{self, HeaderValue, InvalidHeaderValue};
+use actix_web::http::header::{self, HeaderValue};
 use actix_web::http::StatusCode;
-use actix_web::{http, HttpResponse, ResponseError};
+use actix_web::HttpResponse;
 use chrono::{DateTime, Utc};
-use serde::Serialize;
-use thiserror::Error;
-
-use super::errors::APIError;
 
 
 /// Given a `last_modification_time`, this function tries to construct
@@ -17,30 +12,30 @@ use super::errors::APIError;
 /// The reason this function exists is because the date and time format is a bit peculiar.
 ///
 /// See [Last-Modified documentation on MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified).
-pub fn construct_last_modified_header_value(
-    last_modification_time: &DateTime<Utc>,
-) -> Result<HeaderValue, InvalidHeaderValue> {
+pub fn construct_last_modified_header_value(last_modification_time: &DateTime<Utc>) -> HeaderValue {
     let date_time_formatter = last_modification_time.format("%a, %d %b %Y %H:%M:%S GMT");
-    HeaderValue::from_str(date_time_formatter.to_string().as_str())
+
+    // PANIC SAFETY: Using our date time formatter ensures
+    // we only emit visible ASCII characters (32-127), therefore `HeaderValue::from_str`
+    // can't panic.
+    HeaderValue::from_str(date_time_formatter.to_string().as_str()).unwrap()
 }
 
 
-pub fn construct_not_modified_response(
-    last_modified_at: &DateTime<Utc>,
-) -> Result<HttpResponse, APIError> {
+#[deprecated = "use EndpointResponseBuilder::new(...).with_last_modified_at(...).build() instead"]
+pub fn construct_not_modified_response(last_modified_at: &DateTime<Utc>) -> HttpResponse {
     let mut not_modified_response = HttpResponse::new(StatusCode::NOT_MODIFIED);
 
     not_modified_response.headers_mut().append(
         header::LAST_MODIFIED,
-        construct_last_modified_header_value(last_modified_at).map_err(|_| {
-            APIError::internal_error_with_reason("unable to construct Last-Modified header")
-        })?,
+        construct_last_modified_header_value(last_modified_at),
     );
 
-    Ok(not_modified_response)
+    not_modified_response
 }
 
 
+/*
 #[derive(Debug, Error)]
 pub enum KolomoniResponseBuilderJSONError {
     #[error("failed to encode value as JSON")]
@@ -71,6 +66,7 @@ pub enum KolomoniResponseBuilderLMAError {
 /// instead of manually implementing this trait.**
 ///
 /// See documentation of [`impl_json_response_builder`][crate::impl_json_response_builder] for more info.
+#[deprecated = "use EndpointResponseBuilder instead"]
 pub struct KolomoniResponseBuilder {
     /// Status code to respond with.
     status_code: StatusCode,
@@ -166,7 +162,7 @@ impl ContextlessResponder for KolomoniResponseBuilder {
 /// look at [`ContextlessResponder`] and the documentation provided in
 /// [`impl_json_response_builder`][crate::impl_json_response_builder].
 pub trait IntoKolomoniResponseBuilder: Serialize {
-    fn into_response_builder(self) -> Result<KolomoniResponseBuilder, APIError>;
+    fn into_response_builder(self) -> Result<KolomoniResponseBuilder, EndpointError>;
 }
 
 
@@ -183,7 +179,7 @@ pub trait ContextlessResponder {
     type Body: MessageBody + 'static;
 
     /// Serializes `self` as JSON and return a `HTTP 200 OK` response
-    /// with a JSON-encoded body.  
+    /// with a JSON-encoded body.
     fn into_response(self) -> HttpResponse<Self::Body>;
 }
 
@@ -210,13 +206,14 @@ where
 
             response
         }
-        Err(_) => APIError::internal_error_with_reason("Failed to serialize value to JSON.")
+        Err(_) => EndpointError::internal_error_with_reason("Failed to serialize value to JSON.")
             .error_response(),
     }
 }
-
+ */
 
 #[macro_export]
+#[deprecated = "use ApplicationStateInner::acquire_database_connection instead"]
 macro_rules! obtain_database_connection {
     ($state:expr) => {
         $state.database_pool.acquire().await?
@@ -225,6 +222,7 @@ macro_rules! obtain_database_connection {
 
 
 
+/*
 /// A macro that, given some struct type, implements the following two traits on it:
 /// - [`ContextlessResponder`], allowing you to make a struct instance and call
 ///   [`into_response`][ContextlessResponder::into_response] on it, turning it into a
@@ -256,7 +254,7 @@ macro_rules! obtain_database_connection {
 /// #[get("/some/path")]
 /// async fn example_handler() -> EndpointResult {
 ///     // ...
-///     
+///
 ///     Ok(SomeResponse { value: 42 }.into_response())
 ///     //                           ^^^^^^^^^^^^^^^^
 ///     // By calling the implementor macro we gained the ability to call
@@ -289,7 +287,7 @@ macro_rules! obtain_database_connection {
 /// #[get("/some/path")]
 /// async fn example_handler() -> EndpointResult {
 ///     // ...
-///     
+///
 ///     Ok(
 ///         SomeResponse { value: 42 }
 ///             .into_response_builder()?
@@ -309,6 +307,7 @@ macro_rules! obtain_database_connection {
 /// }
 /// ```
 #[macro_export]
+#[deprecated = "no longer needed, use EndpointResponseBuilder::ok().with_json_body(data).build() instead"]
 macro_rules! impl_json_response_builder {
     ($struct:ty) => {
         impl $crate::api::macros::ContextlessResponder for $struct {
@@ -322,16 +321,17 @@ macro_rules! impl_json_response_builder {
         impl $crate::api::macros::IntoKolomoniResponseBuilder for $struct {
             fn into_response_builder(
                 self,
-            ) -> Result<$crate::api::macros::KolomoniResponseBuilder, $crate::api::errors::APIError>
+            ) -> Result<$crate::api::macros::KolomoniResponseBuilder, $crate::api::errors::EndpointError>
             {
                 Ok($crate::api::macros::KolomoniResponseBuilder::new_json(self)?)
             }
         }
     };
-}
+} */
 
 
 
+/*
 /// A macro for generating a [`HttpResponse`]
 /// with a given status code and a JSON body containing the `reason` field
 /// that describes the issue.
@@ -361,18 +361,19 @@ macro_rules! impl_json_response_builder {
 ///             "Here is a reason."
 ///         ));
 ///     }
-///     
+///
 ///     // ...
 ///     # todo!();
 /// }
 /// ```
 #[macro_export]
+#[deprecated = "use EndpointResponseBuilder with ErrorReason::Other instead"]
 macro_rules! json_error_response_with_reason {
     ($status_code:expr, $reason:expr) => {
         actix_web::HttpResponseBuilder::new($status_code)
             .json($crate::api::errors::ErrorReasonResponse::custom_reason($reason))
     };
-}
+} */
 
 
 
@@ -425,9 +426,16 @@ macro_rules! json_error_response_with_reason {
 #[macro_export]
 macro_rules! require_user_authentication {
     ($user_auth_extractor:expr) => {
-        $user_auth_extractor
-            .authenticated_user()
-            .ok_or($crate::api::errors::APIError::NotAuthenticated)?
+        match $user_auth_extractor.authenticated_user() {
+            Some(user) => user,
+            None => {
+                return $crate::api::errors::EndpointResponseBuilder::new(
+                    actix_web::http::StatusCode::UNAUTHORIZED,
+                )
+                .with_error_reason($crate::api::errors::ErrorReason::missing_authentication())
+                .build();
+            }
+        }
     };
 }
 
@@ -436,23 +444,20 @@ macro_rules! require_user_authentication {
 macro_rules! require_permission_with_optional_authentication {
     ($database_connection:expr, $user_auth_extractor:expr, $permission:expr) => {
         match $user_auth_extractor.authenticated_user() {
-            Some(_authenticated_user) => {
-                if !_authenticated_user
-                    .transitively_has_permission($database_connection, $permission)
-                    .await?
-                {
-                    return Err(
-                        $crate::api::errors::APIError::missing_specific_permission($permission),
-                    );
-                }
-
-                Some(_authenticated_user)
-            }
+            Some(__authenticated_user) => Some($crate::require_permission_on_user!(
+                $database_connection,
+                __authenticated_user,
+                $permission
+            )),
             None => {
                 if !$user_auth_extractor.is_permission_granted_to_all($permission) {
-                    return Err(
-                        $crate::api::errors::APIError::missing_specific_permission($permission),
-                    );
+                    return $crate::api::errors::EndpointResponseBuilder::new(
+                        actix_web::http::StatusCode::FORBIDDEN,
+                    )
+                    .with_error_reason(
+                        $crate::api::errors::ErrorReason::missing_permission($permission),
+                    )
+                    .build();
                 }
 
                 None
@@ -583,9 +588,13 @@ macro_rules! require_permission_OLD {
 macro_rules! require_permission_in_set {
     ($permission_set:expr, $required_permission:expr) => {
         if !$permission_set.has_permission($required_permission) {
-            return Err(
-                $crate::api::errors::APIError::missing_specific_permission($required_permission),
-            );
+            return $crate::api::errors::EndpointResponseBuilder::new(
+                actix_web::http::StatusCode::FORBIDDEN,
+            )
+            .with_error_reason(
+                $crate::api::errors::ErrorReason::missing_permission($required_permission),
+            )
+            .build();
         }
     };
 }
@@ -598,9 +607,13 @@ macro_rules! require_permission_on_user {
             .transitively_has_permission($database_connection, $required_permission)
             .await?
         {
-            return Err(
-                $crate::api::errors::APIError::missing_specific_permission($required_permission),
-            );
+            return $crate::api::errors::EndpointResponseBuilder::new(
+                actix_web::http::StatusCode::FORBIDDEN,
+            )
+            .with_error_reason(
+                $crate::api::errors::ErrorReason::missing_permission($required_permission),
+            )
+            .build();
         }
 
         $authenticated_user

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{borrow::Cow, collections::HashSet};
 
 use miette::{miette, Result};
 use serde::{Deserialize, Serialize};
@@ -279,6 +279,13 @@ impl PermissionSet {
         self.permissions
             .iter()
             .map(|permission| permission.name())
+            .collect()
+    }
+
+    pub fn permission_names_cow(&self) -> Vec<Cow<'static, str>> {
+        self.permissions
+            .iter()
+            .map(|permission| Cow::Borrowed(permission.name()))
             .collect()
     }
 

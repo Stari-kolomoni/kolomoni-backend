@@ -13,7 +13,7 @@ use utoipa::{
     ToSchema,
 };
 
-use crate::api::errors::ErrorReasonResponse;
+use crate::api::errors::ErrorResponseWithReason;
 
 
 /// A "required permission" trait.
@@ -201,7 +201,7 @@ impl<P: RequiredPermission> utoipa::IntoResponses for FailedAuthentication<P> {
                             )))
                             .build(),
                     )])
-                    .schema(ErrorReasonResponse::schema().1)
+                    .schema(ErrorResponseWithReason::schema().1)
                     .build(),
             )
             .build();
@@ -492,7 +492,7 @@ impl utoipa::IntoResponses for MissingOrInvalidJsonRequestBody {
                                 .build(),
                         )
                     ])
-                    .schema(ErrorReasonResponse::schema().1)
+                    .schema(ErrorResponseWithReason::schema().1)
                     .build(),
             ).build();
 

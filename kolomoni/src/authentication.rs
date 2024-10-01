@@ -72,7 +72,7 @@ impl FromRequest for UserAuthenticationExtractor {
         match req.headers().get(header::AUTHORIZATION) {
             Some(authorization_header_value) => {
                 let jwt_manager = match req.app_data::<Data<ApplicationStateInner>>() {
-                    Some(app_state) => &app_state.jwt_manager,
+                    Some(app_state) => app_state.jwt_manager(),
                     None => {
                         error!("BUG: No AppState injected, all `UserAuthenticationExtractor`s will fail!");
 

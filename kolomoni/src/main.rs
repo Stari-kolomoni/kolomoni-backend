@@ -67,6 +67,7 @@ use std::time::Duration;
 
 use actix_web::error::JsonPayloadError;
 use actix_web::{web, HttpServer};
+use api::errors::InvalidJsonBodyReason;
 use clap::Parser;
 use kolomoni_configuration::{Configuration, ForApiDatabaseConfiguration};
 use miette::{Context, IntoDiagnostic, Result};
@@ -84,7 +85,7 @@ mod state;
 mod testing;
 
 use crate::api::api_router;
-use crate::api::errors::APIError;
+use crate::api::errors::EndpointError;
 use crate::cli::CLIArgs;
 use crate::logging::initialize_tracing;
 use crate::state::ApplicationStateInner;
@@ -266,29 +267,29 @@ async fn main() -> Result<()> {
             .error_handler(|payload_error, request| {
                 match payload_error {
                     JsonPayloadError::ContentType  => {
-                        APIError::client_error(
-                            "non-JSON body. If your request body contains JSON, please signal that \
-                            with the Content-Type: application/json header."
-                        ).into()
+                        EndpointError::missing_json_body().into()
                     },
                     JsonPayloadError::Serialize(error) => {
-                        APIError::internal_error_with_reason(
+                        EndpointError::internal_error_with_reason(
                             format!("Failed to serialize to JSON: {:?}. Request: {:?}", error, request)
                         ).into()
                     },
-                    JsonPayloadError::Deserialize(_) => {
-                        APIError::client_error(
-                            "invalid JSON body."
-                        ).into()
+                    JsonPayloadError::Deserialize(error) => {
+                        match error.classify() {
+                            serde_json::error::Category::Io | serde_json::error::Category::Syntax | serde_json::error::Category::Eof => {
+                                EndpointError::invalid_json_body(InvalidJsonBodyReason::NotJson).into()
+                            }
+                            serde_json::error::Category::Data => {
+                                EndpointError::invalid_json_body(InvalidJsonBodyReason::InvalidData).into()
+                            }
+                        }
                     },
                     JsonPayloadError::Overflow { .. } | JsonPayloadError::OverflowKnownLength { .. } => {
-                        APIError::client_error(
-                            "request body is too large."
-                        ).into()
+                        EndpointError::invalid_json_body(InvalidJsonBodyReason::TooLarge).into()
                     },
                     error => {
-                        APIError::internal_error_with_reason(format!(
-                            "Unrecognized error: {:?}",
+                        EndpointError::internal_error_with_reason(format!(
+                            "Unhandled JSON error: {:?}",
                             error
                         )).into()
                     }

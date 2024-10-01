@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
-use actix_web::{delete, get, http::StatusCode, patch, post, web, HttpResponse};
-use itertools::Itertools;
+use actix_web::{delete, get, patch, post, web};
 use kolomoni_auth::{Permission, Role, RoleSet};
 use kolomoni_core::{
     api_models::{
@@ -16,20 +15,17 @@ use kolomoni_core::{
     id::UserId,
 };
 use kolomoni_database::entities;
-use sqlx::{types::Uuid, Acquire};
+use sqlx::Acquire;
 use tracing::info;
 
 use crate::{
     api::{
-        errors::{APIError, EndpointResult},
-        macros::ContextlessResponder,
+        errors::{EndpointResponseBuilder, EndpointResult, UsersErrorReason},
         openapi,
         traits::IntoApiModel,
-        v1::dictionary::parse_string_into_uuid,
+        v1::dictionary::parse_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    json_error_response_with_reason,
-    obtain_database_connection,
     require_permission_in_set,
     require_permission_with_optional_authentication,
     require_user_authentication,
@@ -90,8 +86,7 @@ async fn get_specific_user_info(
     authentication_extractor: UserAuthenticationExtractor,
     path_info: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
-
+    let mut database_connection = state.acquire_database_connection().await?;
 
     // Users don't need to authenticate due to a
     // blanket permission grant for `user.any:read`.
@@ -106,23 +101,24 @@ async fn get_specific_user_info(
 
 
     // Return information about the requested user.
-    let requested_user_id = UserId::new(parse_string_into_uuid(
-        path_info.into_inner().0.as_str(),
-    )?);
+    let requested_user_id = parse_uuid::<UserId>(path_info.into_inner().0)?;
 
 
     let user_info_if_they_exist =
         entities::UserQuery::get_user_by_id(&mut database_connection, requested_user_id).await?;
 
     let Some(user_info) = user_info_if_they_exist else {
-        return Ok(HttpResponse::NotFound().finish());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(UsersErrorReason::user_not_found())
+            .build();
     };
 
 
-    Ok(UserInfoResponse {
-        user: user_info.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserInfoResponse {
+            user: user_info.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -163,9 +159,9 @@ async fn get_specific_user_info(
 pub async fn get_specific_user_roles(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    path_info: web::Path<(Uuid,)>,
+    path_info: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
 
     // Users don't need to authenticate due to a
@@ -180,14 +176,16 @@ pub async fn get_specific_user_roles(
     );
 
 
-    let requested_user_id = UserId::new(path_info.into_inner().0);
+    let requested_user_id = parse_uuid::<UserId>(path_info.into_inner().0)?;
 
 
     let target_user_exists =
         entities::UserQuery::exists_by_id(&mut database_connection, requested_user_id).await?;
 
     if !target_user_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(UsersErrorReason::user_not_found())
+            .build();
     }
 
 
@@ -195,10 +193,11 @@ pub async fn get_specific_user_roles(
         entities::UserRoleQuery::roles_for_user(&mut database_connection, requested_user_id).await?;
 
 
-    Ok(UserRolesResponse {
-        role_names: target_user_role_set.role_names(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserRolesResponse {
+            role_names: target_user_role_set.role_names_cow(),
+        })
+        .build()
 }
 
 
@@ -249,7 +248,7 @@ async fn get_specific_user_effective_permissions(
     authentication_extractor: UserAuthenticationExtractor,
     path_info: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
 
     // To access this endpoint, the user:
@@ -263,16 +262,16 @@ async fn get_specific_user_effective_permissions(
 
 
     // Get requested user's permissions.
-    let requested_user_id = UserId::new(parse_string_into_uuid(
-        path_info.into_inner().0.as_str(),
-    )?);
+    let requested_user_id = parse_uuid::<UserId>(path_info.into_inner().0)?;
 
 
     let requested_user_exists =
         entities::UserQuery::exists_by_id(&mut database_connection, requested_user_id).await?;
 
     if !requested_user_exists {
-        return Ok(HttpResponse::NotFound().finish());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(UsersErrorReason::user_not_found())
+            .build();
     }
 
 
@@ -283,14 +282,11 @@ async fn get_specific_user_effective_permissions(
     .await?;
 
 
-    Ok(UserPermissionsResponse {
-        permissions: requested_user_permission_set
-            .permission_names()
-            .into_iter()
-            .map_into()
-            .collect(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserPermissionsResponse {
+            permissions: requested_user_permission_set.permission_names_cow(),
+        })
+        .build()
 }
 
 
@@ -364,7 +360,7 @@ async fn update_specific_user_display_name(
     path_info: web::Path<(String,)>,
     request_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
 
@@ -381,18 +377,15 @@ async fn update_specific_user_display_name(
 
     let authenticated_user_id = authenticated_user.user_id();
 
-    let requested_user_id = UserId::new(parse_string_into_uuid(
-        path_info.into_inner().0.as_str(),
-    )?);
+    let requested_user_id = parse_uuid::<UserId>(path_info.into_inner().0)?;
     let request_data = request_data.into_inner();
 
 
     // Disallow modifying your own account on these `/{user_id}/*` endpoints.
     if authenticated_user_id == requested_user_id {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::FORBIDDEN,
-            "Can't modify your own account on this endpoint."
-        ));
+        return EndpointResponseBuilder::forbidden()
+            .with_error_reason(UsersErrorReason::cannot_modify_your_own_account())
+            .build();
     }
 
 
@@ -400,7 +393,9 @@ async fn update_specific_user_display_name(
         entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !requested_user_exists {
-        return Err(APIError::not_found_with_reason("no such user"));
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(UsersErrorReason::user_not_found())
+            .build();
     }
 
 
@@ -413,10 +408,9 @@ async fn update_specific_user_display_name(
     .await?;
 
     if new_display_name_already_exists {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "User with given display name already exists."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(UsersErrorReason::display_name_already_exists())
+            .build();
     }
 
 
@@ -439,10 +433,11 @@ async fn update_specific_user_display_name(
     );
 
 
-    Ok(UserDisplayNameChangeResponse {
-        user: updated_user.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserDisplayNameChangeResponse {
+            user: updated_user.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -521,7 +516,7 @@ pub async fn add_roles_to_specific_user(
     path_info: web::Path<(String,)>,
     json_data: web::Json<UserRoleAddRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
 
@@ -542,18 +537,15 @@ pub async fn add_roles_to_specific_user(
 
     let authenticated_user_id = authenticated_user.user_id();
 
-    let requested_user_id = UserId::new(parse_string_into_uuid(
-        path_info.into_inner().0.as_str(),
-    )?);
+    let requested_user_id = parse_uuid::<UserId>(path_info.into_inner().0)?;
     let request_data = json_data.into_inner();
 
 
     // Disallow modifying your own user account on this endpoint.
     if authenticated_user_id == requested_user_id {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::FORBIDDEN,
-            "Can't modify your own account on this endpoint."
-        ));
+        return EndpointResponseBuilder::forbidden()
+            .with_error_reason(UsersErrorReason::cannot_modify_your_own_account())
+            .build();
     }
 
 
@@ -562,10 +554,9 @@ pub async fn add_roles_to_specific_user(
 
         for raw_role_name in request_data.roles_to_add {
             let Some(role) = Role::from_name(&raw_role_name) else {
-                return Ok(json_error_response_with_reason!(
-                    StatusCode::BAD_REQUEST,
-                    format!("{} is an invalid role name", raw_role_name)
-                ));
+                return EndpointResponseBuilder::bad_request()
+                    .with_error_reason(UsersErrorReason::invalid_role_name(raw_role_name))
+                    .build();
             };
 
             roles_to_add_to_user.insert(role);
@@ -580,13 +571,11 @@ pub async fn add_roles_to_specific_user(
     // be dangerous as it would essentially allow for privilege escalation.
     for role in roles_to_add_to_user.roles() {
         if !authenticated_user_roles.has_role(role) {
-            return Ok(json_error_response_with_reason!(
-                StatusCode::FORBIDDEN,
-                format!(
-                    "You cannot give out roles you do not have (missing role: {}).",
-                    role.name()
-                )
-            ));
+            return EndpointResponseBuilder::forbidden()
+                .with_error_reason(UsersErrorReason::unable_to_give_out_unowned_role(
+                    *role,
+                ))
+                .build();
         }
     }
 
@@ -595,9 +584,9 @@ pub async fn add_roles_to_specific_user(
     let user_exists = entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !user_exists {
-        return Err(APIError::not_found_with_reason(
-            "The specified user does not exist.",
-        ));
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(UsersErrorReason::user_not_found())
+            .build();
     }
 
 
@@ -620,10 +609,11 @@ pub async fn add_roles_to_specific_user(
     );
 
 
-    Ok(UserRolesResponse {
-        role_names: full_updated_user_role_set.role_names(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserRolesResponse {
+            role_names: full_updated_user_role_set.role_names_cow(),
+        })
+        .build()
 }
 
 
@@ -703,7 +693,7 @@ pub async fn remove_roles_from_specific_user(
     path_info: web::Path<(String,)>,
     request_data: web::Json<UserRoleRemoveRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
 
@@ -724,18 +714,15 @@ pub async fn remove_roles_from_specific_user(
 
     let authenticated_user_id = authenticated_user.user_id();
 
-    let requested_user_id = UserId::new(parse_string_into_uuid(
-        path_info.into_inner().0.as_str(),
-    )?);
+    let requested_user_id = parse_uuid::<UserId>(path_info.into_inner().0)?;
     let request_data = request_data.into_inner();
 
 
     // Disallow modifying your own user account on this endpoint.
     if authenticated_user_id == requested_user_id {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::FORBIDDEN,
-            "Can't modify your own account on this endpoint."
-        ));
+        return EndpointResponseBuilder::forbidden()
+            .with_error_reason(UsersErrorReason::cannot_modify_your_own_account())
+            .build();
     }
 
 
@@ -745,10 +732,9 @@ pub async fn remove_roles_from_specific_user(
 
         for raw_role_name in request_data.roles_to_remove {
             let Some(role) = Role::from_name(&raw_role_name) else {
-                return Ok(json_error_response_with_reason!(
-                    StatusCode::BAD_REQUEST,
-                    format!("{} is an invalid role name", raw_role_name)
-                ));
+                return EndpointResponseBuilder::bad_request()
+                    .with_error_reason(UsersErrorReason::invalid_role_name(raw_role_name))
+                    .build();
             };
 
             roles_to_remove_from_user.insert(role);
@@ -763,13 +749,9 @@ pub async fn remove_roles_from_specific_user(
     // be dangerous as it would essentially allow for privilege de-escalation.
     for role in roles_to_remove_from_user.roles() {
         if !authenticated_user_roles.has_role(role) {
-            return Ok(json_error_response_with_reason!(
-                StatusCode::FORBIDDEN,
-                format!(
-                    "You cannot remove others' roles which you do not have (missing role: {}).",
-                    role.name()
-                )
-            ));
+            return EndpointResponseBuilder::forbidden()
+                .with_error_reason(UsersErrorReason::unable_to_take_away_unowned_role(*role))
+                .build();
         }
     }
 
@@ -777,9 +759,9 @@ pub async fn remove_roles_from_specific_user(
     let user_exists = entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !user_exists {
-        return Err(APIError::not_found_with_reason(
-            "The specified user does not exist.",
-        ));
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(UsersErrorReason::user_not_found())
+            .build();
     }
 
 
@@ -802,8 +784,9 @@ pub async fn remove_roles_from_specific_user(
     );
 
 
-    Ok(UserRolesResponse {
-        role_names: full_updated_user_role_set.role_names(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserRolesResponse {
+            role_names: full_updated_user_role_set.role_names_cow(),
+        })
+        .build()
 }

@@ -203,7 +203,7 @@ pub struct UserDisplayNameChangeResponse {
     })
 )]
 pub struct UserRolesResponse {
-    pub role_names: Vec<String>,
+    pub role_names: Vec<Cow<'static, str>>,
 }
 
 

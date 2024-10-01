@@ -1,5 +1,4 @@
-use actix_http::StatusCode;
-use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
+use actix_web::{delete, get, patch, post, web, Scope};
 use futures_util::StreamExt;
 use kolomoni_auth::Permission;
 use kolomoni_core::{
@@ -25,15 +24,12 @@ use uuid::Uuid;
 
 use crate::{
     api::{
-        errors::{APIError, EndpointResult},
-        macros::ContextlessResponder,
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult, WordErrorReason},
         openapi,
         traits::IntoApiModel,
-        v1::dictionary::parse_string_into_uuid,
+        v1::dictionary::parse_uuid,
     },
     authentication::UserAuthenticationExtractor,
-    json_error_response_with_reason,
-    obtain_database_connection,
     require_permission_with_optional_authentication,
     require_user_authentication_and_permission,
     state::ApplicationState,
@@ -72,7 +68,7 @@ pub async fn get_all_slovene_words(
     authentication: UserAuthenticationExtractor,
     request_body: Option<web::Json<SloveneWordsListRequest>>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -109,7 +105,9 @@ pub async fn get_all_slovene_words(
     }
 
 
-    Ok(SloveneWordsResponse { slovene_words }.into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(SloveneWordsResponse { slovene_words })
+        .build()
 }
 
 
@@ -154,7 +152,7 @@ pub async fn create_slovene_word(
     authentication: UserAuthenticationExtractor,
     creation_request: web::Json<SloveneWordCreationRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     let authenticated_user = require_user_authentication_and_permission!(
@@ -173,10 +171,9 @@ pub async fn create_slovene_word(
             .await?;
 
     if word_lemma_already_exists {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "A slovene word with the given lemma already exists."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(WordErrorReason::word_with_given_lemma_already_exists())
+            .build();
     }
 
 
@@ -202,11 +199,12 @@ pub async fn create_slovene_word(
         .map_err(APIError::InternalGenericError)?; */
 
 
-    Ok(SloveneWordCreationResponse {
-        // Newly created words do not belong to any categories.
-        word: newly_created_word.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(SloveneWordCreationResponse {
+            // Newly created words do not belong to any categories.
+            word: newly_created_word.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -256,7 +254,7 @@ pub async fn get_specific_slovene_word(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(Uuid,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -275,14 +273,17 @@ pub async fn get_specific_slovene_word(
     .await?;
 
     let Some(slovene_word_with_meanings) = potential_slovene_word else {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
     };
 
 
-    Ok(SloveneWordInfoResponse {
-        word: slovene_word_with_meanings.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(SloveneWordInfoResponse {
+            word: slovene_word_with_meanings.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -329,7 +330,7 @@ pub async fn get_specific_slovene_word_by_lemma(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -348,14 +349,17 @@ pub async fn get_specific_slovene_word_by_lemma(
     .await?;
 
     let Some(slovene_word_with_meanings) = potential_slovene_word else {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
     };
 
 
-    Ok(SloveneWordInfoResponse {
-        word: slovene_word_with_meanings.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(SloveneWordInfoResponse {
+            word: slovene_word_with_meanings.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -412,7 +416,7 @@ pub async fn update_specific_slovene_word(
     parameters: web::Path<(String,)>,
     request_data: web::Json<SloveneWordUpdateRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -422,9 +426,7 @@ pub async fn update_specific_slovene_word(
     );
 
 
-    let target_word_id = SloveneWordId::new(parse_string_into_uuid(
-        parameters.into_inner().0.as_str(),
-    )?);
+    let target_word_id = parse_uuid::<SloveneWordId>(parameters.into_inner().0)?;
 
     let request_data = request_data.into_inner();
 
@@ -434,7 +436,9 @@ pub async fn update_specific_slovene_word(
         entities::SloveneWordQuery::exists_by_id(&mut transaction, target_word_id).await?;
 
     if !target_word_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
     }
 
 
@@ -450,8 +454,8 @@ pub async fn update_specific_slovene_word(
     if !updated_successfully {
         transaction.rollback().await?;
 
-        return Err(APIError::internal_error_with_reason(
-            "database inconsistency: failed to update slovene word, even though it \
+        return Err(EndpointError::invalid_database_state(
+            "failed to update slovene word, even though it \
             previously existed inside the same transaction",
         ));
     }
@@ -461,8 +465,8 @@ pub async fn update_specific_slovene_word(
         entities::SloveneWordQuery::get_by_id_with_meanings(&mut transaction, target_word_id)
             .await?
             .ok_or_else(|| {
-                APIError::internal_error_with_reason(
-                    "database inconsistency: word did not exist after updating it \
+                EndpointError::invalid_database_state(
+                    "slovene word did not exist after just having updated it \
                     inside the same transaction",
                 )
             })?;
@@ -480,10 +484,11 @@ pub async fn update_specific_slovene_word(
         .map_err(APIError::InternalGenericError)?; */
 
 
-    Ok(SloveneWordInfoResponse {
-        word: updated_word.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(SloveneWordInfoResponse {
+            word: updated_word.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -535,7 +540,7 @@ pub async fn delete_specific_slovene_word(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -545,16 +550,16 @@ pub async fn delete_specific_slovene_word(
     );
 
 
-    let target_word_id = SloveneWordId::new(parse_string_into_uuid(
-        parameters.into_inner().0.as_str(),
-    )?);
+    let target_word_id = parse_uuid::<SloveneWordId>(parameters.into_inner().0)?;
 
 
     let target_word_exists =
         entities::SloveneWordQuery::exists_by_id(&mut transaction, target_word_id).await?;
 
     if !target_word_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
     }
 
 
@@ -562,7 +567,10 @@ pub async fn delete_specific_slovene_word(
         entities::SloveneWordMutation::delete(&mut transaction, target_word_id).await?;
 
     if !has_been_deleted {
-        return Err(APIError::not_found());
+        return Err(EndpointError::invalid_database_state(
+            "failed to delete slovene word after just having checked \
+             that it exists in the same transaction",
+        ));
     }
 
 
@@ -575,7 +583,7 @@ pub async fn delete_specific_slovene_word(
         .map_err(APIError::InternalGenericError)?; */
 
 
-    Ok(HttpResponse::Ok().finish())
+    EndpointResponseBuilder::ok().build()
 }
 
 

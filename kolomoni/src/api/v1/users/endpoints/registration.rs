@@ -1,12 +1,14 @@
-use actix_web::{http::StatusCode, post, web};
+use actix_web::{post, web};
 use kolomoni_core::api_models::{UserRegistrationRequest, UserRegistrationResponse};
 use kolomoni_database::entities::{self, UserRegistrationInfo};
 use sqlx::Acquire;
 
 use crate::{
-    api::{errors::EndpointResult, macros::ContextlessResponder, openapi, traits::IntoApiModel},
-    json_error_response_with_reason,
-    obtain_database_connection,
+    api::{
+        errors::{EndpointResponseBuilder, EndpointResult, UsersErrorReason},
+        openapi,
+        traits::IntoApiModel,
+    },
     state::ApplicationState,
 };
 
@@ -59,7 +61,7 @@ pub async fn register_user(
     state: ApplicationState,
     request_data: web::Json<UserRegistrationRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
 
@@ -74,10 +76,9 @@ pub async fn register_user(
     .await?;
 
     if username_already_exists {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "User with provided username already exists."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(UsersErrorReason::username_already_exists())
+            .build();
     }
 
 
@@ -89,17 +90,16 @@ pub async fn register_user(
     .await?;
 
     if display_name_already_exists {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "User with provided display name already exists."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(UsersErrorReason::display_name_already_exists())
+            .build();
     }
 
 
     // Create new user.
     let newly_created_user = entities::UserMutation::create_user(
         &mut transaction,
-        &state.hasher,
+        state.hasher(),
         UserRegistrationInfo {
             username: registration_request_data.username,
             display_name: registration_request_data.display_name,
@@ -112,8 +112,9 @@ pub async fn register_user(
     transaction.commit().await?;
 
 
-    Ok(UserRegistrationResponse {
-        user: newly_created_user.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserRegistrationResponse {
+            user: newly_created_user.into_api_model(),
+        })
+        .build()
 }

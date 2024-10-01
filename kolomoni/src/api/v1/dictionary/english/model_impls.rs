@@ -1,19 +1,12 @@
 use kolomoni_core::api_models::{
-    EnglishWordCreationResponse,
-    EnglishWordInfoResponse,
     EnglishWordMeaning,
-    EnglishWordMeaningUpdatedResponse,
     EnglishWordMeaningWithCategoriesAndTranslations,
-    EnglishWordMeaningsResponse,
-    EnglishWordUpdateRequest,
     EnglishWordWithMeanings,
-    EnglishWordsResponse,
-    NewEnglishWordMeaningCreatedResponse,
     ShallowSloveneWordMeaning,
 };
 use kolomoni_database::entities;
 
-use crate::{api::traits::IntoApiModel, impl_json_response_builder};
+use crate::api::traits::IntoApiModel;
 
 
 /*
@@ -90,14 +83,6 @@ impl IntoApiModel<EnglishWordWithMeanings> for entities::EnglishWordModel {
 }
 
 
-
-impl_json_response_builder!(EnglishWordsResponse);
-impl_json_response_builder!(EnglishWordCreationResponse);
-impl_json_response_builder!(EnglishWordInfoResponse);
-impl_json_response_builder!(EnglishWordUpdateRequest);
-
-
-
 /*
  * Impls for the "word meaning" part of the endpoints (words themselves are above).
  */
@@ -114,9 +99,3 @@ impl IntoApiModel<EnglishWordMeaning> for entities::EnglishWordMeaningModel {
         }
     }
 }
-
-
-
-impl_json_response_builder!(EnglishWordMeaningsResponse);
-impl_json_response_builder!(NewEnglishWordMeaningCreatedResponse);
-impl_json_response_builder!(EnglishWordMeaningUpdatedResponse);

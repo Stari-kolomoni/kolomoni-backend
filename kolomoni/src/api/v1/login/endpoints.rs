@@ -1,4 +1,4 @@
-use actix_web::{post, web, HttpResponse};
+use actix_web::{post, web};
 use chrono::{Duration, Utc};
 use kolomoni_auth::{JWTClaims, JWTTokenType, JWTValidationError};
 use kolomoni_core::api_models::{
@@ -10,10 +10,8 @@ use kolomoni_core::api_models::{
 use kolomoni_database::entities;
 use tracing::{debug, warn};
 
-use crate::api::errors::{EndpointResult, ErrorReasonResponse};
-use crate::api::macros::ContextlessResponder;
+use crate::api::errors::{EndpointResponseBuilder, EndpointResult, LoginErrorReason};
 use crate::api::openapi;
-use crate::obtain_database_connection;
 use crate::state::ApplicationState;
 
 
@@ -56,24 +54,22 @@ pub async fn login(
     state: ApplicationState,
     login_info: web::Json<UserLoginRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
 
     // Validate user login credentials.
     let login_result = entities::UserQuery::validate_credentials(
         &mut database_connection,
-        &state.hasher,
+        state.hasher(),
         &login_info.username,
         &login_info.password,
     )
     .await?;
 
     let Some(logged_in_user) = login_result else {
-        return Ok(
-            HttpResponse::Forbidden().json(ErrorReasonResponse::custom_reason(
-                "Invalid login credentials.",
-            )),
-        );
+        return EndpointResponseBuilder::forbidden()
+            .with_error_reason(LoginErrorReason::invalid_login_credentials())
+            .build();
     };
 
 
@@ -95,8 +91,8 @@ pub async fn login(
     );
 
 
-    let access_token = state.jwt_manager.create_token(access_token_claims)?;
-    let refresh_token = state.jwt_manager.create_token(refresh_token_claims)?;
+    let access_token = state.jwt_manager().create_token(access_token_claims)?;
+    let refresh_token = state.jwt_manager().create_token(refresh_token_claims)?;
 
 
     debug!(
@@ -105,11 +101,12 @@ pub async fn login(
     );
 
 
-    Ok(UserLoginResponse {
-        access_token,
-        refresh_token,
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserLoginResponse {
+            access_token,
+            refresh_token,
+        })
+        .build()
 }
 
 
@@ -166,7 +163,10 @@ pub async fn refresh_login(
     refresh_info: web::Json<UserLoginRefreshRequest>,
 ) -> EndpointResult {
     // Parse and validate provided refresh token.
-    let refresh_token_claims = match state.jwt_manager.decode_token(&refresh_info.refresh_token) {
+    let refresh_token_claims = match state
+        .jwt_manager()
+        .decode_token(&refresh_info.refresh_token)
+    {
         Ok(token_claims) => token_claims,
         Err(error) => {
             return match error {
@@ -176,31 +176,27 @@ pub async fn refresh_login(
                         "Refusing to refresh expired token.",
                     );
 
-                    Ok(
-                        HttpResponse::Forbidden().json(ErrorReasonResponse::custom_reason(
-                            "Refresh token has expired.",
-                        )),
-                    )
+                    // FIXME need to fix openapi schema again, this status code has been changed
+                    EndpointResponseBuilder::bad_request()
+                        .with_error_reason(LoginErrorReason::expired_refresh_token())
+                        .build()
                 }
                 JWTValidationError::InvalidToken { reason } => {
                     warn!(error = %reason, "Failed to parse refresh token.");
 
-                    Ok(
-                        HttpResponse::BadRequest().json(ErrorReasonResponse::custom_reason(
-                            "Invalid refresh token.",
-                        )),
-                    )
+                    // FIXME need to fix openapi schema again, this status code has been changed
+                    EndpointResponseBuilder::bad_request()
+                        .with_error_reason(LoginErrorReason::invalid_refresh_json_web_token())
+                        .build()
                 }
-            }
+            };
         }
     };
 
     if refresh_token_claims.token_type != JWTTokenType::Refresh {
-        return Ok(
-            HttpResponse::BadRequest().json(ErrorReasonResponse::custom_reason(
-                "The provided token is not a refresh token.",
-            )),
-        );
+        return EndpointResponseBuilder::bad_request()
+            .with_error_reason(LoginErrorReason::not_a_refresh_token())
+            .build();
     }
 
     // Refresh token is valid, create new access token.
@@ -211,7 +207,7 @@ pub async fn refresh_login(
         JWTTokenType::Access,
     );
 
-    let access_token = state.jwt_manager.create_token(access_token_claims)?;
+    let access_token = state.jwt_manager().create_token(access_token_claims)?;
 
 
     debug!(
@@ -220,5 +216,7 @@ pub async fn refresh_login(
     );
 
 
-    Ok(UserLoginRefreshResponse { access_token }.into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserLoginRefreshResponse { access_token })
+        .build()
 }

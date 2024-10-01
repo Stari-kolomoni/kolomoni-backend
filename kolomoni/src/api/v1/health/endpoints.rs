@@ -1,8 +1,7 @@
 use actix_web::get;
 use kolomoni_core::api_models::PingResponse;
 
-use crate::api::errors::EndpointResult;
-use crate::api::macros::ContextlessResponder;
+use crate::api::errors::{EndpointResponseBuilder, EndpointResult};
 
 
 /// Ping the server.
@@ -21,5 +20,7 @@ use crate::api::macros::ContextlessResponder;
 )]
 #[get("/ping")]
 pub async fn ping() -> EndpointResult {
-    Ok(PingResponse { ok: true }.into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(PingResponse { ok: true })
+        .build()
 }

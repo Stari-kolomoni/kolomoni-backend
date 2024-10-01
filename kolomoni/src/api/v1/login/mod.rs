@@ -1,5 +1,4 @@
 mod endpoints;
-mod model_impls;
 
 use actix_web::{web, Scope};
 pub use endpoints::*;

@@ -1,18 +1,12 @@
 use kolomoni_core::api_models::{
-    NewSloveneWordMeaningCreatedResponse,
     ShallowEnglishWordMeaning,
-    SloveneWordCreationResponse,
-    SloveneWordInfoResponse,
     SloveneWordMeaning,
-    SloveneWordMeaningUpdatedResponse,
     SloveneWordMeaningWithCategoriesAndTranslations,
-    SloveneWordMeaningsResponse,
     SloveneWordWithMeanings,
-    SloveneWordsResponse,
 };
 use kolomoni_database::entities;
 
-use crate::{api::traits::IntoApiModel, impl_json_response_builder};
+use crate::api::traits::IntoApiModel;
 
 
 
@@ -93,12 +87,6 @@ impl IntoApiModel<SloveneWordWithMeanings> for entities::SloveneWordModel {
 
 
 
-impl_json_response_builder!(SloveneWordsResponse);
-impl_json_response_builder!(SloveneWordCreationResponse);
-impl_json_response_builder!(SloveneWordInfoResponse);
-
-
-
 /*
  * Impls for the "word meaning" part of the endpoints (words themselves are above).
  */
@@ -115,8 +103,3 @@ impl IntoApiModel<SloveneWordMeaning> for entities::SloveneWordMeaningModel {
         }
     }
 }
-
-
-impl_json_response_builder!(SloveneWordMeaningsResponse);
-impl_json_response_builder!(NewSloveneWordMeaningCreatedResponse);
-impl_json_response_builder!(SloveneWordMeaningUpdatedResponse);

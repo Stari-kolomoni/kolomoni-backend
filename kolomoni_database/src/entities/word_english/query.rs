@@ -43,10 +43,18 @@ create_async_stream_wrapper!(
 
 
 
-#[derive(Clone, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct EnglishWordsQueryOptions {
     /// Ignored if `None` (i.e. no filtering).
     pub only_words_modified_after: Option<DateTime<Utc>>,
+}
+
+impl EnglishWordsQueryOptions {
+    pub const fn new_without_filters() -> Self {
+        Self {
+            only_words_modified_after: None,
+        }
+    }
 }
 
 

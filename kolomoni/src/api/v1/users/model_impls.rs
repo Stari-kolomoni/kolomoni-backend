@@ -1,15 +1,7 @@
-use kolomoni_core::api_models::{
-    RegisteredUsersListResponse,
-    UserDisplayNameChangeResponse,
-    UserInfo,
-    UserInfoResponse,
-    UserPermissionsResponse,
-    UserRegistrationResponse,
-    UserRolesResponse,
-};
+use kolomoni_core::api_models::UserInfo;
 use kolomoni_database::entities;
 
-use crate::{api::traits::IntoApiModel, impl_json_response_builder};
+use crate::api::traits::IntoApiModel;
 
 
 
@@ -25,13 +17,3 @@ impl IntoApiModel<UserInfo> for entities::UserModel {
         }
     }
 }
-
-
-impl_json_response_builder!(UserInfoResponse);
-impl_json_response_builder!(UserDisplayNameChangeResponse);
-impl_json_response_builder!(UserRolesResponse);
-impl_json_response_builder!(UserPermissionsResponse);
-
-impl_json_response_builder!(RegisteredUsersListResponse);
-
-impl_json_response_builder!(UserRegistrationResponse);

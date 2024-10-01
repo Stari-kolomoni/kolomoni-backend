@@ -1,16 +1,8 @@
-use kolomoni_core::api_models::{
-    CategoriesResponse,
-    Category,
-    CategoryCreationResponse,
-    CategoryResponse,
-};
+use kolomoni_core::api_models::Category;
 use kolomoni_database::entities;
 
-use crate::{api::traits::IntoApiModel, impl_json_response_builder};
+use crate::api::traits::IntoApiModel;
 
-
-
-impl_json_response_builder!(CategoryCreationResponse);
 
 
 impl IntoApiModel<Category> for entities::CategoryModel {
@@ -24,7 +16,3 @@ impl IntoApiModel<Category> for entities::CategoryModel {
         }
     }
 }
-
-
-impl_json_response_builder!(CategoriesResponse);
-impl_json_response_builder!(CategoryResponse);

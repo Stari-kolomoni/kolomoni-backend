@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{borrow::Cow, collections::HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -159,6 +159,13 @@ impl RoleSet {
         self.roles
             .iter()
             .map(|role| role.name().to_string())
+            .collect()
+    }
+
+    pub fn role_names_cow(&self) -> Vec<Cow<'static, str>> {
+        self.roles
+            .iter()
+            .map(|role| Cow::Borrowed(role.name()))
             .collect()
     }
 }

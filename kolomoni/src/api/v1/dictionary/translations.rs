@@ -1,5 +1,4 @@
-use actix_http::StatusCode;
-use actix_web::{delete, post, web, HttpResponse, Scope};
+use actix_web::{delete, post, web, Scope};
 use kolomoni_auth::Permission;
 use kolomoni_core::{
     api_models::{TranslationCreationRequest, TranslationDeletionRequest},
@@ -11,12 +10,10 @@ use tracing::info;
 
 use crate::{
     api::{
-        errors::{APIError, EndpointResult},
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult, TranslationsErrorReason},
         openapi,
     },
     authentication::UserAuthenticationExtractor,
-    json_error_response_with_reason,
-    obtain_database_connection,
     require_user_authentication_and_permission,
     state::ApplicationState,
 };
@@ -70,7 +67,7 @@ pub async fn create_translation(
     authentication_extractor: UserAuthenticationExtractor,
     request_body: web::Json<TranslationCreationRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     let authenticated_user = require_user_authentication_and_permission!(
@@ -92,9 +89,9 @@ pub async fn create_translation(
             .await?;
 
     if !english_word_exists {
-        return Err(APIError::client_error(
-            "The provided english word meaning does not exist.",
-        ));
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(TranslationsErrorReason::english_word_meaning_not_found())
+            .build();
     }
 
 
@@ -103,9 +100,9 @@ pub async fn create_translation(
             .await?;
 
     if !slovene_word_exists {
-        return Err(APIError::client_error(
-            "The provided slovene word meaning does not exist.",
-        ));
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(TranslationsErrorReason::slovene_word_meaning_not_found())
+            .build();
     }
 
 
@@ -118,10 +115,9 @@ pub async fn create_translation(
     .await?;
 
     if translation_already_exists {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "The translation already exists."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(TranslationsErrorReason::translation_relationship_already_exists())
+            .build();
     }
 
 
@@ -149,7 +145,7 @@ pub async fn create_translation(
         .map_err(APIError::InternalGenericError)?; */
 
 
-    Ok(HttpResponse::Ok().finish())
+    EndpointResponseBuilder::ok().build()
 }
 
 
@@ -199,7 +195,7 @@ pub async fn delete_translation(
     authentication_extractor: UserAuthenticationExtractor,
     request_body: web::Json<TranslationDeletionRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     let authenticated_user = require_user_authentication_and_permission!(
@@ -220,9 +216,10 @@ pub async fn delete_translation(
             .await?;
 
     if !english_word_meaning_exists {
-        return Err(APIError::client_error(
-            "The given english word meaning does not exist.",
-        ));
+        // FIXME fix docs, status code changed here
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(TranslationsErrorReason::english_word_meaning_not_found())
+            .build();
     }
 
 
@@ -231,9 +228,10 @@ pub async fn delete_translation(
             .await?;
 
     if !slovene_word_meaning_exists {
-        return Err(APIError::client_error(
-            "The given slovene word meaning does not exist.",
-        ));
+        // FIXME fix docs, status code changed here
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(TranslationsErrorReason::slovene_word_meaning_not_found())
+            .build();
     }
 
 
@@ -245,7 +243,9 @@ pub async fn delete_translation(
     .await?;
 
     if !translation_relationship_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(TranslationsErrorReason::translation_relationship_not_found())
+            .build();
     }
 
 
@@ -259,7 +259,7 @@ pub async fn delete_translation(
 
 
     if !deleted_translation_relationship_successfully {
-        return Err(APIError::internal_error_with_reason(
+        return Err(EndpointError::internal_error_with_reason(
             "database inconsistency: failed to delete a translation relationship \
             even though it previously existed inside the same transaction",
         ));
@@ -288,7 +288,7 @@ pub async fn delete_translation(
         .map_err(APIError::InternalGenericError)?; */
 
 
-    Ok(HttpResponse::Ok().finish())
+    EndpointResponseBuilder::ok().build()
 }
 
 

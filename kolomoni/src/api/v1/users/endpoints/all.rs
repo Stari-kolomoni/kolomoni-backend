@@ -5,9 +5,12 @@ use kolomoni_core::api_models::RegisteredUsersListResponse;
 use kolomoni_database::entities;
 
 use crate::{
-    api::{errors::EndpointResult, macros::ContextlessResponder, openapi, traits::IntoApiModel},
+    api::{
+        errors::{EndpointResponseBuilder, EndpointResult},
+        openapi,
+        traits::IntoApiModel,
+    },
     authentication::UserAuthenticationExtractor,
-    obtain_database_connection,
     require_user_authentication_and_permission,
     state::ApplicationState,
 };
@@ -43,7 +46,7 @@ pub async fn get_all_registered_users(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
 
     // To access this endpoint, the user:
@@ -65,8 +68,9 @@ pub async fn get_all_registered_users(
     }
 
 
-    Ok(RegisteredUsersListResponse {
-        users: parsed_users,
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(RegisteredUsersListResponse {
+            users: parsed_users,
+        })
+        .build()
 }

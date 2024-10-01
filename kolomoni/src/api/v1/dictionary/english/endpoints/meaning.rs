@@ -15,12 +15,10 @@ use sqlx::{types::Uuid, Acquire};
 
 use crate::{
     api::{
-        errors::{APIError, EndpointResult},
-        macros::ContextlessResponder,
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult, WordErrorReason},
         traits::IntoApiModel,
     },
     authentication::UserAuthenticationExtractor,
-    obtain_database_connection,
     require_permission_with_optional_authentication,
     require_user_authentication_and_permission,
     state::ApplicationState,
@@ -35,7 +33,7 @@ pub async fn get_all_english_word_meanings(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(Uuid,)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     require_permission_with_optional_authentication!(
         &mut database_connection,
@@ -54,13 +52,14 @@ pub async fn get_all_english_word_meanings(
     .await?;
 
 
-    Ok(EnglishWordMeaningsResponse {
-        meanings: english_word_meanings
-            .into_iter()
-            .map(|meaning| meaning.into_api_model())
-            .collect(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(EnglishWordMeaningsResponse {
+            meanings: english_word_meanings
+                .into_iter()
+                .map(|meaning| meaning.into_api_model())
+                .collect(),
+        })
+        .build()
 }
 
 
@@ -73,7 +72,7 @@ pub async fn create_english_word_meaning(
     parameters: web::Path<(Uuid,)>,
     request_data: web::Json<NewEnglishWordMeaningRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -86,6 +85,8 @@ pub async fn create_english_word_meaning(
     let target_english_word_id = EnglishWordId::new(parameters.into_inner().0);
     let new_word_meaning_data = request_data.into_inner();
 
+
+    // TODO need to check for duplicate meanings (+ in slovene as well)
 
     let newly_created_meaning = entities::EnglishWordMeaningMutation::create(
         &mut transaction,
@@ -101,10 +102,11 @@ pub async fn create_english_word_meaning(
     transaction.commit().await?;
 
 
-    Ok(NewEnglishWordMeaningCreatedResponse {
-        meaning: newly_created_meaning.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(NewEnglishWordMeaningCreatedResponse {
+            meaning: newly_created_meaning.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -117,7 +119,7 @@ pub async fn update_english_word_meaning(
     parameters: web::Path<(Uuid, Uuid)>,
     request_data: web::Json<EnglishWordMeaningUpdateRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -158,7 +160,9 @@ pub async fn update_english_word_meaning(
 
     // When zero rows are affected by the query, that means there is no such english word meaning.
     if !updated_meaning_successfully {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
     }
 
 
@@ -171,9 +175,9 @@ pub async fn update_english_word_meaning(
     .await?;
 
     let Some(updated_meaning) = updated_meaning else {
-        return Err(APIError::internal_error_with_reason(
-            "database inconsistency: after updating an english word meaning \
-            we could not fetch the exact same meaning",
+        return Err(EndpointError::invalid_database_state(
+            "after updating an english word meaning, we could not fetch \
+             the full (exact same) meaning inside the transaction",
         ));
     };
 
@@ -181,10 +185,11 @@ pub async fn update_english_word_meaning(
     transaction.commit().await?;
 
 
-    Ok(EnglishWordMeaningUpdatedResponse {
-        meaning: updated_meaning.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(EnglishWordMeaningUpdatedResponse {
+            meaning: updated_meaning.into_api_model(),
+        })
+        .build()
 }
 
 
@@ -196,7 +201,7 @@ pub async fn delete_english_word_meaning(
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(Uuid, Uuid)>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
     require_user_authentication_and_permission!(
@@ -228,7 +233,9 @@ pub async fn delete_english_word_meaning(
         .await?;
 
     if !word_to_meaning_relationship_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
     }
 
 
@@ -240,7 +247,10 @@ pub async fn delete_english_word_meaning(
 
 
     if !successfully_deleted_meaning {
-        return Err(APIError::not_found());
+        return Err(EndpointError::invalid_database_state(
+            "after checking that the english word meaning exists, \
+             we could not delete that very same meaning inside the same transaction",
+        ));
     }
 
 

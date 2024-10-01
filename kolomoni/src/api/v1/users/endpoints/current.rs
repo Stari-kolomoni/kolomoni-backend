@@ -1,5 +1,4 @@
-use actix_web::{get, http::StatusCode, patch, web};
-use itertools::Itertools;
+use actix_web::{get, patch, web};
 use kolomoni_auth::Permission;
 use kolomoni_core::api_models::{
     UserDisplayNameChangeRequest,
@@ -14,19 +13,12 @@ use tracing::info;
 
 use crate::{
     api::{
-        errors::{APIError, EndpointResult},
-        macros::{
-            construct_not_modified_response,
-            ContextlessResponder,
-            IntoKolomoniResponseBuilder,
-        },
+        errors::{EndpointResponseBuilder, EndpointResult, UsersErrorReason},
         openapi,
         traits::IntoApiModel,
         OptionalIfModifiedSince,
     },
     authentication::UserAuthenticationExtractor,
-    json_error_response_with_reason,
-    obtain_database_connection,
     require_permission_in_set,
     require_user_authentication,
     require_user_authentication_and_permission,
@@ -82,7 +74,7 @@ pub async fn get_current_user_info(
     authentication_extractor: UserAuthenticationExtractor,
     if_modified_since_header: OptionalIfModifiedSince,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
 
     // To access this endpoint, the user:
@@ -96,26 +88,31 @@ pub async fn get_current_user_info(
 
     let authenticated_user_id = authenticated_user.user_id();
 
-
     // Load user from database.
-    let current_user =
-        entities::UserQuery::get_user_by_id(&mut database_connection, authenticated_user_id)
-            .await?
-            .ok_or_else(APIError::not_found)?;
+    let Some(current_user) =
+        entities::UserQuery::get_user_by_id(&mut database_connection, authenticated_user_id).await?
+    else {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(UsersErrorReason::user_not_found())
+            .build();
+    };
 
 
-    if if_modified_since_header.enabled_and_has_not_changed_since(&current_user.last_modified_at) {
-        construct_not_modified_response(&current_user.last_modified_at)
-    } else {
-        let last_modified_at = current_user.last_modified_at;
+    let user_last_modified_at = current_user.last_modified_at;
 
-        Ok(UserInfoResponse {
-            user: current_user.into_api_model(),
-        }
-        .into_response_builder()?
-        .last_modified_at(last_modified_at)?
-        .build())
+    if if_modified_since_header.enabled_and_has_not_changed_since(&user_last_modified_at) {
+        return EndpointResponseBuilder::not_modified()
+            .with_last_modified_at(&current_user.last_modified_at)
+            .build();
     }
+
+
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserInfoResponse {
+            user: current_user.into_api_model(),
+        })
+        .with_last_modified_at(&user_last_modified_at)
+        .build()
 }
 
 
@@ -154,7 +151,7 @@ pub async fn get_current_user_roles(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
 
     // To access this endpoint, the user:
@@ -173,7 +170,9 @@ pub async fn get_current_user_roles(
         entities::UserQuery::exists_by_id(&mut database_connection, authenticated_user_id).await?;
 
     if !user_exists {
-        return Err(APIError::not_found());
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(UsersErrorReason::user_not_found())
+            .build();
     }
 
 
@@ -181,13 +180,12 @@ pub async fn get_current_user_roles(
         entities::UserRoleQuery::roles_for_user(&mut database_connection, authenticated_user_id)
             .await?;
 
-    let user_role_names = user_roles.role_names();
 
-
-    Ok(UserRolesResponse {
-        role_names: user_role_names,
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserRolesResponse {
+            role_names: user_roles.role_names_cow(),
+        })
+        .build()
 }
 
 
@@ -228,7 +226,7 @@ async fn get_current_user_effective_permissions(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
 
     // To access this endpoint, the user:
     // - MUST provide an authentication token, and
@@ -241,14 +239,11 @@ async fn get_current_user_effective_permissions(
     require_permission_in_set!(user_permissions, Permission::UserSelfRead);
 
 
-    Ok(UserPermissionsResponse {
-        permissions: user_permissions
-            .permission_names()
-            .into_iter()
-            .map_into()
-            .collect(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserPermissionsResponse {
+            permissions: user_permissions.permission_names_cow(),
+        })
+        .build()
 }
 
 
@@ -307,7 +302,7 @@ async fn update_current_user_display_name(
     authentication_extractor: UserAuthenticationExtractor,
     request_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
-    let mut database_connection = obtain_database_connection!(state);
+    let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
 
@@ -333,10 +328,9 @@ async fn update_current_user_display_name(
     .await?;
 
     if new_display_name_already_exists {
-        return Ok(json_error_response_with_reason!(
-            StatusCode::CONFLICT,
-            "User with given display name already exists."
-        ));
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(UsersErrorReason::display_name_already_exists())
+            .build();
     }
 
 
@@ -359,8 +353,9 @@ async fn update_current_user_display_name(
     );
 
 
-    Ok(UserDisplayNameChangeResponse {
-        user: updated_user.into_api_model(),
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(UserDisplayNameChangeResponse {
+            user: updated_user.into_api_model(),
+        })
+        .build()
 }

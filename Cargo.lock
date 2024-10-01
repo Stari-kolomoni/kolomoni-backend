@@ -1436,6 +1436,7 @@ dependencies = [
  "kolomoni_core",
  "reqwest",
  "serde",
+ "serde_json",
  "thiserror",
  "url",
 ]
