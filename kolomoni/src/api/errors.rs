@@ -21,11 +21,16 @@ use utoipa::ToSchema;
 use super::macros::construct_last_modified_header_value;
 use crate::authentication::AuthenticatedUserError;
 
+pub trait ErrorReasonName {
+    fn reason_name(&self) -> &'static str;
+}
+
+
 
 /// Pertains to all endpoints under:
 /// - `/dictionary/english`, and
 /// - `/dictionary/slovene`
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, ToSchema)]
 #[serde(tag = "word-error-type")]
 #[non_exhaustive]
 pub enum WordErrorReason {
@@ -60,9 +65,20 @@ impl WordErrorReason {
     }
 }
 
+impl ErrorReasonName for WordErrorReason {
+    fn reason_name(&self) -> &'static str {
+        match self {
+            Self::WordWithGivenLemmaAlreadyExists => "word with given lemma already exists",
+            Self::WordNotFound => "word not found",
+            Self::IdenticalWordMeaningAlreadyExists => "identical word meaning already exists",
+            Self::WordMeaningNotFound => "word meaning not found",
+        }
+    }
+}
+
 
 /// Pertains to all endpoints under `/dictionary/translation`
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, ToSchema)]
 #[serde(tag = "translation-error-type")]
 #[non_exhaustive]
 pub enum TranslationsErrorReason {
@@ -97,10 +113,21 @@ impl TranslationsErrorReason {
     }
 }
 
+impl ErrorReasonName for TranslationsErrorReason {
+    fn reason_name(&self) -> &'static str {
+        match self {
+            Self::EnglishWordMeaningNotFound => "english word meaning not found",
+            Self::SloveneWordMeaningNotFound => "slovene word meaning not found",
+            Self::TranslationRelationshipNotFound => "translation relationship not found",
+            Self::TranslationRelationshipAlreadyExists => "translation relationship already exists",
+        }
+    }
+}
+
 
 
 /// Pertains to all endpoints under `/login`.
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, ToSchema)]
 #[serde(tag = "login-error-type")]
 #[non_exhaustive]
 pub enum LoginErrorReason {
@@ -138,9 +165,20 @@ impl LoginErrorReason {
     }
 }
 
+impl ErrorReasonName for LoginErrorReason {
+    fn reason_name(&self) -> &'static str {
+        match self {
+            Self::InvalidLoginCredentials => "invalid login credentials",
+            Self::ExpiredRefreshToken => "expired refresh token",
+            Self::InvalidRefreshJsonWebToken => "invalid refresh JWT",
+            Self::NotARefreshToken => "not a refresh token",
+        }
+    }
+}
+
 
 /// Pertains to all endpoints under `/users`.
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, ToSchema)]
 #[serde(tag = "users-error-type")]
 #[non_exhaustive]
 pub enum UsersErrorReason {
@@ -172,10 +210,16 @@ pub enum UsersErrorReason {
     InvalidRoleName { role_name: String },
 
     #[serde(rename = "unable-to-give-out-unowned-role")]
-    UnableToGiveOutUnownedRole { role: Role },
+    UnableToGiveOutUnownedRole {
+        #[schema(value_type = String)]
+        role: Role,
+    },
 
     #[serde(rename = "unable-to-take-away-unowned-role")]
-    UnableToTakeAwayUnownedRole { role: Role },
+    UnableToTakeAwayUnownedRole {
+        #[schema(value_type = String)]
+        role: Role,
+    },
 }
 
 impl UsersErrorReason {
@@ -216,10 +260,24 @@ impl UsersErrorReason {
     }
 }
 
+impl ErrorReasonName for UsersErrorReason {
+    fn reason_name(&self) -> &'static str {
+        match self {
+            Self::UserNotFound => "user not found",
+            Self::UsernameAlreadyExists => "username already exists",
+            Self::DisplayNameAlreadyExists => "display name already exists",
+            Self::CannotModifyYourOwnAccount => "cannot modify your own account",
+            Self::InvalidRoleName { .. } => "invalid role name",
+            Self::UnableToGiveOutUnownedRole { .. } => "unable to give out unowned role",
+            Self::UnableToTakeAwayUnownedRole { .. } => "unable to take away unowned role",
+        }
+    }
+}
+
 
 // TODO
 /// Pertains to all endpoints under `/dictionary/category`.
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, ToSchema)]
 #[serde(tag = "category-error-type")]
 #[non_exhaustive]
 pub enum CategoryErrorReason {
@@ -273,8 +331,19 @@ impl CategoryErrorReason {
     }
 }
 
+impl ErrorReasonName for CategoryErrorReason {
+    fn reason_name(&self) -> &'static str {
+        match self {
+            Self::CategoryNotFound => "category not found",
+            Self::SloveneNameAlreadyExists => "slovene name already exists",
+            Self::EnglishNameAlreadyExists => "english name already exists",
+            Self::NoFieldsToUpdate => "no fields to update",
+        }
+    }
+}
 
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, ToSchema)]
 #[serde(tag = "type", content = "data")]
 #[non_exhaustive]
 pub enum ErrorReason {
@@ -292,7 +361,10 @@ pub enum ErrorReason {
     MissingJsonBody,
 
     #[serde(rename = "invalid-json-body")]
-    InvalidJsonBody { reason: InvalidJsonBodyReason },
+    InvalidJsonBody {
+        #[schema(value_type = String)]
+        reason: InvalidJsonBodyReason,
+    },
 
     #[serde(rename = "invalid-uuid-format")]
     InvalidUuidFormat,
@@ -301,31 +373,31 @@ pub enum ErrorReason {
      * Category-related
      */
     #[serde(rename = "category")]
-    CategoryErrorReason(CategoryErrorReason),
+    Category(CategoryErrorReason),
 
     /*
      * `/login` endpoint-related
      */
     #[serde(rename = "login")]
-    LoginErrorReason(LoginErrorReason),
+    Login(LoginErrorReason),
 
     /*
      * `/users` endpoint-related
      */
     #[serde(rename = "users")]
-    UsersErrorReason(UsersErrorReason),
+    Users(UsersErrorReason),
 
     /*
      * `/dictionary/translation`-endpoint related
      */
     #[serde(rename = "translations")]
-    TranslationErrorReason(TranslationsErrorReason),
+    Translations(TranslationsErrorReason),
 
     /// Pertains to all endpoints under:
     /// - `/dictionary/english`, and
     /// - `/dictionary/slovene`
     #[serde(rename = "word")]
-    WordErrorReason(WordErrorReason),
+    Word(WordErrorReason),
 
     /*
      * Other
@@ -358,117 +430,70 @@ impl ErrorReason {
     }
 }
 
+impl ErrorReasonName for ErrorReason {
+    fn reason_name(&self) -> &'static str {
+        match self {
+            Self::MissingAuthentication => "missing authentication",
+            Self::MissingPermissions { .. } => "missing permissions",
+            Self::MissingJsonBody => "missing JSON body",
+            Self::InvalidJsonBody { .. } => "invalid JSON body",
+            Self::InvalidUuidFormat => "invalid UUID format",
+            Self::Category(category_error_reason) => category_error_reason.reason_name(),
+            Self::Login(login_error_reason) => login_error_reason.reason_name(),
+            Self::Users(users_error_reason) => users_error_reason.reason_name(),
+            Self::Translations(translations_error_reason) => translations_error_reason.reason_name(),
+            Self::Word(word_error_reason) => word_error_reason.reason_name(),
+            Self::Other { .. } => "other reason",
+        }
+    }
+}
+
 impl From<CategoryErrorReason> for ErrorReason {
     fn from(value: CategoryErrorReason) -> Self {
-        Self::CategoryErrorReason(value)
+        Self::Category(value)
     }
 }
 
 impl From<LoginErrorReason> for ErrorReason {
     fn from(value: LoginErrorReason) -> Self {
-        Self::LoginErrorReason(value)
+        Self::Login(value)
     }
 }
 
 impl From<UsersErrorReason> for ErrorReason {
     fn from(value: UsersErrorReason) -> Self {
-        Self::UsersErrorReason(value)
+        Self::Users(value)
     }
 }
 
 impl From<TranslationsErrorReason> for ErrorReason {
     fn from(value: TranslationsErrorReason) -> Self {
-        Self::TranslationErrorReason(value)
+        Self::Translations(value)
     }
 }
 
 impl From<WordErrorReason> for ErrorReason {
     fn from(value: WordErrorReason) -> Self {
-        Self::WordErrorReason(value)
+        Self::Word(value)
     }
 }
 
 
 
-/// Simple JSON-encodable response containing a strongly-typed error reason
-/// (see [`ErrorReason`]).
-///
-/// This is useful when responding with a HTTP status code
-/// where the precise error reason is ambiguous.
-/// For example, on a missing permission error and a `403 Forbidden`,
-/// we can use this to specify what precise permission the caller needs.
-///
-/// This can be used on the frontend to enrich error displays.
+/// **Do not use directly in endpoint code.**
 #[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(serde::Deserialize))]
-pub struct ErrorResponseWithReason {
-    pub reason: ErrorReason,
+pub struct ResponseWithErrorReason {
+    reason: ErrorReason,
 }
 
-impl ErrorResponseWithReason {
-    pub fn new<R>(reason: R) -> Self
-    where
-        R: Into<ErrorReason>,
-    {
-        Self {
-            reason: reason.into(),
-        }
+impl ResponseWithErrorReason {
+    #[inline]
+    pub fn new(reason: ErrorReason) -> Self {
+        Self { reason }
     }
-
-    /*
-    /// Initialize an [`ErrorReasonResponse`] with a custom error message.
-    pub fn custom_reason<M: Into<String>>(reason: M) -> Self {
-        Self {
-            reason: reason.into(),
-        }
-    } */
-
-    /*
-    /// Initialize an [`ErrorReasonResponse`] with a message about a missing `Authorization` header.
-    pub fn not_authenticated() -> Self {
-        Self {
-            reason: "Not authenticated (missing Authorization header).".to_string(),
-        }
-    }
-
-    /// Initialize an [`ErrorReasonResponse`] with a message about missing permissions
-    /// (but not specifying which ones).
-    pub fn missing_permissions() -> Self {
-        Self {
-            reason: "Missing permissions.".to_string(),
-        }
-    }
-
-    /// Initialize an `ErrorReasonResponse` with a message about a specific missing permission.
-    pub fn missing_specific_permission(permission: &Permission) -> Self {
-        Self {
-            reason: format!("Missing permission: {}", permission.name()),
-        }
-    }
-
-    /// Initialize an `ErrorReasonResponse` with a message about a specific missing permission
-    /// or permissions.
-    pub fn missing_specific_permissions(permission: &[Permission]) -> Self {
-        if permission.is_empty() {
-            Self::missing_permissions()
-        } else if permission.len() == 1 {
-            Self::missing_specific_permission(
-                // PANIC SAFETY: We just checked that the length is one.
-                permission.first().unwrap(),
-            )
-        } else {
-            Self {
-                reason: format!(
-                    "Missing permissions: {}",
-                    permission
-                        .iter()
-                        .map(|permission| permission.name())
-                        .join(", ")
-                ),
-            }
-        }
-    } */
 }
+
 
 
 
@@ -874,11 +899,21 @@ impl ResponseError for EndpointError {
             Self::InvalidJsonBody { reason } => EndpointResponseBuilder::bad_request()
                 .with_error_reason(ErrorReason::invalid_json_body(*reason))
                 .build(),
-            Self::InvalidUuidFormat { .. } => EndpointResponseBuilder::bad_request().build(),
-            Self::InternalErrorWithReason { .. } => EndpointResponseBuilder::bad_request().build(),
-            Self::InternalGenericError { .. } => EndpointResponseBuilder::bad_request().build(),
-            Self::InternalDatabaseError { .. } => EndpointResponseBuilder::bad_request().build(),
-            Self::InvalidDatabaseState { .. } => EndpointResponseBuilder::bad_request().build(),
+            Self::InvalidUuidFormat { .. } => EndpointResponseBuilder::bad_request()
+                .with_error_reason(ErrorReason::invalid_uuid_format())
+                .build(),
+            Self::InternalErrorWithReason { .. } => {
+                EndpointResponseBuilder::internal_server_error().build()
+            }
+            Self::InternalGenericError { .. } => {
+                EndpointResponseBuilder::internal_server_error().build()
+            }
+            Self::InternalDatabaseError { .. } => {
+                EndpointResponseBuilder::internal_server_error().build()
+            }
+            Self::InvalidDatabaseState { .. } => {
+                EndpointResponseBuilder::internal_server_error().build()
+            }
         };
 
 
@@ -931,29 +966,6 @@ impl From<JWTCreationError> for EndpointError {
         }
     }
 }
-
-/*
-//  TODO what is this for?
-impl From<KolomoniResponseBuilderJSONError> for EndpointError {
-    fn from(value: KolomoniResponseBuilderJSONError) -> Self {
-        match value {
-            KolomoniResponseBuilderJSONError::JsonError { error } => Self::InternalGenericError {
-                error: Box::new(error),
-            },
-        }
-    }
-}
-
-//  TODO what is this for?
-impl From<KolomoniResponseBuilderLMAError> for EndpointError {
-    fn from(value: KolomoniResponseBuilderLMAError) -> Self {
-        match value {
-            KolomoniResponseBuilderLMAError::JsonError { error } => Self::InternalGenericError {
-                error: Box::new(error),
-            },
-        }
-    }
-} */
 
 
 
@@ -1017,6 +1029,11 @@ impl EndpointResponseBuilder {
         Self::new(StatusCode::NOT_MODIFIED)
     }
 
+    #[inline]
+    pub fn internal_server_error() -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+
     pub fn with_json_body<D, S>(mut self, data: D) -> Self
     where
         S: Serialize,
@@ -1040,7 +1057,7 @@ impl EndpointResponseBuilder {
     where
         R: Into<ErrorReason>,
     {
-        self.with_json_body(reason.into())
+        self.with_json_body(ResponseWithErrorReason::new(reason.into()))
     }
 
     pub fn with_last_modified_at(mut self, last_modified_at: &DateTime<Utc>) -> Self {

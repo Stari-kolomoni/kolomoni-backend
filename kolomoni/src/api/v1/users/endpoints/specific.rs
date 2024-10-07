@@ -21,11 +21,15 @@ use tracing::info;
 use crate::{
     api::{
         errors::{EndpointResponseBuilder, EndpointResult, UsersErrorReason},
-        openapi,
+        openapi::{
+            self,
+            response::{requires, AsErrorReason},
+        },
         traits::IntoApiModel,
         v1::dictionary::parse_uuid,
     },
     authentication::UserAuthenticationExtractor,
+    declare_openapi_error_reason_response,
     require_permission_in_set,
     require_permission_with_optional_authentication,
     require_user_authentication,
@@ -34,6 +38,13 @@ use crate::{
 };
 
 
+
+declare_openapi_error_reason_response!(
+    pub struct SpecificUserNotFound {
+        description => "User not found.",
+        reason => UsersErrorReason::user_not_found()
+    }
+);
 
 
 /// Get a user's information
@@ -74,9 +85,10 @@ use crate::{
         ),
         (
             status = 404,
-            description = "Requested user does not exist."
+            response = inline(AsErrorReason<SpecificUserNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingPermissions<requires::UserAnyRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
@@ -149,9 +161,10 @@ async fn get_specific_user_info(
         ),
         (
             status = 404,
-            description = "No such user."
+            response = inline(AsErrorReason<SpecificUserNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingPermissions<requires::UserAnyRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
@@ -233,9 +246,10 @@ pub async fn get_specific_user_roles(
         ),
         (
             status = 404,
-            description = "Requested user does not exist."
+            response = inline(AsErrorReason<SpecificUserNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingPermissions<requires::UserAnyRead, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -292,6 +306,23 @@ async fn get_specific_user_effective_permissions(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct SpecificUserCannotModifyYourself {
+        description => "You are not allowed to change your own account on this endpoint.",
+        reason => UsersErrorReason::cannot_modify_your_own_account()
+    }
+);
+
+declare_openapi_error_reason_response!(
+    pub struct SpecificUserNewDisplayNameAlreadyExists {
+        description => "Unable to change user's display name, because the \
+                        given display name is already in use.",
+        reason => UsersErrorReason::display_name_already_exists()
+    }
+);
+
+
+
 /// Update a user's display name
 ///
 /// This is generic version of the `PATCH /users/me/display_name` endpoint,
@@ -334,19 +365,21 @@ async fn get_specific_user_effective_permissions(
             })
         ),
         (
+            status = 403,
+            response = inline(AsErrorReason<SpecificUserCannotModifyYourself>)
+        ),
+        (
             status = 404,
-            description = "User with the given ID does not exist.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Resource not found: no such user." })
+            response = inline(AsErrorReason<SpecificUserNotFound>)
         ),
         (
             status = 409,
-            description = "User with given display name already exists.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "User with given display name already exists." })
+            response = inline(AsErrorReason<SpecificUserNewDisplayNameAlreadyExists>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyWrite>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::UserAnyWrite, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -442,6 +475,21 @@ async fn update_specific_user_display_name(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct SpecificUserInvalidRoleName {
+        description => "Invalid role name.",
+        reason => UsersErrorReason::invalid_role_name(String::default())
+    }
+);
+
+declare_openapi_error_reason_response!(
+    pub struct SpecificUserCannotGiveOutRolesYouDontHave {
+        description => "Not allowed to add a given role, because you do not have it.",
+        reason => UsersErrorReason::unable_to_give_out_unowned_role(Role::User)
+    }
+);
+
+
 /// Add roles to a user
 ///
 /// This endpoint allows a user with enough permissions to add roles to another user.
@@ -476,33 +524,24 @@ async fn update_specific_user_display_name(
         ),
         (
             status = 400,
-            description = "Invalid role name.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "No such role: \"non-existent-role-name\"." })
+            response = inline(AsErrorReason<SpecificUserInvalidRoleName>)
         ),
         (
             status = 403,
-            description = "Not allowed to modify roles.",
-            body = ErrorReasonResponse,
-            examples(
-                ("Can't give out roles you don't have" = (
-                    summary = "Can't give out roles you don't have.",
-                    value = json!({ "reason": "You cannot give out roles you do not have (missing role: administrator)." })
-                )),
-                ("Can't modify yourself" = (
-                    summary = "You're not allowed to modify your own account.",
-                    value = json!({ "reason": "Can't modify your own account on this endpoint." })
-                ))
-            )
+            response = inline(AsErrorReason<SpecificUserCannotGiveOutRolesYouDontHave>)
+        ),
+        (
+            status = 403,
+            response = inline(AsErrorReason<SpecificUserCannotModifyYourself>)
         ),
         (
             status = 404,
-            description = "The specified user does not exist.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "The specified user does not exist." })
+            response = inline(AsErrorReason<SpecificUserNotFound>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyWrite>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::UserAnyWrite, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -618,6 +657,13 @@ pub async fn add_roles_to_specific_user(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct SpecificUserCannotTakeAwayRolesYouDontHave {
+        description => "Not allowed to remove a given role, because you do not have it.",
+        reason => UsersErrorReason::unable_to_take_away_unowned_role(Role::User)
+    }
+);
+
 
 /// Removes roles from a user
 ///
@@ -642,8 +688,8 @@ pub async fn add_roles_to_specific_user(
             description = "UUID of the user to remove roles from."
         )
     ),
-    request_body(
-        content = UserRoleRemoveRequest
+    params(
+        UserRoleRemoveRequest
     ),
     responses(
         (
@@ -653,33 +699,24 @@ pub async fn add_roles_to_specific_user(
         ),
         (
             status = 400,
-            description = "Invalid role name.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "No such role: \"non-existent-role-name\"." })
+            response = inline(AsErrorReason<SpecificUserInvalidRoleName>)
         ),
         (
             status = 403,
-            description = "Not allowed to modify roles.",
-            body = ErrorReasonResponse,
-            examples(
-                ("Can't remove others' roles you don't have" = (
-                    summary = "Can't give out roles you don't have.",
-                    value = json!({ "reason": "You cannot remove others' roles which you do not have (missing role: administrator)." })
-                )),
-                ("Can't modify yourself" = (
-                    summary = "You're not allowed to modify your own account.",
-                    value = json!({ "reason": "Can't modify your own account on this endpoint." })
-                ))
-            )
+            response = inline(AsErrorReason<SpecificUserCannotTakeAwayRolesYouDontHave>)
+        ),
+        (
+            status = 403,
+            response = inline(AsErrorReason<SpecificUserCannotModifyYourself>)
         ),
         (
             status = 404,
-            description = "The specified user does not exist.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "The specified user does not exist." })
+            response = inline(AsErrorReason<SpecificUserNotFound>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyWrite>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::UserAnyWrite, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -691,7 +728,7 @@ pub async fn remove_roles_from_specific_user(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
     path_info: web::Path<(String,)>,
-    request_data: web::Json<UserRoleRemoveRequest>,
+    request_data: web::Query<UserRoleRemoveRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;

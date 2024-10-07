@@ -14,11 +14,15 @@ use tracing::info;
 use crate::{
     api::{
         errors::{EndpointResponseBuilder, EndpointResult, UsersErrorReason},
-        openapi,
+        openapi::{
+            self,
+            response::{requires, AsErrorReason},
+        },
         traits::IntoApiModel,
         OptionalIfModifiedSince,
     },
     authentication::UserAuthenticationExtractor,
+    declare_openapi_error_reason_response,
     require_permission_in_set,
     require_user_authentication,
     require_user_authentication_and_permission,
@@ -26,6 +30,14 @@ use crate::{
 };
 
 // TODO introduce transactions here and elsewhere (even in read-only operations?, for consistency)
+
+
+declare_openapi_error_reason_response!(
+    pub struct UserYourAccountNotFound {
+        description => "Your user account no longer exists.",
+        reason => UsersErrorReason::user_not_found()
+    }
+);
 
 
 /// Get your user information
@@ -58,11 +70,12 @@ use crate::{
         ),
         (
             status = 404,
-            description = "Your user account does not exist."
+            response = inline(AsErrorReason<UserYourAccountNotFound>)
         ),
+        openapi::response::Unmodified,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::UserSelfRead, 1>,
         openapi::response::InternalServerError,
-        openapi::response::UnmodifiedConditional,
-        openapi::response::FailedAuthentication<openapi::response::requires::UserSelfRead>,
     ),
     security(
         ("access_token" = [])
@@ -137,9 +150,10 @@ pub async fn get_current_user_info(
         ),
         (
             status = 404,
-            description = "Your user account does not exist."
+            response = inline(AsErrorReason<UserYourAccountNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::UserSelfRead, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -214,7 +228,12 @@ pub async fn get_current_user_roles(
                 ]
             })
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::UserSelfRead>,
+        (
+            status = 404,
+            response = inline(AsErrorReason<UserYourAccountNotFound>)
+        ),
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::UserSelfRead, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -239,6 +258,19 @@ async fn get_current_user_effective_permissions(
     require_permission_in_set!(user_permissions, Permission::UserSelfRead);
 
 
+    let user_exists = entities::UserQuery::exists_by_id(
+        &mut database_connection,
+        authenticated_user.user_id(),
+    )
+    .await?;
+
+    if !user_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(UsersErrorReason::user_not_found())
+            .build();
+    }
+
+
     EndpointResponseBuilder::ok()
         .with_json_body(UserPermissionsResponse {
             permissions: user_permissions.permission_names_cow(),
@@ -246,6 +278,16 @@ async fn get_current_user_effective_permissions(
         .build()
 }
 
+
+
+
+declare_openapi_error_reason_response!(
+    pub struct UserNewDisplayNameAlreadyExists {
+        description => "Unable to change display name, because the \
+                        given display name is already in use.",
+        reason => UsersErrorReason::display_name_already_exists()
+    }
+);
 
 
 /// Change your display name
@@ -262,34 +304,24 @@ async fn get_current_user_effective_permissions(
     tag = "users:self",
     request_body(
         content = UserDisplayNameChangeRequest,
-        example = json!({
-            "new_display_name": "Janez Novak Veliki"
-        })
     ),
     responses(
         (
             status = 200,
             description = "Your display name has been changed.",
             body = UserDisplayNameChangeResponse,
-            example = json!({
-                "user": {
-                    "id": "01922622-dbe9-7871-91df-f0646e70b2e8",
-                    "username": "janeznovak",
-                    "display_name": "Janez Novak Veliki",
-                    "joined_at": "2023-06-27T20:33:53.078789Z",
-                    "last_modified_at": "2023-06-27T20:44:27.217273Z",
-                    "last_active_at": "2023-06-27T20:34:27.253746Z"
-                }
-            })
         ),
         (
             status = 409,
-            description = "User with given display name already exists.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "User with given display name already exists." })
+            response = inline(AsErrorReason<UserNewDisplayNameAlreadyExists>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::UserSelfWrite>,
+        (
+            status = 404,
+            response = inline(AsErrorReason<UserYourAccountNotFound>)
+        ),
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::UserSelfRead, 1>,
         openapi::response::InternalServerError,
     ),
     security(

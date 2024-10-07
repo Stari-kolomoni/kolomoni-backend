@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use super::SloveneWordMeaningWithCategoriesAndTranslations;
 use crate::id::SloveneWordId;
@@ -47,17 +47,11 @@ pub struct SloveneWordsResponse {
 }
 
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
-#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
-pub struct SloveneWordFilters {
-    pub last_modified_after: Option<DateTime<Utc>>,
-}
 
-
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema, IntoParams)]
 #[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
 pub struct SloveneWordsListRequest {
-    pub filters: Option<SloveneWordFilters>,
+    pub last_modified_after: Option<DateTime<Utc>>,
 }
 
 

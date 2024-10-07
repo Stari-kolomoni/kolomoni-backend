@@ -17,16 +17,37 @@ use sqlx::Acquire;
 use crate::{
     api::{
         errors::{CategoryErrorReason, EndpointError, EndpointResponseBuilder, EndpointResult},
-        openapi,
+        openapi::{
+            self,
+            response::{requires, AsErrorReason},
+        },
         traits::IntoApiModel,
         v1::dictionary::parse_uuid,
     },
     authentication::UserAuthenticationExtractor,
+    declare_openapi_error_reason_response,
     require_permission_with_optional_authentication,
     require_user_authentication_and_permission,
     state::ApplicationState,
 };
 
+
+
+declare_openapi_error_reason_response!(
+    pub struct CategoryWithGivenSloveneNameAlreadyExists {
+        description => "The provided slovene name for the new category \
+                        is already present on an existing category.",
+        reason => CategoryErrorReason::slovene_name_already_exists()
+    }
+);
+
+declare_openapi_error_reason_response!(
+    pub struct CategoryWithGivenEnglishNameAlreadyExists {
+        description => "The provided english name for the new category \
+                        is already present on an existing category.",
+        reason => CategoryErrorReason::english_name_already_exists()
+    }
+);
 
 
 /// Create a new category
@@ -50,10 +71,15 @@ use crate::{
         ),
         (
             status = 409,
-            description = "This english-slovene word combination already exists as a category."
+            response = inline(AsErrorReason<CategoryWithGivenSloveneNameAlreadyExists>),
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::CategoryCreate>,
+        (
+            status = 409,
+            response = inline(AsErrorReason<CategoryWithGivenEnglishNameAlreadyExists>),
+        ),
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::CategoryCreate, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -138,6 +164,8 @@ pub async fn create_category(
 ///
 /// # Authentication
 /// This endpoint does not require authentication.
+/// It technically does require the "category:read" permission,
+/// but that permission is granted to all unauthenticated API callers.
 #[utoipa::path(
     get,
     path = "/dictionary/category",
@@ -148,6 +176,7 @@ pub async fn create_category(
             description = "The category list.",
             body = CategoriesResponse,
         ),
+        openapi::response::MissingPermissions<requires::CategoryRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
@@ -184,6 +213,14 @@ pub async fn get_all_categories(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct CategoryIdDoesNotExist {
+        description => "Category does not exist.",
+        reason => CategoryErrorReason::category_not_found()
+    }
+);
+
+
 /// Get category
 ///
 /// This endpoint will return information about a single category.
@@ -210,8 +247,10 @@ pub async fn get_all_categories(
         ),
         (
             status = 404,
-            description = "Category does not exist."
+            response = inline(AsErrorReason<CategoryIdDoesNotExist>)
         ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingPermissions<requires::CategoryRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
@@ -253,6 +292,31 @@ pub async fn get_specific_category(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct CategoryUpdateWouldConflictWithExistingSloveneName {
+        description => "The requested update cannot be applied, because the \
+                        new slovene category name is already present on another category.",
+        reason => CategoryErrorReason::slovene_name_already_exists()
+    }
+);
+
+declare_openapi_error_reason_response!(
+    pub struct CategoryUpdateWouldConflictWithExistingEnglishName {
+        description => "The requested update cannot be applied, because the \
+                        new english category name is already present on another category.",
+        reason => CategoryErrorReason::english_name_already_exists()
+    }
+);
+
+declare_openapi_error_reason_response!(
+    pub struct CategoryNoFieldsToUpdate {
+        description => "Invalid request body: you should provide at least one field to update.",
+        reason => CategoryErrorReason::no_fields_to_update()
+    }
+);
+
+
+
 /// Update category
 ///
 /// This endpoint allows a user with enough permissions to update a category.
@@ -278,15 +342,25 @@ pub async fn get_specific_category(
             body = CategoryResponse,
         ),
         (
+            status = 400,
+            response = inline(AsErrorReason<CategoryNoFieldsToUpdate>)
+        ),
+        (
             status = 404,
-            description = "Category does not exist."
+            response = inline(AsErrorReason<CategoryIdDoesNotExist>)
         ),
         (
             status = 409,
-            description = "The update would create a conflict with another category."
+            response = inline(AsErrorReason<CategoryUpdateWouldConflictWithExistingEnglishName>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::CategoryUpdate>,
+        (
+            status = 409,
+            response = inline(AsErrorReason<CategoryUpdateWouldConflictWithExistingSloveneName>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::CategoryUpdate, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -300,7 +374,8 @@ pub async fn update_specific_category(
     authentication: UserAuthenticationExtractor,
     request_body: web::Json<CategoryUpdateRequest>,
 ) -> EndpointResult {
-    let mut database_connection = state.acquire_database_connection().await?;
+    let mut database_connection: sqlx::pool::PoolConnection<sqlx::Postgres> =
+        state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
 
@@ -445,9 +520,11 @@ pub async fn update_specific_category(
         ),
         (
             status = 404,
-            description = "Category does not exist."
+            response = inline(AsErrorReason<CategoryIdDoesNotExist>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::CategoryDelete>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::CategoryDelete, 1>,
         openapi::response::InternalServerError,
     ),
     security(

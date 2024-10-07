@@ -11,17 +11,42 @@ use tracing::info;
 use crate::{
     api::{
         errors::{EndpointError, EndpointResponseBuilder, EndpointResult, TranslationsErrorReason},
-        openapi,
+        openapi::{
+            self,
+            response::{requires, AsErrorReason},
+        },
     },
     authentication::UserAuthenticationExtractor,
+    declare_openapi_error_reason_response,
     require_user_authentication_and_permission,
     state::ApplicationState,
 };
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct TranslationLinkedSloveneWordMeaningNotFound {
+        description => "The provided slovene word meaning doesn't exist.",
+        reason => TranslationsErrorReason::slovene_word_meaning_not_found()
+    }
+);
 
-/// Create a new translation
+declare_openapi_error_reason_response!(
+    pub struct TranslationLinkedEnglishWordMeaningNotFound {
+        description => "The provided english word meaning doesn't exist.",
+        reason => TranslationsErrorReason::english_word_meaning_not_found()
+    }
+);
+
+declare_openapi_error_reason_response!(
+    pub struct TranslationAlreadyExists {
+        description => "The translation relationship already exists for the given word meaning pair.",
+        reason => TranslationsErrorReason::translation_relationship_already_exists()
+    }
+);
+
+
+/// Create a new translation relationship
 ///
 /// This endpoint will create a new translation relationship
 /// between an english and a slovene word. Note that this is different than
@@ -34,27 +59,28 @@ use crate::{
     path = "/dictionary/translation",
     tag = "dictionary:translation",
     request_body(
-        content = TranslationRequest
+        content = TranslationCreationRequest
     ),
     responses(
         (
             status = 200,
-            description = "The translation has been created."
+            description = "The translation relationship has been created."
         ),
         (
             status = 400,
-            description = "The provided slovene or english word does not exist.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "The provided english word does not exist." })
+            response = inline(AsErrorReason<TranslationLinkedSloveneWordMeaningNotFound>)
+        ),
+        (
+            status = 400,
+            response = inline(AsErrorReason<TranslationLinkedEnglishWordMeaningNotFound>)
         ),
         (
             status = 409,
-            description = "The translation already exists.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "The translation already exists." })
+            response = inline(AsErrorReason<TranslationAlreadyExists>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::TranslationCreate>,
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::TranslationCreate, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -150,6 +176,15 @@ pub async fn create_translation(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct TranslationNotFound {
+        description => "The translation relationship with the provided \
+                        slovene and english word meaning IDs does not exist.",
+        reason => TranslationsErrorReason::translation_relationship_not_found()
+    }
+);
+
+
 
 /// Delete a translation
 ///
@@ -163,8 +198,8 @@ pub async fn create_translation(
     delete,
     path = "/dictionary/translation",
     tag = "dictionary:translation",
-    request_body(
-        content = TranslationDeletionRequest
+    params(
+        TranslationDeletionRequest
     ),
     responses(
         (
@@ -173,16 +208,18 @@ pub async fn create_translation(
         ),
         (
             status = 400,
-            description = "The provided slovene or english word does not exist.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "The provided english word does not exist." })
+            response = inline(AsErrorReason<TranslationLinkedSloveneWordMeaningNotFound>)
+        ),
+        (
+            status = 400,
+            response = inline(AsErrorReason<TranslationLinkedEnglishWordMeaningNotFound>)
         ),
         (
             status = 404,
-            description = "The translation relationship does not exist.",
+            response = inline(AsErrorReason<TranslationNotFound>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::TranslationDelete>,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::TranslationDelete, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -193,7 +230,7 @@ pub async fn create_translation(
 pub async fn delete_translation(
     state: ApplicationState,
     authentication_extractor: UserAuthenticationExtractor,
-    request_body: web::Json<TranslationDeletionRequest>,
+    request_body: web::Query<TranslationDeletionRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;

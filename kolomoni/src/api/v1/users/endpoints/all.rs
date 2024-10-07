@@ -7,7 +7,7 @@ use kolomoni_database::entities;
 use crate::{
     api::{
         errors::{EndpointResponseBuilder, EndpointResult},
-        openapi,
+        openapi::{self, response::requires},
         traits::IntoApiModel,
     },
     authentication::UserAuthenticationExtractor,
@@ -34,7 +34,8 @@ use crate::{
             description = "List of registered users.",
             body = RegisteredUsersListResponse
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::UserAnyRead>,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::UserAnyRead, 1>,
         openapi::response::InternalServerError,
     ),
     security(

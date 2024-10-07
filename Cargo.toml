@@ -97,6 +97,7 @@ futures-util = "^0.3.30"
 pin-project-lite = "^0.2.14"
 
 
+
 [workspace.dependencies.sqlx]
 version = "^0.8.2"	
 features = [
@@ -133,6 +134,10 @@ features = [
 [[bin]]
 name = "kolomoni"
 path = "./kolomoni/src/main.rs"
+
+[lib]
+path = "./kolomoni/src/lib.rs"
+
 
 
 [dependencies]

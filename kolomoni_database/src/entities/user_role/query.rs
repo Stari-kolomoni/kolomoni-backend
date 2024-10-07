@@ -81,14 +81,15 @@ impl UserRoleQuery {
 
         let mut permission_hash_set = HashSet::with_capacity(raw_permissions.len());
         for raw_permission in raw_permissions {
-            let Some(permission) = Permission::from_id(raw_permission.permission_id) else {
-                return Err(QueryError::ModelError {
-                    reason: format!(
-                        "unrecognized internal permission ID: {}",
-                        raw_permission.permission_id
-                    )
-                    .into(),
-                });
+            let permission_id_u16 = u16::try_from(raw_permission.permission_id).map_err(|_| {
+                QueryError::model_error("Invalid permission ID: outside of u16 range.")
+            })?;
+
+            let Some(permission) = Permission::from_id(permission_id_u16) else {
+                return Err(QueryError::model_error(format!(
+                    "unrecognized internal permission ID: {}",
+                    raw_permission.permission_id
+                )));
             };
 
             permission_hash_set.insert(permission);
@@ -119,7 +120,7 @@ impl UserRoleQuery {
                     user_role.user_id = $1 AND role_permission.permission_id = $2 \
             )",
             user_id.into_uuid(),
-            permission.id()
+            permission.id() as i32
         )
         .fetch_one(connection)
         .await?;

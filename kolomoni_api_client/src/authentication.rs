@@ -28,11 +28,11 @@ pub enum AuthenticationError {
 }
 
 
-pub struct Authentication {
+pub struct AccessToken {
     access_token: String,
 }
 
-impl Authentication {
+impl AccessToken {
     pub async fn log_in<U, P>(
         server: ApiServer,
         http_client: reqwest::Client,

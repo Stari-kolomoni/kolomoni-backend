@@ -1,6 +1,6 @@
 use kolomoni_core::api_models::PingResponse;
 
-use crate::{urls::build_request_url, Client, ClientError, ClientResult};
+use crate::{request::RequestBuilder, Client, ClientResult};
 
 pub struct HealthApi<'c> {
     client: &'c Client,
@@ -8,19 +8,12 @@ pub struct HealthApi<'c> {
 
 impl<'c> HealthApi<'c> {
     pub async fn ping(&self) -> ClientResult<bool> {
-        let response = self
-            .client
-            .get(build_request_url(
-                &self.client.server,
-                "/health/ping",
-            )?)
+        let response = RequestBuilder::get(self.client)
+            .endpoint_url("/health/ping")
+            .send()
             .await?;
 
-
-        let response_body: PingResponse = response
-            .json()
-            .await
-            .map_err(|error| ClientError::ResponseJsonBodyError { error })?;
+        let response_body: PingResponse = response.json().await?;
 
         Ok(response_body.ok)
     }

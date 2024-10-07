@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 
 macro_rules! impl_transparent_display_for_newtype_struct {
@@ -21,7 +22,10 @@ macro_rules! create_uuid_newtype {
     ($struct_name:ident) => {
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[derive(serde::Serialize, serde::Deserialize)]
+        #[derive(utoipa::ToSchema)]
         #[serde(transparent)]
+        #[schema(value_type = uuid::Uuid)]
+        #[schema(format = Uuid)]
         pub struct $struct_name(#[serde(with = "uuid::serde::simple")] pub(crate) uuid::Uuid);
 
         impl $struct_name {
@@ -120,7 +124,7 @@ impl SloveneWordMeaningId {
 
 
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ToSchema)]
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PermissionId(pub(crate) i32);
@@ -141,7 +145,7 @@ impl_transparent_display_for_newtype_struct!(PermissionId);
 
 
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, ToSchema)]
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct RoleId(pub(crate) i32);

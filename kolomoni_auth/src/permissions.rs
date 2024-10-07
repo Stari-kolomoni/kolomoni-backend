@@ -2,6 +2,7 @@ use std::{borrow::Cow, collections::HashSet};
 
 use miette::{miette, Result};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 // TODO Make sure this and roles are synced with the database migrations.
 
@@ -16,109 +17,103 @@ use serde::{Deserialize, Serialize};
 /// # Maintenance
 /// **The defined permissions must match with the `*_seed_permissions.rs` file
 /// in `kolomoni_migrations`!**
-#[derive(Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone, Debug)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Eq,
+    PartialEq,
+    Hash,
+    Copy,
+    Clone,
+    Debug,
+    ToSchema
+)]
+#[repr(u16)]
 pub enum Permission {
     /// Allows the user to log in and view their account information.
     #[serde(rename = "user.self:read")]
-    UserSelfRead,
+    UserSelfRead = 1,
 
     /// Allows the user to update their account information.
     #[serde(rename = "user.self:write")]
-    UserSelfWrite,
+    UserSelfWrite = 2,
 
     /// Allows the user to view public account information of any other user.
     #[serde(rename = "user.any:read")]
-    UserAnyRead,
+    UserAnyRead = 3,
 
     /// Allows the user to update public account information of any other user and
     /// give or remove their permissions.
     #[serde(rename = "user.any:write")]
-    UserAnyWrite,
+    UserAnyWrite = 4,
 
     #[serde(rename = "word:create")]
-    WordCreate,
+    WordCreate = 5,
 
     #[serde(rename = "word:read")]
-    WordRead,
+    WordRead = 6,
 
     #[serde(rename = "word:update")]
-    WordUpdate,
+    WordUpdate = 7,
 
     #[serde(rename = "word:delete")]
-    WordDelete,
+    WordDelete = 8,
 
     // TODO Remove.
     #[serde(rename = "word.suggestion:create")]
-    SuggestionCreate,
+    SuggestionCreate = 9,
 
     // TODO Remove.
     #[serde(rename = "word.suggestion:delete")]
-    SuggestionDelete,
+    SuggestionDelete = 10,
 
     #[serde(rename = "word.translation:create")]
-    TranslationCreate,
+    TranslationCreate = 11,
 
     #[serde(rename = "word.translation:delete")]
-    TranslationDelete,
+    TranslationDelete = 12,
 
     #[serde(rename = "category:create")]
-    CategoryCreate,
+    CategoryCreate = 13,
 
     #[serde(rename = "category:read")]
-    CategoryRead,
+    CategoryRead = 14,
 
     #[serde(rename = "category:update")]
-    CategoryUpdate,
+    CategoryUpdate = 15,
 
     #[serde(rename = "category:delete")]
-    CategoryDelete,
+    CategoryDelete = 16,
 }
 
 
 impl Permission {
-    pub fn from_id(internal_permission_id: i32) -> Option<Self> {
+    pub fn from_id(internal_permission_id: u16) -> Option<Self> {
         match internal_permission_id {
-            1 => Some(Self::UserSelfRead),
-            2 => Some(Self::UserSelfWrite),
-            3 => Some(Self::UserAnyRead),
-            4 => Some(Self::UserAnyWrite),
-            5 => Some(Self::WordCreate),
-            6 => Some(Self::WordRead),
-            7 => Some(Self::WordUpdate),
-            8 => Some(Self::WordDelete),
-            9 => Some(Self::SuggestionCreate),
-            10 => Some(Self::SuggestionDelete),
-            11 => Some(Self::TranslationCreate),
-            12 => Some(Self::TranslationDelete),
-            13 => Some(Self::CategoryCreate),
-            14 => Some(Self::CategoryRead),
-            15 => Some(Self::CategoryUpdate),
-            16 => Some(Self::CategoryDelete),
+            id if id == (Self::UserSelfRead as u16) => Some(Self::UserSelfRead),
+            id if id == (Self::UserSelfWrite as u16) => Some(Self::UserSelfWrite),
+            id if id == (Self::UserAnyRead as u16) => Some(Self::UserAnyRead),
+            id if id == (Self::UserAnyWrite as u16) => Some(Self::UserAnyWrite),
+            id if id == (Self::WordCreate as u16) => Some(Self::WordCreate),
+            id if id == (Self::WordRead as u16) => Some(Self::WordRead),
+            id if id == (Self::WordUpdate as u16) => Some(Self::WordUpdate),
+            id if id == (Self::WordDelete as u16) => Some(Self::WordDelete),
+            id if id == (Self::SuggestionCreate as u16) => Some(Self::SuggestionCreate),
+            id if id == (Self::SuggestionDelete as u16) => Some(Self::SuggestionDelete),
+            id if id == (Self::TranslationCreate as u16) => Some(Self::TranslationCreate),
+            id if id == (Self::TranslationDelete as u16) => Some(Self::TranslationDelete),
+            id if id == (Self::CategoryCreate as u16) => Some(Self::CategoryCreate),
+            id if id == (Self::CategoryRead as u16) => Some(Self::CategoryRead),
+            id if id == (Self::CategoryUpdate as u16) => Some(Self::CategoryUpdate),
+            id if id == (Self::CategoryDelete as u16) => Some(Self::CategoryDelete),
             _ => None,
         }
     }
 
     /// Get the internal ID of the given [`Permission`].
     /// This ID is used primarily in the database and should not be visible externally.
-    pub fn id(&self) -> i32 {
-        match self {
-            Self::UserSelfRead => 1,
-            Self::UserSelfWrite => 2,
-            Self::UserAnyRead => 3,
-            Self::UserAnyWrite => 4,
-            Self::WordCreate => 5,
-            Self::WordRead => 6,
-            Self::WordUpdate => 7,
-            Self::WordDelete => 8,
-            Self::SuggestionCreate => 9,
-            Self::SuggestionDelete => 10,
-            Self::TranslationCreate => 11,
-            Self::TranslationDelete => 12,
-            Self::CategoryCreate => 13,
-            Self::CategoryRead => 14,
-            Self::CategoryUpdate => 15,
-            Self::CategoryDelete => 16,
-        }
+    pub fn id(&self) -> u16 {
+        *self as u16
     }
 
     /// Attempt to parse a [`Permission`] from its name.
@@ -193,6 +188,13 @@ impl Permission {
     }
 }
 
+impl AsRef<Permission> for Permission {
+    fn as_ref(&self) -> &Permission {
+        self
+    }
+}
+
+
 /// List of permissions that are given to **ANY API CALLER**,
 /// authenticated or not.
 pub const BLANKET_PERMISSION_GRANT: [Permission; 3] = [
@@ -204,6 +206,7 @@ pub const BLANKET_PERMISSION_GRANT: [Permission; 3] = [
 
 
 /// Set of permissions, usually associated with some user.
+#[derive(Debug)]
 pub struct PermissionSet {
     /// Set of permissions.
     permissions: HashSet<Permission>,
@@ -252,12 +255,15 @@ impl PermissionSet {
     /// This will also check the blanket permission grant (see `BLANKET_ANY_USER_PERMISSION_GRANT`)
     /// and return `true` regardless of the user's effective permissions (if the required permission
     /// has a blanket grant).
-    pub fn has_permission(&self, permission: Permission) -> bool {
-        if BLANKET_PERMISSION_GRANT.contains(&permission) {
+    pub fn has_permission_or_is_always_granted<P>(&self, permission: P) -> bool
+    where
+        P: AsRef<Permission>,
+    {
+        if BLANKET_PERMISSION_GRANT.contains(permission.as_ref()) {
             return true;
         }
 
-        if self.permissions.contains(&permission) {
+        if self.permissions.contains(permission.as_ref()) {
             return true;
         }
 
@@ -270,7 +276,7 @@ impl PermissionSet {
     }
 
     /// Returns a reference to the set of permissions.
-    pub fn permissions(&self) -> &HashSet<Permission> {
+    pub fn inner_permission_set(&self) -> &HashSet<Permission> {
         &self.permissions
     }
 
@@ -312,10 +318,10 @@ mod test {
         ])
         .unwrap();
 
-        assert!(permissions.has_permission(Permission::UserSelfRead));
-        assert!(permissions.has_permission(Permission::UserSelfWrite));
-        assert!(permissions.has_permission(Permission::UserAnyRead));
-        assert!(permissions.has_permission(Permission::UserAnyWrite));
+        assert!(permissions.has_permission_or_is_always_granted(Permission::UserSelfRead));
+        assert!(permissions.has_permission_or_is_always_granted(Permission::UserSelfWrite));
+        assert!(permissions.has_permission_or_is_always_granted(Permission::UserAnyRead));
+        assert!(permissions.has_permission_or_is_always_granted(Permission::UserAnyWrite));
     }
 
     #[test]

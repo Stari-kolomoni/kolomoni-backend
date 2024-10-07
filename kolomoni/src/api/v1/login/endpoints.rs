@@ -12,8 +12,17 @@ use tracing::{debug, warn};
 
 use crate::api::errors::{EndpointResponseBuilder, EndpointResult, LoginErrorReason};
 use crate::api::openapi;
+use crate::api::openapi::response::AsErrorReason;
+use crate::declare_openapi_error_reason_response;
 use crate::state::ApplicationState;
 
+
+declare_openapi_error_reason_response!(
+    pub struct LoginInvalidCredentials {
+        description => "Invalid login credentials.",
+        reason => LoginErrorReason::invalid_login_credentials()
+    }
+);
 
 
 /// Login
@@ -41,11 +50,9 @@ use crate::state::ApplicationState;
         ),
         (
             status = 403,
-            description = "Invalid login information.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Invalid login credentials." })
+            response = inline(AsErrorReason<LoginInvalidCredentials>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
+        openapi::response::RequiredJsonBodyErrors,
         openapi::response::InternalServerError,
     )
 )]
@@ -111,6 +118,27 @@ pub async fn login(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct LoginRefreshTokenHasExpired {
+        description => "The provided refresh token has expired.",
+        reason => LoginErrorReason::expired_refresh_token()
+    }
+);
+
+declare_openapi_error_reason_response!(
+    pub struct LoginInvalidRefreshToken {
+        description => "The provided refresh token is invalid (not a valid JWT).",
+        reason => LoginErrorReason::invalid_refresh_json_web_token()
+    }
+);
+
+declare_openapi_error_reason_response!(
+    pub struct LoginNotARefreshToken {
+        description => "The provided JWT is not a refresh token.",
+        reason => LoginErrorReason::not_a_refresh_token()
+    }
+);
+
 
 /// Refresh a login
 ///
@@ -133,27 +161,18 @@ pub async fn login(
             body = UserLoginRefreshResponse
         ),
         (
-            status = 403,
-            description = "Refresh token has expired.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Refresh token has expired." })
+            status = 400,
+            response = inline(AsErrorReason<LoginRefreshTokenHasExpired>)
         ),
         (
             status = 400,
-            description = "Invalid refresh token.",
-            body = ErrorReasonResponse,
-            examples(
-                ("Invalid JWT token" = (
-                    summary = "The provided JWT refresh token is not a valid token at all.",
-                    value = json!({ "reason": "Invalid refresh token." })
-                )),
-                ("Not a refresh token" = (
-                    summary = "The provided JWT token is not a refresh token.",
-                    value = json!({ "reason": "The provided token is not a refresh token." })
-                ))
-            )
+            response = inline(AsErrorReason<LoginInvalidRefreshToken>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
+        (
+            status = 400,
+            response = inline(AsErrorReason<LoginNotARefreshToken>)
+        ),
+        openapi::response::RequiredJsonBodyErrors,
         openapi::response::InternalServerError,
     )
 )]
@@ -176,7 +195,6 @@ pub async fn refresh_login(
                         "Refusing to refresh expired token.",
                     );
 
-                    // FIXME need to fix openapi schema again, this status code has been changed
                     EndpointResponseBuilder::bad_request()
                         .with_error_reason(LoginErrorReason::expired_refresh_token())
                         .build()
@@ -184,7 +202,6 @@ pub async fn refresh_login(
                 JWTValidationError::InvalidToken { reason } => {
                     warn!(error = %reason, "Failed to parse refresh token.");
 
-                    // FIXME need to fix openapi schema again, this status code has been changed
                     EndpointResponseBuilder::bad_request()
                         .with_error_reason(LoginErrorReason::invalid_refresh_json_web_token())
                         .build()

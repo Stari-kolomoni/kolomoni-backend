@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 
@@ -10,7 +10,16 @@ pub struct TranslationCreationRequest {
 }
 
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+#[derive(
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Clone,
+    Debug,
+    ToSchema,
+    IntoParams
+)]
 pub struct TranslationDeletionRequest {
     pub english_word_meaning_id: Uuid,
     pub slovene_word_meaning_id: Uuid,

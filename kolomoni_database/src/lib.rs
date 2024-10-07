@@ -26,6 +26,15 @@ pub enum QueryError {
 }
 
 impl QueryError {
+    pub fn model_error<R>(reason: R) -> Self
+    where
+        R: Into<Cow<'static, str>>,
+    {
+        Self::ModelError {
+            reason: reason.into(),
+        }
+    }
+
     pub fn database_inconsistency<R>(problem: R) -> Self
     where
         R: Into<Cow<'static, str>>,

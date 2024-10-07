@@ -8,6 +8,7 @@ kolomoni_core = { path = "../kolomoni_core", features = ["serde_impls_for_client
 # kolomoni_auth = { path = "../kolomoni_auth" }
 
 serde = { workspace = true }
+serde_json = { workspace = true }
 
 thiserror = { workspace = true }
 

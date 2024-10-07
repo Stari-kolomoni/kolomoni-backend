@@ -587,7 +587,7 @@ macro_rules! require_permission_OLD {
 #[macro_export]
 macro_rules! require_permission_in_set {
     ($permission_set:expr, $required_permission:expr) => {
-        if !$permission_set.has_permission($required_permission) {
+        if !$permission_set.has_permission_or_is_always_granted($required_permission) {
             return $crate::api::errors::EndpointResponseBuilder::new(
                 actix_web::http::StatusCode::FORBIDDEN,
             )

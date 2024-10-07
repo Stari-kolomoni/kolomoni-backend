@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::id::UserId;
 
@@ -314,7 +314,7 @@ pub struct UserRoleAddRequest {
 }
 
 
-#[derive(Deserialize, PartialEq, Eq, Debug, ToSchema)]
+#[derive(Deserialize, PartialEq, Eq, Debug, ToSchema, IntoParams)]
 #[cfg_attr(feature = "serde_impls_for_client_on_models", derive(serde::Serialize))]
 #[schema(
     example = json!({

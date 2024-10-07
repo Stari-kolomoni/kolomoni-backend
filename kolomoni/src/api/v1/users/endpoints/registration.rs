@@ -6,13 +6,28 @@ use sqlx::Acquire;
 use crate::{
     api::{
         errors::{EndpointResponseBuilder, EndpointResult, UsersErrorReason},
-        openapi,
+        openapi::{self, response::AsErrorReason},
         traits::IntoApiModel,
     },
+    declare_openapi_error_reason_response,
     state::ApplicationState,
 };
 
 
+
+declare_openapi_error_reason_response!(
+    pub struct RegistrationUsernameIsTaken {
+        description => "The provided username is already in use.",
+        reason => UsersErrorReason::username_already_exists()
+    }
+);
+
+declare_openapi_error_reason_response!(
+    pub struct RegistrationDisplayNameIsTaken {
+        description => "The provided display name is already in use.",
+        reason => UsersErrorReason::display_name_already_exists()
+    }
+);
 
 
 /// Register a new user
@@ -39,20 +54,13 @@ use crate::{
         ),
         (
             status = 409,
-            description = "User with given username already exists.",
-            body = ErrorReasonResponse,
-            examples(
-                ("User with same username exists" = (
-                    summary = "The username is taken.",
-                    value = json!({ "reason": "User with provided username already exists." })
-                )),
-                ("User with same display name exists" = (
-                    summary = "The display name is taken.",
-                    value = json!({ "reason": "User with provided display name already exists." })
-                )),
-            )
+            response = inline(AsErrorReason<RegistrationUsernameIsTaken>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
+        (
+            status = 409,
+            response = inline(AsErrorReason<RegistrationDisplayNameIsTaken>)
+        ),
+        openapi::response::RequiredJsonBodyErrors,
         openapi::response::InternalServerError,
     )
 )]

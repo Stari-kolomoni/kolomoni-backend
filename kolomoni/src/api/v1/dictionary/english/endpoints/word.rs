@@ -24,11 +24,15 @@ use tracing::info;
 use crate::{
     api::{
         errors::{EndpointError, EndpointResponseBuilder, EndpointResult, WordErrorReason},
-        openapi,
+        openapi::{
+            self,
+            response::{requires, AsErrorReason},
+        },
         traits::IntoApiModel,
         v1::dictionary::parse_uuid,
     },
     authentication::UserAuthenticationExtractor,
+    declare_openapi_error_reason_response,
     require_permission_with_optional_authentication,
     require_user_authentication_and_permission,
     state::ApplicationState,
@@ -48,8 +52,8 @@ use crate::{
     get,
     path = "/dictionary/english",
     tag = "dictionary:english",
-    request_body(
-        content = Option<EnglishWordsListRequest>
+    params(
+        EnglishWordsListRequest
     ),
     responses(
         (
@@ -57,7 +61,7 @@ use crate::{
             description = "A list of all english words.",
             body = EnglishWordsResponse,
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::WordRead>,
+        openapi::response::MissingPermissions<requires::WordRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
@@ -65,7 +69,7 @@ use crate::{
 pub async fn get_all_english_words(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    request_body: Option<web::Json<EnglishWordsListRequest>>,
+    request_query_params: web::Query<EnglishWordsListRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
 
@@ -77,16 +81,9 @@ pub async fn get_all_english_words(
 
 
 
-    let word_query_options = request_body
-        .and_then(|options| {
-            options
-                .into_inner()
-                .filters
-                .map(|filter_options| EnglishWordsQueryOptions {
-                    only_words_modified_after: filter_options.last_modified_after,
-                })
-        })
-        .unwrap_or_else(EnglishWordsQueryOptions::new_without_filters);
+    let word_query_options = EnglishWordsQueryOptions {
+        only_words_modified_after: request_query_params.into_inner().last_modified_after,
+    };
 
     let mut words_with_meanings_stream =
         entities::EnglishWordQuery::get_all_english_words_with_meanings(
@@ -111,6 +108,14 @@ pub async fn get_all_english_words(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct EnglishWordWithGivenLemmaAlreadyExists {
+        description => "An english word with the given lemma already exists.",
+        reason => WordErrorReason::word_with_given_lemma_already_exists()
+    }
+);
+
+
 /// Create an english word
 ///
 /// This endpoint creates a new english word in the dictionary.
@@ -132,12 +137,12 @@ pub async fn get_all_english_words(
         ),
         (
             status = 409,
-            description = "English word with the given lemma already exists.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "An english word with the given lemma already exists." })
+            // FIXME these error reasons aren't rendering properly in the openapi schema, fix that
+            response = inline(AsErrorReason<EnglishWordWithGivenLemmaAlreadyExists>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::WordCreate>,
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordCreate, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -208,7 +213,12 @@ pub async fn create_english_word(
 }
 
 
-
+declare_openapi_error_reason_response!(
+    pub struct EnglishWordNotFound {
+        description => "The requested english word does not exist.",
+        reason => WordErrorReason::word_not_found()
+    }
+);
 
 /// Get an english word
 ///
@@ -232,20 +242,15 @@ pub async fn create_english_word(
     responses(
         (
             status = 200,
-            description = "Information about the requested english word.",
+            description = "The requested english word.",
             body = EnglishWordInfoResponse,
         ),
         (
-            status = 400,
-            description = "Invalid word UUID provided.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Client error: invalid UUID." })
-        ),
-        (
             status = 404,
-            description = "The requested english word does not exist."
+            response = inline(AsErrorReason<EnglishWordNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::WordRead>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingPermissions<requires::WordRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
@@ -314,14 +319,15 @@ pub async fn get_english_word_by_id(
     responses(
         (
             status = 200,
-            description = "Information about the requested english word.",
+            description = "The requested english word.",
             body = EnglishWordInfoResponse,
         ),
         (
             status = 404,
-            description = "The requested english word does not exist."
+            response = inline(AsErrorReason<EnglishWordNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::WordRead>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingPermissions<requires::WordRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
@@ -394,17 +400,13 @@ pub async fn get_english_word_by_lemma(
             body = EnglishWordInfoResponse,
         ),
         (
-            status = 400,
-            description = "Invalid word UUID provided.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Client error: invalid UUID." })
-        ),
-        (
             status = 404,
-            description = "The requested english word does not exist."
+            response = inline(AsErrorReason<EnglishWordNotFound>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::WordUpdate>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -412,7 +414,7 @@ pub async fn get_english_word_by_lemma(
     )
 )]
 #[patch("/{word_uuid}")]
-pub async fn update_specific_english_word(
+pub async fn update_english_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
@@ -517,16 +519,12 @@ pub async fn update_specific_english_word(
             description = "English word deleted.",
         ),
         (
-            status = 400,
-            description = "Invalid word UUID provided.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Client error: invalid UUID." })
-        ),
-        (
             status = 404,
-            description = "The given english word does not exist."
+            response = inline(AsErrorReason<EnglishWordNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::WordDelete>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordDelete, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -566,9 +564,8 @@ pub async fn delete_english_word(
         entities::EnglishWordMutation::delete(&mut transaction, target_word_uuid).await?;
 
     if !has_been_deleted {
-        return Err(EndpointError::internal_error_with_reason(
-            "database inconsistency: failed to delete english word that \
-            just existed in the same transaction",
+        return Err(EndpointError::invalid_database_state(
+            "failed to delete english word that had just existed in the same transaction",
         ));
     }
 

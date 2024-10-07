@@ -2,15 +2,16 @@
 
 use std::rc::Rc;
 
-use authentication::Authentication;
-use reqwest::Url;
+use authentication::AccessToken;
+use reqwest::{Body, StatusCode, Url};
+use serde::de::DeserializeOwned;
 use server::ApiServer;
 use thiserror::Error;
 
 pub mod api;
 pub mod authentication;
+pub(crate) mod request;
 pub mod server;
-pub(crate) mod urls;
 
 
 #[derive(Debug, Error)]
@@ -20,6 +21,12 @@ pub enum ClientError {
         #[from]
         #[source]
         error: url::ParseError,
+    },
+
+    #[error("failed to serialize data for body")]
+    RequestBodySerializationError {
+        #[source]
+        error: serde_json::Error,
     },
 
     #[error("failed to execute request")]
@@ -48,6 +55,48 @@ pub enum ClientInitializationError {
     },
 }
 
+
+pub struct ServerResponse {
+    http_response: reqwest::Response,
+}
+
+impl ServerResponse {
+    pub(crate) fn from_reqwest_response(response: reqwest::Response) -> Self {
+        Self {
+            http_response: response,
+        }
+    }
+
+    pub(crate) fn into_reqwest_response(self) -> reqwest::Response {
+        self.http_response
+    }
+
+    pub(crate) fn status(&self) -> StatusCode {
+        self.http_response.status()
+    }
+
+    pub(crate) async fn json<V>(self) -> ClientResult<V>
+    where
+        V: DeserializeOwned,
+    {
+        self.http_response
+            .json()
+            .await
+            .map_err(|error| ClientError::ResponseJsonBodyError { error })
+    }
+}
+
+
+
+pub(crate) trait HttpClient {
+    fn server(&self) -> &ApiServer;
+
+    async fn get(&self, url: Url) -> Result<ServerResponse, ClientError>;
+
+    async fn post<B>(&self, url: Url, json_body: Option<B>) -> Result<ServerResponse, ClientError>
+    where
+        B: Into<Body>;
+}
 
 
 
@@ -79,7 +128,7 @@ impl Client {
 
     pub async fn with_authentication(
         &self,
-        authentication: &Rc<Authentication>,
+        authentication: &Rc<AccessToken>,
     ) -> AuthenticatedClient {
         AuthenticatedClient::new(
             self.server.clone(),
@@ -87,13 +136,36 @@ impl Client {
             self.http_client.clone(),
         )
     }
+}
 
+impl HttpClient for Client {
+    fn server(&self) -> &ApiServer {
+        &self.server
+    }
 
-    pub(crate) async fn get(&self, url: Url) -> Result<reqwest::Response, ClientError> {
+    async fn get(&self, url: Url) -> Result<ServerResponse, ClientError> {
         self.http_client
             .get(url)
             .send()
             .await
+            .map(ServerResponse::from_reqwest_response)
+            .map_err(|error| ClientError::RequestExecutionError { error })
+    }
+
+    async fn post<B>(&self, url: Url, json_body: Option<B>) -> Result<ServerResponse, ClientError>
+    where
+        B: Into<Body>,
+    {
+        let mut request_builder = self.http_client.post(url);
+
+        if let Some(json_body) = json_body {
+            request_builder = request_builder.body(json_body);
+        }
+
+        request_builder
+            .send()
+            .await
+            .map(ServerResponse::from_reqwest_response)
             .map_err(|error| ClientError::RequestExecutionError { error })
     }
 
@@ -103,14 +175,14 @@ impl Client {
 
 pub struct AuthenticatedClient {
     server: Rc<ApiServer>,
-    authentication: Rc<Authentication>,
+    authentication: Rc<AccessToken>,
     http_client: reqwest::Client,
 }
 
 impl AuthenticatedClient {
     pub(crate) fn new(
         server: Rc<ApiServer>,
-        authentication: Rc<Authentication>,
+        authentication: Rc<AccessToken>,
         http_client: reqwest::Client,
     ) -> Self {
         Self {

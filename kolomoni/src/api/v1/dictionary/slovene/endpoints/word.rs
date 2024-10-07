@@ -25,11 +25,15 @@ use uuid::Uuid;
 use crate::{
     api::{
         errors::{EndpointError, EndpointResponseBuilder, EndpointResult, WordErrorReason},
-        openapi,
+        openapi::{
+            self,
+            response::{requires, AsErrorReason},
+        },
         traits::IntoApiModel,
         v1::dictionary::parse_uuid,
     },
     authentication::UserAuthenticationExtractor,
+    declare_openapi_error_reason_response,
     require_permission_with_optional_authentication,
     require_user_authentication_and_permission,
     state::ApplicationState,
@@ -49,8 +53,8 @@ use crate::{
     get,
     path = "/dictionary/slovene",
     tag = "dictionary:slovene",
-    request_body(
-        content = Option<SloveneWordsListRequest>
+    params(
+        SloveneWordsListRequest
     ),
     responses(
         (
@@ -58,7 +62,7 @@ use crate::{
             description = "A list of all slovene words.",
             body = SloveneWordsResponse,
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::WordRead>,
+        openapi::response::MissingPermissions<requires::WordRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
@@ -66,7 +70,7 @@ use crate::{
 pub async fn get_all_slovene_words(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    request_body: Option<web::Json<SloveneWordsListRequest>>,
+    request_query_params: web::Query<SloveneWordsListRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
 
@@ -77,16 +81,10 @@ pub async fn get_all_slovene_words(
     );
 
 
-    let word_query_options = request_body
-        .and_then(|options| {
-            options
-                .into_inner()
-                .filters
-                .map(|filter_options| SloveneWordsQueryOptions {
-                    only_words_modified_after: filter_options.last_modified_after,
-                })
-        })
-        .unwrap_or_default();
+
+    let word_query_options = SloveneWordsQueryOptions {
+        only_words_modified_after: request_query_params.into_inner().last_modified_after,
+    };
 
 
     // Load words from the database.
@@ -112,6 +110,13 @@ pub async fn get_all_slovene_words(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct SloveneWordWithGivenLemmaAlreadyExists {
+        description => "A slovene word with the given lemma already exists.",
+        reason => WordErrorReason::word_with_given_lemma_already_exists()
+    }
+);
+
 
 /// Create a slovene word
 ///
@@ -134,12 +139,11 @@ pub async fn get_all_slovene_words(
         ),
         (
             status = 409,
-            description = "Slovene word with the given lemma already exists.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "A slovene word with the given lemma already exists." })
+            response = inline(AsErrorReason<SloveneWordWithGivenLemmaAlreadyExists>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::WordCreate>,
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordCreate, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -209,6 +213,13 @@ pub async fn create_slovene_word(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct SloveneWordNotFound {
+        description => "The requested slovene word does not exist.",
+        reason => WordErrorReason::word_not_found()
+    }
+);
+
 
 /// Get a slovene word
 ///
@@ -231,25 +242,20 @@ pub async fn create_slovene_word(
     responses(
         (
             status = 200,
-            description = "Information about the requested slovene word.",
+            description = "The requested slovene word.",
             body = SloveneWordInfoResponse,
         ),
         (
-            status = 400,
-            description = "Invalid word UUID provided.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Client error: invalid UUID." })
-        ),
-        (
             status = 404,
-            description = "The requested slovene word does not exist."
+            response = inline(AsErrorReason<SloveneWordNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::WordRead>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingPermissions<requires::WordRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
 #[get("/{word_uuid}")]
-pub async fn get_specific_slovene_word(
+pub async fn get_slovene_word_by_id(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(Uuid,)>,
@@ -318,14 +324,14 @@ pub async fn get_specific_slovene_word(
         ),
         (
             status = 404,
-            description = "The requested slovene word does not exist."
+            response = inline(AsErrorReason<SloveneWordNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::WordRead>,
+        openapi::response::MissingPermissions<requires::WordRead, 1>,
         openapi::response::InternalServerError,
     )
 )]
 #[get("/by-lemma/{word_lemma}")]
-pub async fn get_specific_slovene_word_by_lemma(
+pub async fn get_slovene_word_by_lemma(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
@@ -392,17 +398,13 @@ pub async fn get_specific_slovene_word_by_lemma(
             body = SloveneWordInfoResponse,
         ),
         (
-            status = 400,
-            description = "Invalid word UUID provided.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Client error: invalid UUID." })
-        ),
-        (
             status = 404,
-            description = "The requested slovene word does not exist."
+            response = inline(AsErrorReason<SloveneWordNotFound>)
         ),
-        openapi::response::MissingOrInvalidJsonRequestBody,
-        openapi::response::FailedAuthentication<openapi::response::requires::WordUpdate>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -410,7 +412,7 @@ pub async fn get_specific_slovene_word_by_lemma(
     )
 )]
 #[patch("/{word_uuid}")]
-pub async fn update_specific_slovene_word(
+pub async fn update_slovene_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
@@ -518,16 +520,12 @@ pub async fn update_specific_slovene_word(
             description = "Slovene word deleted.",
         ),
         (
-            status = 400,
-            description = "Invalid word UUID provided.",
-            body = ErrorReasonResponse,
-            example = json!({ "reason": "Client error: invalid UUID." })
-        ),
-        (
             status = 404,
-            description = "The given slovene word does not exist."
+            response = inline(AsErrorReason<SloveneWordNotFound>)
         ),
-        openapi::response::FailedAuthentication<openapi::response::requires::WordDelete>,
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordDelete, 1>,
         openapi::response::InternalServerError,
     ),
     security(
@@ -535,7 +533,7 @@ pub async fn update_specific_slovene_word(
     )
 )]
 #[delete("/{word_uuid}")]
-pub async fn delete_specific_slovene_word(
+pub async fn delete_slovene_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     parameters: web::Path<(String,)>,
@@ -594,8 +592,8 @@ pub fn slovene_word_router() -> Scope {
     web::scope("")
         .service(get_all_slovene_words)
         .service(create_slovene_word)
-        .service(get_specific_slovene_word)
-        .service(get_specific_slovene_word_by_lemma)
-        .service(update_specific_slovene_word)
-        .service(delete_specific_slovene_word)
+        .service(get_slovene_word_by_id)
+        .service(get_slovene_word_by_lemma)
+        .service(update_slovene_word)
+        .service(delete_slovene_word)
 }
