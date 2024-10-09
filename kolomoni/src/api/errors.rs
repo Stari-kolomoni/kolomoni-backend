@@ -10,7 +10,7 @@ use actix_web::body::{BoxBody, MessageBody};
 use actix_web::http::{header, StatusCode};
 use actix_web::{HttpResponse, ResponseError};
 use chrono::{DateTime, Utc};
-use kolomoni_auth::{JWTCreationError, Permission, Role};
+use kolomoni_auth::{JWTCreationError, Permission, PermissionSet, Role};
 use kolomoni_database::entities::UserQueryError;
 use kolomoni_database::QueryError;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ use super::macros::construct_last_modified_header_value;
 use crate::authentication::AuthenticatedUserError;
 
 pub trait ErrorReasonName {
-    fn reason_name(&self) -> &'static str;
+    fn reason_description(&self) -> &'static str;
 }
 
 
@@ -66,7 +66,7 @@ impl WordErrorReason {
 }
 
 impl ErrorReasonName for WordErrorReason {
-    fn reason_name(&self) -> &'static str {
+    fn reason_description(&self) -> &'static str {
         match self {
             Self::WordWithGivenLemmaAlreadyExists => "word with given lemma already exists",
             Self::WordNotFound => "word not found",
@@ -114,7 +114,7 @@ impl TranslationsErrorReason {
 }
 
 impl ErrorReasonName for TranslationsErrorReason {
-    fn reason_name(&self) -> &'static str {
+    fn reason_description(&self) -> &'static str {
         match self {
             Self::EnglishWordMeaningNotFound => "english word meaning not found",
             Self::SloveneWordMeaningNotFound => "slovene word meaning not found",
@@ -166,7 +166,7 @@ impl LoginErrorReason {
 }
 
 impl ErrorReasonName for LoginErrorReason {
-    fn reason_name(&self) -> &'static str {
+    fn reason_description(&self) -> &'static str {
         match self {
             Self::InvalidLoginCredentials => "invalid login credentials",
             Self::ExpiredRefreshToken => "expired refresh token",
@@ -261,7 +261,7 @@ impl UsersErrorReason {
 }
 
 impl ErrorReasonName for UsersErrorReason {
-    fn reason_name(&self) -> &'static str {
+    fn reason_description(&self) -> &'static str {
         match self {
             Self::UserNotFound => "user not found",
             Self::UsernameAlreadyExists => "username already exists",
@@ -332,7 +332,7 @@ impl CategoryErrorReason {
 }
 
 impl ErrorReasonName for CategoryErrorReason {
-    fn reason_name(&self) -> &'static str {
+    fn reason_description(&self) -> &'static str {
         match self {
             Self::CategoryNotFound => "category not found",
             Self::SloveneNameAlreadyExists => "slovene name already exists",
@@ -417,6 +417,13 @@ impl ErrorReason {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn missing_permissions(permission_set: &PermissionSet) -> Self {
+        Self::MissingPermissions {
+            permissions: permission_set.set().iter().copied().collect(),
+        }
+    }
+
     pub const fn missing_json_body() -> Self {
         Self::MissingJsonBody
     }
@@ -431,18 +438,20 @@ impl ErrorReason {
 }
 
 impl ErrorReasonName for ErrorReason {
-    fn reason_name(&self) -> &'static str {
+    fn reason_description(&self) -> &'static str {
         match self {
             Self::MissingAuthentication => "missing authentication",
             Self::MissingPermissions { .. } => "missing permissions",
             Self::MissingJsonBody => "missing JSON body",
             Self::InvalidJsonBody { .. } => "invalid JSON body",
             Self::InvalidUuidFormat => "invalid UUID format",
-            Self::Category(category_error_reason) => category_error_reason.reason_name(),
-            Self::Login(login_error_reason) => login_error_reason.reason_name(),
-            Self::Users(users_error_reason) => users_error_reason.reason_name(),
-            Self::Translations(translations_error_reason) => translations_error_reason.reason_name(),
-            Self::Word(word_error_reason) => word_error_reason.reason_name(),
+            Self::Category(category_error_reason) => category_error_reason.reason_description(),
+            Self::Login(login_error_reason) => login_error_reason.reason_description(),
+            Self::Users(users_error_reason) => users_error_reason.reason_description(),
+            Self::Translations(translations_error_reason) => {
+                translations_error_reason.reason_description()
+            }
+            Self::Word(word_error_reason) => word_error_reason.reason_description(),
             Self::Other { .. } => "other reason",
         }
     }

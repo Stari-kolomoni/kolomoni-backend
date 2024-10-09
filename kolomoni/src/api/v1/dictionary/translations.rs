@@ -18,7 +18,7 @@ use crate::{
     },
     authentication::UserAuthenticationExtractor,
     declare_openapi_error_reason_response,
-    require_user_authentication_and_permission,
+    require_user_authentication_and_permissions,
     state::ApplicationState,
 };
 
@@ -96,7 +96,7 @@ pub async fn create_translation(
     let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_user_authentication_and_permission!(
+    let authenticated_user = require_user_authentication_and_permissions!(
         &mut transaction,
         authentication_extractor,
         Permission::TranslationCreate
@@ -235,7 +235,7 @@ pub async fn delete_translation(
     let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
-    let authenticated_user = require_user_authentication_and_permission!(
+    let authenticated_user = require_user_authentication_and_permissions!(
         &mut transaction,
         authentication_extractor,
         Permission::TranslationDelete

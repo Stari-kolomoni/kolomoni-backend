@@ -25,11 +25,10 @@ use crate::{
     declare_openapi_error_reason_response,
     require_permission_in_set,
     require_user_authentication,
-    require_user_authentication_and_permission,
+    require_user_authentication_and_permissions,
     state::ApplicationState,
 };
 
-// TODO introduce transactions here and elsewhere (even in read-only operations?, for consistency)
 
 
 declare_openapi_error_reason_response!(
@@ -93,7 +92,7 @@ pub async fn get_current_user_info(
     // To access this endpoint, the user:
     // - MUST provide an authentication token, and
     // - MUST have the `user.self:read` permission.
-    let authenticated_user = require_user_authentication_and_permission!(
+    let authenticated_user = require_user_authentication_and_permissions!(
         &mut database_connection,
         authentication_extractor,
         Permission::UserSelfRead
@@ -115,7 +114,7 @@ pub async fn get_current_user_info(
 
     if if_modified_since_header.enabled_and_has_not_changed_since(&user_last_modified_at) {
         return EndpointResponseBuilder::not_modified()
-            .with_last_modified_at(&current_user.last_modified_at)
+            .with_last_modified_at(&user_last_modified_at)
             .build();
     }
 
@@ -171,7 +170,7 @@ pub async fn get_current_user_roles(
     // To access this endpoint, the user:
     // - MUST provide an authentication token, and
     // - MUST have the `user.self:read` permission.
-    let authenticated_user = require_user_authentication_and_permission!(
+    let authenticated_user = require_user_authentication_and_permissions!(
         &mut database_connection,
         authentication_extractor,
         Permission::UserSelfRead
@@ -341,7 +340,7 @@ async fn update_current_user_display_name(
     // To access this endpoint, the user:
     // - MUST provide an authentication token, and
     // - MUST have the `user.self:write` permission.
-    let authenticated_user = require_user_authentication_and_permission!(
+    let authenticated_user = require_user_authentication_and_permissions!(
         &mut transaction,
         authentication_extractor,
         Permission::UserSelfWrite

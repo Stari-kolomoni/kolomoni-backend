@@ -19,7 +19,6 @@ pub struct NewEnglishWordMeaning {
 }
 
 
-// TODO Migrate to double options.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct EnglishWordMeaningUpdate {
     pub disambiguation: Option<Option<String>>,

@@ -61,6 +61,16 @@ impl UserAuthenticationExtractor {
     pub fn is_permission_granted_to_all(&self, permission: Permission) -> bool {
         BLANKET_PERMISSION_GRANT.contains(&permission)
     }
+
+    pub fn are_permissions_granted_to_all(&self, permission_set: &PermissionSet) -> bool {
+        for required_permission in permission_set.set() {
+            if !BLANKET_PERMISSION_GRANT.contains(required_permission) {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 impl FromRequest for UserAuthenticationExtractor {
@@ -218,6 +228,34 @@ impl AuthenticatedUser {
         .await?;
 
         Ok(has_permission)
+    }
+
+    pub async fn transitively_has_permissions(
+        &self,
+        database_connection: &mut PgConnection,
+        required_permissions: PermissionSet,
+    ) -> Result<bool, AuthenticatedUserError> {
+        let mut all_permissions_are_blanket_granted = true;
+        for permission in required_permissions.set() {
+            if !BLANKET_PERMISSION_GRANT.contains(permission) {
+                all_permissions_are_blanket_granted = false;
+                break;
+            }
+        }
+
+        if all_permissions_are_blanket_granted {
+            return Ok(true);
+        }
+
+
+        let transitive_permissions = entities::UserRoleQuery::transitive_permissions_for_user(
+            database_connection,
+            self.token.user_id,
+        )
+        .await?;
+
+
+        Ok(required_permissions.is_subset_of(&transitive_permissions))
     }
 
     /// Returns a list of roles the user has.

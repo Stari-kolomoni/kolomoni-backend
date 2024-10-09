@@ -1,13 +1,28 @@
+//! Contains required-permission types used in the [`MissingPermissions`] annotations,
+//! and the [`And`] operator to combine them.
+//!
+//! [`MissingPermissions`]: super::MissingPermissions
+
+
 use std::marker::PhantomData;
 
 use kolomoni_auth::Permission;
 
-pub trait RequiredPermission {
+/// An [`openapi`] module-internal trait to aid in
+/// declaring a required permission for an endpoint's
+/// OpenAPI documentation.
+///
+/// [`openapi`]: kolomoni::api::openapi
+pub(super) trait RequiredPermission {
     fn permission() -> Permission;
 }
 
-
-pub trait RequiredPermissionSet<const N: usize> {
+/// An [`openapi`] module-internal trait to aid in
+/// declaring a set of required permissions for an endpoint's
+/// OpenAPI documentation.
+///
+/// [`openapi`]: kolomoni::api::openapi
+pub(super) trait RequiredPermissionSet<const N: usize> {
     fn permissions() -> [Permission; N];
 }
 
@@ -54,8 +69,6 @@ where
 
 
 
-// The macro calls below generate empty structs for all available permissions,
-// making them usable as a parameter for the [`FailedAuthenticationResponses`] generic.
 
 /// Given a variant name for [`Permission`][kolomoni_auth::Permission], this macro will generate
 /// an empty struct with the name `RequiredPermissionNameHere`.
@@ -110,6 +123,9 @@ macro_rules! generate_standalone_requirement_struct {
     };
 }
 
+
+// These macro calls generate empty structs for all available permissions,
+// making them usable as a parameter for the [`FailedAuthenticationResponses`] generic.
 
 generate_standalone_requirement_struct!(UserSelfRead);
 generate_standalone_requirement_struct!(UserSelfWrite);

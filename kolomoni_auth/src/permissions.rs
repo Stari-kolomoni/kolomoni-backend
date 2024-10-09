@@ -221,9 +221,16 @@ impl PermissionSet {
         }
     }
 
+    #[inline]
+    pub fn from_permissions(permissions: &[Permission]) -> Self {
+        Self {
+            permissions: HashSet::from_iter(permissions.iter().copied()),
+        }
+    }
+
     /// Initialize a permission set from a [`HashSet`] of [`Permission`]s.
     #[inline]
-    pub fn from_permission_hash_set(permission_set: HashSet<Permission>) -> Self {
+    pub const fn from_permission_hash_set(permission_set: HashSet<Permission>) -> Self {
         Self {
             permissions: permission_set,
         }
@@ -250,12 +257,16 @@ impl PermissionSet {
         Ok(Self { permissions })
     }
 
+    pub fn is_subset_of(&self, other: &Self) -> bool {
+        self.set().is_subset(other.set())
+    }
+
     /// Returns `true` if the user has the specified permission, `false` otherwise.
     ///
     /// This will also check the blanket permission grant (see `BLANKET_ANY_USER_PERMISSION_GRANT`)
     /// and return `true` regardless of the user's effective permissions (if the required permission
     /// has a blanket grant).
-    pub fn has_permission_or_is_always_granted<P>(&self, permission: P) -> bool
+    pub fn has_permission_or_is_blanket_granted<P>(&self, permission: P) -> bool
     where
         P: AsRef<Permission>,
     {
@@ -276,7 +287,7 @@ impl PermissionSet {
     }
 
     /// Returns a reference to the set of permissions.
-    pub fn inner_permission_set(&self) -> &HashSet<Permission> {
+    pub fn set(&self) -> &HashSet<Permission> {
         &self.permissions
     }
 
@@ -318,10 +329,10 @@ mod test {
         ])
         .unwrap();
 
-        assert!(permissions.has_permission_or_is_always_granted(Permission::UserSelfRead));
-        assert!(permissions.has_permission_or_is_always_granted(Permission::UserSelfWrite));
-        assert!(permissions.has_permission_or_is_always_granted(Permission::UserAnyRead));
-        assert!(permissions.has_permission_or_is_always_granted(Permission::UserAnyWrite));
+        assert!(permissions.has_permission_or_is_blanket_granted(Permission::UserSelfRead));
+        assert!(permissions.has_permission_or_is_blanket_granted(Permission::UserSelfWrite));
+        assert!(permissions.has_permission_or_is_blanket_granted(Permission::UserAnyRead));
+        assert!(permissions.has_permission_or_is_blanket_granted(Permission::UserAnyWrite));
     }
 
     #[test]

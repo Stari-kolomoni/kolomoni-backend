@@ -46,8 +46,6 @@ pub enum CliCommand {
                 Note that in general, this is a destructive action."
     )]
     Down(DownCommandArguments),
-    // Status(StatusCommandArguments),
-    // TODO and so on
 }
 
 

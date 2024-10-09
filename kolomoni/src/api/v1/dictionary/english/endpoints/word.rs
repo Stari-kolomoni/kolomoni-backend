@@ -34,7 +34,7 @@ use crate::{
     authentication::UserAuthenticationExtractor,
     declare_openapi_error_reason_response,
     require_permission_with_optional_authentication,
-    require_user_authentication_and_permission,
+    require_user_authentication_and_permissions,
     state::ApplicationState,
 };
 
@@ -157,7 +157,7 @@ pub async fn create_english_word(
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
 
-    let authenticated_user = require_user_authentication_and_permission!(
+    let authenticated_user = require_user_authentication_and_permissions!(
         &mut database_connection,
         authentication,
         Permission::WordCreate
@@ -423,7 +423,7 @@ pub async fn update_english_word(
     let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
-    require_user_authentication_and_permission!(
+    require_user_authentication_and_permissions!(
         &mut transaction,
         authentication,
         Permission::WordUpdate
@@ -540,7 +540,7 @@ pub async fn delete_english_word(
     let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.begin().await?;
 
-    require_user_authentication_and_permission!(
+    require_user_authentication_and_permissions!(
         &mut transaction,
         authentication,
         Permission::WordDelete

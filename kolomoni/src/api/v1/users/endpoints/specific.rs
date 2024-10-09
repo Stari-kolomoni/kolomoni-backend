@@ -33,7 +33,7 @@ use crate::{
     require_permission_in_set,
     require_permission_with_optional_authentication,
     require_user_authentication,
-    require_user_authentication_and_permission,
+    require_user_authentication_and_permissions,
     state::ApplicationState,
 };
 
@@ -268,7 +268,7 @@ async fn get_specific_user_effective_permissions(
     // To access this endpoint, the user:
     // - MUST provide an authentication token, and
     // - MUST have the `user.self:read` permission.
-    require_user_authentication_and_permission!(
+    require_user_authentication_and_permissions!(
         &mut database_connection,
         authentication_extractor,
         Permission::UserAnyRead
@@ -402,7 +402,7 @@ async fn update_specific_user_display_name(
     // - MUST have the `user.self:write` permission.
     //
     // Intended for moderation tooling.
-    let authenticated_user = require_user_authentication_and_permission!(
+    let authenticated_user = require_user_authentication_and_permissions!(
         &mut transaction,
         authentication_extractor,
         Permission::UserAnyWrite

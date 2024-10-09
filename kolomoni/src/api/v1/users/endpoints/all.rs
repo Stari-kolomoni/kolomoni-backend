@@ -11,7 +11,7 @@ use crate::{
         traits::IntoApiModel,
     },
     authentication::UserAuthenticationExtractor,
-    require_user_authentication_and_permission,
+    require_user_authentication_and_permissions,
     state::ApplicationState,
 };
 
@@ -53,7 +53,7 @@ pub async fn get_all_registered_users(
     // To access this endpoint, the user:
     // - MUST provide their authentication token, and
     // - MUST have the `user.any:read` permission.
-    require_user_authentication_and_permission!(
+    require_user_authentication_and_permissions!(
         &mut database_connection,
         authentication,
         Permission::UserAnyRead

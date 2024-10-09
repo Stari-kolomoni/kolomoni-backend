@@ -12,35 +12,17 @@ pub(crate) mod cli;
 pub mod logging;
 pub(crate) mod state;
 
-pub async fn establish_database_connection_pool(
-    database_configuration: &ForApiDatabaseConfiguration,
-) -> Result<PgPool, sqlx::Error> {
-    let mut connection_options = PgConnectOptions::new_without_pgpass()
-        .application_name(&format!(
-            "stari-kolomoni-backend-api_v{}",
-            env!("CARGO_PKG_VERSION")
-        ))
-        .statement_cache_capacity(
-            database_configuration
-                .statement_cache_capacity
-                .unwrap_or(200),
-        )
-        .host(&database_configuration.host)
-        .port(database_configuration.port)
-        .username(&database_configuration.username)
-        .database(&database_configuration.database_name);
-
-    if let Some(password) = &database_configuration.password {
-        connection_options = connection_options.password(password.as_str());
-    }
-
-
-    PgPoolOptions::new()
-        .idle_timeout(Some(Duration::from_secs(60 * 20)))
-        .max_lifetime(Some(Duration::from_secs(60 * 60)))
-        .min_connections(1)
-        .max_connections(10)
-        .test_before_acquire(true)
-        .connect_with(connection_options)
-        .await
-}
+// TODO -- things to do, in rough order: --
+// DONE migrate to the new database structure, which will remove and add some new endpoints
+// DONE refactor actix extractors/data into a better structure
+// DONE refactor non-library things out of this crate into kolomoni_core (including API request/response models?)
+// TODO review documentation, especially top-level crate docs (+ check for cargo doc warnings)
+// TODO refactor how state is updated locally, so it can be more general than just for the search crate
+// TODO rework search crate with either a deep-dive into tantivy or by removing tantivy and using manual similarity metrics
+// TODO rework the kolomoni_sample_data to be rust, and to ingest the Google Sheets document for seeding data
+// TODO migrate tests to new database structure
+// TODO for clarity, create two directories: `crates` and `binaries`, where workspaces crates will be categorized
+//      (e.g. `kolomoni` + `kolomoni_openapi` can go in `binaries`)
+// TODO review CI
+// TODO review makefile
+// TODO review unused dependencies
