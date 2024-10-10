@@ -53,9 +53,26 @@ args = [
 
 
 
+[tasks."backend:run"]
+clear = true
+workspace = false
+command = "cargo"
+args = ["run", "--release"]
+cwd = "."
+
+[tasks."backend:openapi:run"]
+clear = true
+workspace = false
+command = "cargo"
+args = ["run", "--release"]
+cwd = "./kolomoni_openapi"
+
+
+
+
 [tasks.build-and-open-full-documentation]
 clear = true
-workspace = true
+workspace = false
 command = "cargo"
 args = [
     "doc",
@@ -63,26 +80,9 @@ args = [
     "--open"
 ]
 
-
-[tasks."backend:run"]
-clear = true
-workspace = true
-command = "cargo"
-args = ["run", "--release"]
-cwd = "."
-
-[tasks."backend:openapi:run"]
-clear = true
-workspace = true
-command = "cargo"
-args = ["run", "--release"]
-cwd = "./kolomoni_openapi"
-
-
-
 [tasks.build-and-watch-workspace-documentation-with-private-items]
 clear = true
-workspace = true
+workspace = false
 command = "cargo"
 args = [
     "watch",
@@ -94,9 +94,13 @@ args = [
 
 [tasks.documentation]
 clear = true
-workspace = true
-alias = "doc"
+workspace = false
 dependencies = [
     "build-and-open-full-documentation",
     "build-and-watch-workspace-documentation-with-private-items"
 ]
+
+[tasks.doc]
+clear = true
+workspace = false
+alias = "documentation"
