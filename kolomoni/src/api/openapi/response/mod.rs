@@ -747,7 +747,7 @@ impl utoipa::IntoResponses for UuidUrlParameterError {
 /// A hidden trait related to the [`declare_openapi_error_reason_response!`] macro.
 /// Avoid implementing directly.
 ///
-/// [`declare_openapi_error_reason_response!`]: declare_openapi_error_reason_response
+/// [`declare_openapi_error_reason_response!`]: crate::declare_openapi_error_reason_response
 pub trait ErrorReasonNewtype {
     /// A concrete description of the reason for this error to occur.
     fn description() -> &'static str;
@@ -757,7 +757,7 @@ pub trait ErrorReasonNewtype {
     /// but note that the inner state of that variant is ignored when generating
     /// generic reason descriptions (see [`ErrorReasonName`]).
     ///
-    /// [`ErrorReasonName`]: kolomoni::api::errors::ErrorReasonName
+    /// [`ErrorReasonName`]: crate::api::errors::ErrorReasonName
     fn stateless_error_reason() -> ErrorReason;
 }
 
@@ -858,7 +858,7 @@ macro_rules! declare_openapi_error_reason_response {
 /// }
 /// ```
 ///
-/// [`declare_openapi_error_reason_response!`]: kolomoni::declare_openapi_error_reason_response
+/// [`declare_openapi_error_reason_response!`]: crate::declare_openapi_error_reason_response
 pub struct AsErrorReason<R>
 where
     R: ErrorReasonNewtype,

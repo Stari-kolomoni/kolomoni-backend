@@ -3,7 +3,7 @@ use url::Url;
 use super::build_request_url;
 use crate::{ClientError, ClientResult, HttpClient, ServerResponse};
 
-pub(crate) struct GetRequestBuilder<'c, HC, const HasUrl: bool>
+pub(crate) struct GetRequestBuilder<'c, HC, const HAS_URL: bool>
 where
     HC: HttpClient,
 {
@@ -11,7 +11,7 @@ where
     url: Option<Result<Url, url::ParseError>>,
 }
 
-impl<'c, HC, const HasUrl: bool> GetRequestBuilder<'c, HC, HasUrl>
+impl<'c, HC, const HAS_URL: bool> GetRequestBuilder<'c, HC, HAS_URL>
 where
     HC: HttpClient,
 {

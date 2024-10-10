@@ -2,23 +2,17 @@ use kolomoni_core::api_models::{UserLoginRequest, UserLoginResponse};
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::{server::ApiServer, urls::build_request_url};
+use crate::{request::RequestBuilder, Client, ClientError};
 
 
 #[derive(Debug, Error)]
 pub enum AuthenticationError {
-    #[error("failed to parse a URL")]
-    UrlParseError {
+    #[error("HTTP client error")]
+    ClientError(
         #[from]
         #[source]
-        error: url::ParseError,
-    },
-
-    #[error("failed to build or perform request")]
-    RequestError { error: reqwest::Error },
-
-    #[error("failed to parse response (could be a JSON deserialization error)")]
-    ResponseError { error: reqwest::Error },
+        ClientError,
+    ),
 
     #[error("the provided login information is invalid")]
     IncorrectLoginInformation,
@@ -34,8 +28,7 @@ pub struct AccessToken {
 
 impl AccessToken {
     pub async fn log_in<U, P>(
-        server: ApiServer,
-        http_client: reqwest::Client,
+        client: &Client,
         username: U,
         password: P,
     ) -> Result<Self, AuthenticationError>
@@ -43,22 +36,17 @@ impl AccessToken {
         U: Into<String>,
         P: Into<String>,
     {
-        let login_response = http_client
-            .post(build_request_url(&server, "/login")?)
+        let login_response = RequestBuilder::post(client)
+            .endpoint_url("/login")
             .json(&UserLoginRequest {
                 username: username.into(),
                 password: password.into(),
             })
             .send()
-            .await
-            .map_err(|error| AuthenticationError::RequestError { error })?;
+            .await?;
 
         if login_response.status() == StatusCode::OK {
-            let login_response_data: UserLoginResponse = login_response
-                .json()
-                .await
-                .map_err(|error| AuthenticationError::ResponseError { error })?;
-
+            let login_response_data = login_response.json::<UserLoginResponse>().await?;
 
             Ok(Self {
                 access_token: login_response_data.access_token,

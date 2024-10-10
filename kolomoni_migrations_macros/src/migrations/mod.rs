@@ -98,11 +98,11 @@ impl ScannedMigrationScript {
 
 
 /// Scans the provided `migrations_directory` for migrations,
-/// returning a list of [`LocalMigration`].
+/// returning a list of [`ScannedMigration`].
 ///
 /// The returned local migrations are sorted by versions in ascending order.
 ///
-/// Since this does not access the database, [`LocalMigration`]s
+/// Since this does not access the database, [`ScannedMigration`]s
 /// don't have any information about applied state.
 pub fn scan_for_migrations(
     migrations_directory: &Path,

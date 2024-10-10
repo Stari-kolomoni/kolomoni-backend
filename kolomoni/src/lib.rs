@@ -1,16 +1,11 @@
-use std::time::Duration;
-
-use kolomoni_configuration::ForApiDatabaseConfiguration;
-use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
-    PgPool,
-};
+#![allow(rustdoc::private_intra_doc_links)]
 
 pub mod api;
 pub(crate) mod authentication;
 pub(crate) mod cli;
 pub mod logging;
-pub(crate) mod state;
+pub mod state;
+
 
 // TODO -- things to do, in rough order: --
 // DONE migrate to the new database structure, which will remove and add some new endpoints

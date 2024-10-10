@@ -12,7 +12,7 @@ use kolomoni_auth::Permission;
 /// declaring a required permission for an endpoint's
 /// OpenAPI documentation.
 ///
-/// [`openapi`]: kolomoni::api::openapi
+/// [`openapi`]: crate::api::openapi
 pub(super) trait RequiredPermission {
     fn permission() -> Permission;
 }
@@ -21,7 +21,7 @@ pub(super) trait RequiredPermission {
 /// declaring a set of required permissions for an endpoint's
 /// OpenAPI documentation.
 ///
-/// [`openapi`]: kolomoni::api::openapi
+/// [`openapi`]: crate::api::openapi
 pub(super) trait RequiredPermissionSet<const N: usize> {
     fn permissions() -> [Permission; N];
 }
@@ -70,7 +70,7 @@ where
 
 
 
-/// Given a variant name for [`Permission`][kolomoni_auth::Permission], this macro will generate
+/// Given a variant name for [`Permission`], this macro will generate
 /// an empty struct with the name `RequiredPermissionNameHere`.
 ///
 /// For example, calling `generate_standalone_requirement_struct!(UserSelfRead)`
@@ -98,13 +98,8 @@ macro_rules! generate_standalone_requirement_struct {
                 "] permission.")
             ]
             #[doc =
-                "Use in conjunction with [`FailedAuthenticationResponses`][crate::api::openapi::FailedAuthenticationResponses] \
-                to indicate that the permission is required."
-            ]
-            #[doc = ""]
-            #[doc =
-                "See documentation on [`FailedAuthenticationResponses`][crate::api::openapi::FailedAuthenticationResponses] \
-                for more information on usage."
+                "Use in conjunction with [`MissingPermissions`][crate::api::openapi::response::MissingPermissions] \
+                to indicate that the permission is required. See its documentation for more information on usage."
             ]
             pub struct $permission_variant;
 

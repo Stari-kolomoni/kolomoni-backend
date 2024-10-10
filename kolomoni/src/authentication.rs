@@ -32,12 +32,14 @@ use crate::state::ApplicationStateInner;
 ///
 /// Then, inside the handler body, you can all e.g. [`UserAuthenticationExtractor::authenticated_user`]
 /// to get an `Option<`[`AuthenticatedUser`]`>`. In reality, you may want to use the
-/// [`require_authentication`][crate::require_authentication] macro that directly returns
+/// [`require_user_authentication`] macro that directly returns
 /// an [`AuthenticatedUser`], early-returning from the function with a `401 Unauthorized`
 /// if the caller did not provide authentication.
 ///
-/// See documentation of [`require_authentication`][crate::require_authentication]
-/// for usage examples.
+/// See documentation of [`require_user_authentication`] for usage examples.
+///
+///
+/// [`require_user_authentication`]: crate::require_user_authentication
 pub enum UserAuthenticationExtractor {
     /// No user authentication provided.
     Unauthenticated,
@@ -62,6 +64,7 @@ impl UserAuthenticationExtractor {
         BLANKET_PERMISSION_GRANT.contains(&permission)
     }
 
+    #[allow(dead_code)]
     pub fn are_permissions_granted_to_all(&self, permission_set: &PermissionSet) -> bool {
         for required_permission in permission_set.set() {
             if !BLANKET_PERMISSION_GRANT.contains(required_permission) {
@@ -192,8 +195,8 @@ impl AuthenticatedUser {
     ///
     /// This operation performs a database lookup.
     ///
-    /// Prefer using [`Self::has_permission`] if you'll be checking for a single permission,
-    /// and this method if you're checking for multiple or doing advanced permission logic.
+    /// Prefer using [`Self::transitively_has_permission`] if you'll be checking for a single permission,
+    /// and this method if you truly need a [`PermissionSet`].
     pub async fn fetch_transitive_permissions(
         &self,
         database_connection: &mut PgConnection,
@@ -230,6 +233,11 @@ impl AuthenticatedUser {
         Ok(has_permission)
     }
 
+    /// Returns a boolean indicating whether the authenticated user has the provided permissions,
+    /// obtained from any of the granted roles.
+    ///
+    /// This operation performs a database lookup.
+    #[allow(dead_code)]
     pub async fn transitively_has_permissions(
         &self,
         database_connection: &mut PgConnection,

@@ -21,9 +21,13 @@ use utoipa::ToSchema;
 use super::macros::construct_last_modified_header_value;
 use crate::authentication::AuthenticatedUserError;
 
+
+
+/// An [`ErrorReason`]-related trait providing a quick static description for a given error reason.
 pub trait ErrorReasonName {
     fn reason_description(&self) -> &'static str;
 }
+
 
 
 
@@ -48,18 +52,29 @@ pub enum WordErrorReason {
 }
 
 impl WordErrorReason {
+    /// Encountered when:
+    /// - an english word with a given lemma already exists,
+    /// - a slovene word with a given lemma already exists.
     pub const fn word_with_given_lemma_already_exists() -> Self {
         Self::WordWithGivenLemmaAlreadyExists
     }
 
+    /// Encountered when:
+    /// - an english word cannot be found by lemma or ID,
+    /// - a slovene word cannot be found by lemma or ID.
     pub const fn word_not_found() -> Self {
         Self::WordNotFound
     }
 
+    // TODO
+    #[allow(dead_code)]
     pub const fn identical_word_meaning_already_exists() -> Self {
         Self::IdenticalWordMeaningAlreadyExists
     }
 
+    /// Encountered when:
+    /// - an english word meaning cannot be found by ID,
+    /// - a slovene word meaning cannot be found by ID.
     pub const fn word_meaning_not_found() -> Self {
         Self::WordMeaningNotFound
     }
@@ -75,6 +90,8 @@ impl ErrorReasonName for WordErrorReason {
         }
     }
 }
+
+
 
 
 /// Pertains to all endpoints under `/dictionary/translation`
@@ -123,6 +140,7 @@ impl ErrorReasonName for TranslationsErrorReason {
         }
     }
 }
+
 
 
 
@@ -175,6 +193,8 @@ impl ErrorReasonName for LoginErrorReason {
         }
     }
 }
+
+
 
 
 /// Pertains to all endpoints under `/users`.
@@ -275,6 +295,8 @@ impl ErrorReasonName for UsersErrorReason {
 }
 
 
+
+
 // TODO
 /// Pertains to all endpoints under `/dictionary/category`.
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, ToSchema)]
@@ -343,53 +365,55 @@ impl ErrorReasonName for CategoryErrorReason {
 }
 
 
+
+
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, ToSchema)]
 #[serde(tag = "type", content = "data")]
 #[non_exhaustive]
 pub enum ErrorReason {
-    /*
-     * General
-     */
+    /// Indicates that authentication is required on the endpoint,
+    /// but the caller did not provide an access token.
     #[serde(rename = "missing-authentication")]
     MissingAuthentication,
 
+    /// Indicates that a permission is required to access an endpoint,
+    /// which was either not blanket granted or not one of the user's permissions.
     #[serde(rename = "missing-permissions")]
     MissingPermissions { permissions: Vec<Permission> },
 
-    /// Request is missing a JSON body.
+    /// Indicates that the request is missing a JSON body.
     #[serde(rename = "missing-json-body")]
     MissingJsonBody,
 
+    /// Indicates that the request has an invalid JSON body (see [`InvalidJsonBodyReason`]).
     #[serde(rename = "invalid-json-body")]
     InvalidJsonBody {
+        /// Describes why the JSON body is invalid.
         #[schema(value_type = String)]
         reason: InvalidJsonBodyReason,
     },
 
+    /// Indicates that some provided UUID parameter (in string format)
+    /// was not a valid UUID.
     #[serde(rename = "invalid-uuid-format")]
     InvalidUuidFormat,
 
-    /*
-     * Category-related
-     */
+    /// Pertains to all category-related endpoints.
     #[serde(rename = "category")]
     Category(CategoryErrorReason),
 
-    /*
-     * `/login` endpoint-related
-     */
+    /// Pertains to all endpoints under:
+    /// - `/login`
     #[serde(rename = "login")]
     Login(LoginErrorReason),
 
-    /*
-     * `/users` endpoint-related
-     */
+    /// Pertains to all endpoints under:
+    /// - `/users`
     #[serde(rename = "users")]
     Users(UsersErrorReason),
 
-    /*
-     * `/dictionary/translation`-endpoint related
-     */
+    /// Pertains to all endpoints under:
+    /// - `/dictionary/translation`
     #[serde(rename = "translations")]
     Translations(TranslationsErrorReason),
 
@@ -399,9 +423,6 @@ pub enum ErrorReason {
     #[serde(rename = "word")]
     Word(WordErrorReason),
 
-    /*
-     * Other
-     */
     #[serde(rename = "other")]
     Other { reason: Cow<'static, str> },
 }
@@ -418,9 +439,16 @@ impl ErrorReason {
     }
 
     #[allow(dead_code)]
-    pub fn missing_permissions(permission_set: &PermissionSet) -> Self {
+    pub fn missing_permissions_from_set(permission_set: &PermissionSet) -> Self {
         Self::MissingPermissions {
             permissions: permission_set.set().iter().copied().collect(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn missing_permissions_from_slice(permissions: &[Permission]) -> Self {
+        Self::MissingPermissions {
+            permissions: permissions.to_vec(),
         }
     }
 
@@ -489,7 +517,14 @@ impl From<WordErrorReason> for ErrorReason {
 
 
 
-/// **Do not use directly in endpoint code.**
+/// A JSON-serializable model containing a single field named `reason` ([`ErrorReason`]).
+///
+/// This type is used when responding with strongly-typed error reasons,
+/// **do not use directly in endpoint code**, use e.g. [`EndpointResponseBuilder`] with
+/// its [`with_error_reason`] builder method instead.
+///
+///
+/// [`with_error_reason`]: EndpointResponseBuilder::with_error_reason
 #[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 #[cfg_attr(feature = "with_test_facilities", derive(serde::Deserialize))]
 pub struct ResponseWithErrorReason {
@@ -505,134 +540,43 @@ impl ResponseWithErrorReason {
 
 
 
-
+/// Reasons for a JSON body to not be accepted by the server.
+///
+/// See also: [`EndpointError::invalid_json_body`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InvalidJsonBodyReason {
-    /// Signals an IO / syntax / EOF error while parsing.
+    /// Indicates that the provided JSON data was invalid,
+    /// possibly due to an IO / syntax / EOF error while parsing.
     #[serde(rename = "not-json")]
     NotJson,
 
+    /// Indicates that the provided JSON data was valid,
+    /// but its data did not match the expected scheme / format
+    /// (deserialization error).
     #[serde(rename = "invalid-data")]
     InvalidData,
 
+    /// Indicates that the provided JSON data was too large.
     #[serde(rename = "too-large")]
     TooLarge,
 }
 
 
 
-/// General-purpose Stari Kolomoni API error type.
+/// The most general endpoint handler error type.
 ///
-/// TODO needs documentation rework
+/// Almost all of the endpoint handler functions tend (or should)
+/// return a `Result` with the [`EndpointError`] error type.
+/// The reason for this is that throughout the codebase, we've integrated
+/// various functions to return either this error type, or an error type that
+/// can be losslessly converted into it.
 ///
-/// Use this type alongside an [`EndpointResult`] return type in your actix endpoint handlers
-/// to allow you to easily
-/// [`?`](https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html#a-shortcut-for-propagating-errors-the--operator)-return
-/// errors and automatically convert them into HTTP 4xx and 5xx errors!
-/// For more details on how this works, consult the
-/// [Actix documentation on errors](https://actix.rs/docs/errors) and the
-/// `impl `[`ResponseError`]` for `[`APIError`] block.
+/// For example, [`QueryError`]s, which come from
+/// the `kolomoni_database` crate, can be `?`-propagated, because we implement
+/// `From<QueryError> for EndpointError`, allowing the actual database calls
+/// that happen in endpoints to not worry about error conversion.
 ///
-/// <br>
-///
-/// # Usage examples
-///
-/// ## 1.1 Internal errors
-/// If the function you're calling returns a [`miette::Result`], you can simply
-/// map it to an [`APIError::InternalError`] and use `?` to return early if an error occurred.
-/// If it returns a std-compatible [`Error`][std::error::Error], you must first call
-/// [`error.into_diagnostic()`][miette::IntoDiagnostic::into_diagnostic].
-///
-/// ```
-/// # use miette::miette;
-/// # use serde::Serialize;
-/// # use actix_web::get;
-/// # use kolomoni::impl_json_response_builder;
-/// # use kolomoni::api::errors::APIError;
-/// # use kolomoni::api::macros::ContextlessResponder;
-/// # use kolomoni::api::errors::EndpointResult;
-/// #[derive(Serialize)]
-/// struct RandomValueResponse {
-///     value: i32,
-/// }
-///
-/// impl_json_response_builder!(RandomValueResponse);
-///
-///
-/// #[get("/some/path")]
-/// async fn example_internal_error() -> EndpointResult {
-///     let some_value: i32 = Result::Err(miette!("This is some error."))
-///         .map_err(APIError::InternalError)?;
-///     
-///     println!("{}", some_value);
-///     Ok(RandomValueResponse { value: some_value }.into_response())
-/// }
-/// ```
-///
-/// > Note that in this case `.map_err(APIError::InternalError)` is the same as
-/// > the longer version: `.map_err(|error| APIError::InternalError(error))`.
-///
-/// As mentioned, returning an [`APIError`] from a [`EndpointResult`]-returning actix handler
-/// will mean actix will automatically generate a relevant 4xx/5xx error, including any additional info,
-/// as configured.
-///
-/// ---
-///
-/// Similarly, you can map a [`sea_orm::error::DbErr`] to [`APIError::InternalDatabaseError`].
-/// If you are working with some other type of `Result`, you can do something like this instead
-/// to produce an `500 Internal Server Error` on `Err`:
-///
-/// ```
-/// # use miette::Error;
-/// # use kolomoni::api::errors::{APIError, EndpointResult};
-/// async fn example_string_internal_error() -> EndpointResult {
-///     let some_value: i32 = Result::<i32, Error>::Ok(42)
-///         .map_err(|_| APIError::internal_reason("Failed this operation!"))?;
-///
-///     # todo!();
-/// }
-/// ```
-///
-///
-/// ## 1.2 Other errors (not found, missing permissions, etc.)
-/// Just like [`APIError::internal_reason`], which returns a constructed [`APIError::InternalReason`]
-/// with your message, there are other helper methods, such as:
-/// - [`APIError::not_found`],
-/// - [`APIError::not_found_with_reason`],
-/// - [`APIError::missing_permission`],
-/// - [`APIError::missing_specific_permission`], and
-/// - [`APIError::missing_specific_permissions`].
-///
-///
-/// <br>
-///
-/// # Full authentication example
-/// When the user is not authenticated at all, you can use the
-/// [`APIError::NotAuthenticated`] error variant.
-///
-/// What follows is a full authentication and permission example, requiring the user to
-/// be authenticated and have the `user.self:read` permission.
-///
-/// ```
-/// use actix_web::post;
-/// use kolomoni::{require_permission, require_authentication};
-/// use kolomoni::authentication::UserAuthenticationExtractor;
-/// use kolomoni::state::ApplicationState;
-/// use kolomoni_auth::Permission;
-/// use kolomoni::api::errors::{APIError, EndpointResult};
-///
-/// #[post("/some/path")]
-/// async fn example_auth(
-///     state: ApplicationState,
-///     authentication: UserAuthenticationExtractor,
-/// ) -> EndpointResult {
-///     let authenticated_user = require_authentication!(authentication);
-///     require_permission!(state, authenticated_user, Permission::UserSelfRead);
-///
-///     // ... the rest of the function ...
-///     # todo!();
-/// }
-/// ```
+/// See also: [`EndpointResult`].
 #[derive(Debug, Error)]
 pub enum EndpointError {
     /*
@@ -640,64 +584,16 @@ pub enum EndpointError {
      *
      * Reasons are exposed as a HTTP status code + optionally a JSON body.
      */
-    /*
-    /// User is not authenticated
-    /// (missing `Authorization: Bearer <token>` HTTP header).
-    NotAuthenticated,
-
-    /// User does not have the required permission (or permissions).
-    /// If `Some`, this specifies the missing permission (or permissions).
-    NotEnoughPermissions {
-        missing_permission: Option<Vec<Permission>>,
-    },
-    /// Resource could not be found. If `Some`, this describes the reason for a 404.
-    NotFound {
-        reason: Option<ErrorResponseWithReason>,
-    },
-
-    /// Bad client request with a reason; will produce a `400 Bad Request`.
-    /// The `reason` will also be sent along in the response.
-    OtherClientError { reason: Cow<'static, str> },
-    */
-    /* DEPRECATED
-    /// This "error variant" exists on this type only for purposes of control flow,
-    /// so that e.g. [`parse_uuid`] can propagate its UUID parsing error upwards,
-    /// including the ability to respond with an [`ErrorReason`] body (or some other response).
-    ///
-    /// **This is not intended to be used directly by endpoints.**
-    ///
-    ///
-    /// [`parse_uuid`]: crate::api::v1::dictionary::parse_uuid
-    NoErrorButRespondWith { response: EndpointResponseBuilder }, */
-
-    /*
-     * Client errors.
-     *
-     * Specific status codes and included JSON bodies are specific to each error.
-     * Avoid using this as much as possible, and use the
-     *
-     * ```rust,no_run
-     * # fn hello_world() -> EndpointResult {
-     * // ...
-     * return EndpointResponseBuilder::ok()
-     *      .with_error_response(todo!())
-     *      .build;
-     * # }
-     * ```
-     *
-     * pattern instead.
-     */
     /// The endpoint expected a JSON body, but there was either:
-    /// - no JSON body sent with the request,
-    /// - or there was an incorrect `Content-Type` header (expected: `application/json`).
+    /// - no JSON body sent with the request, or
+    /// - an incorrect `Content-Type` header (expected `application/json`).
     MissingJsonBody,
 
-    /// Invalid JSON body, either due to a deserialization error,
-    /// or because the body is too large.
-    InvalidJsonBody {
-        reason: InvalidJsonBodyReason,
-    },
+    /// Invalid JSON body, either due to invalid JSON syntax,
+    /// a deserialization error, or because the body is too large.
+    InvalidJsonBody { reason: InvalidJsonBodyReason },
 
+    /// Invalid UUID format encountered when trying to convert from a string.
     InvalidUuidFormat {
         #[source]
         error: uuid::Error,
@@ -706,99 +602,57 @@ pub enum EndpointError {
     /*
      * Server errors.
      *
-     * Reasons are not shown externally.
+     * Strings and boxed errors are not exposed externally.
      */
-    /// Internal error with a string reason.
-    /// Triggers a `500 Internal Server Error` (**reason doesn't leak through the API**).
-    InternalErrorWithReason {
-        reason: Cow<'static, str>,
-    },
+    /// Internal error with a reason string.
+    ///
+    /// Triggers a `500 Internal Server Error`. **The reason doesn't leak through the API**.
+    InternalErrorWithReason { reason: Cow<'static, str> },
 
     /// Internal error, constructed from a boxed [`Error`].
-    /// Triggers a `500 Internal Server Error` (**error doesn't leak through the API**).
+    ///
+    /// Triggers a `500 Internal Server Error`. **The reason doesn't leak through the API**.
     InternalGenericError {
         #[from]
         #[source]
         error: Box<dyn std::error::Error>,
     },
 
-    /// Internal error, constructed from a [`sqlx::Error`].
-    /// Triggers a `500 Internal Server Error` (*doesn't leak the error through the API*).
+    /// Internal error, constructed from a database error ([`sqlx::Error`]).
+    ///
+    /// Triggers a `500 Internal Server Error`. **The reason doesn't leak through the API**.
     InternalDatabaseError {
         #[from]
         #[source]
         error: sqlx::Error,
     },
 
-    InvalidDatabaseState {
-        problem: Cow<'static, str>,
-    },
+    /// Internal database inconsistency, with more details provided by the `problem` field.
+    ///
+    /// Triggers a `500 Internal Server Error`. **The reason doesn't leak through the API**.
+    InvalidDatabaseState { problem: Cow<'static, str> },
 }
 
 impl EndpointError {
-    /*
-    /// Initialize a new not found API error without a specific reason.
-    #[inline]
-    pub const fn not_found() -> Self {
-        Self::NotFound { reason: None }
-    }
-
-    /// Initialize a new not found API error with a specific reason.
-    #[allow(dead_code)]
-    #[inline]
-    pub fn not_found_with_reason<M: Into<String>>(reason: M) -> Self {
-        Self::NotFound {
-            reason: Some(ErrorResponseWithReason::custom_reason(reason)),
-        }
-    }
-
-    /// Initialize a new API error, clarifying that the user is missing
-    /// a permission (or multiple permissions), but without clarification as to which those are.
-    #[allow(dead_code)]
-    #[inline]
-    pub const fn missing_permission() -> Self {
-        Self::NotEnoughPermissions {
-            missing_permission: None,
-        }
-    }
-
-    pub fn client_error<S>(reason: S) -> Self
-    where
-        S: Into<Cow<'static, str>>,
-    {
-        Self::OtherClientError {
-            reason: reason.into(),
-        }
-    } */
-
-    /*
-    /// Initialize a new API error, clarifying that the user is missing
-    /// some permission.
-    #[inline]
-    pub fn missing_specific_permission(permission: Permission) -> Self {
-        Self::NotEnoughPermissions {
-            missing_permission: Some(vec![permission]),
-        }
-    }
-
-    /// Initialize a new API error, clarifying that the user is missing
-    /// some set of permissions.
-    #[inline]
-    #[allow(unused)]
-    pub const fn missing_specific_permissions(permissions: Vec<Permission>) -> Self {
-        Self::NotEnoughPermissions {
-            missing_permission: Some(permissions),
-        }
-    } */
-
+    /// Creates a client error specifying that a JSON body was expected (but not found).
+    ///
+    /// This can also happen when the `Content-Type` header isn't set properly.
     pub const fn missing_json_body() -> Self {
         Self::MissingJsonBody
     }
 
+    /// Creates a client error specifying that a JSON body was found, but was invalid.
+    ///
+    /// Reasons include: invalid JSON syntax, data (schema) error when deserializing,
+    /// or body size.
     pub const fn invalid_json_body(reason: InvalidJsonBodyReason) -> Self {
         Self::InvalidJsonBody { reason }
     }
 
+    /// Creates an internal server error based on any [`Error`]-implementing type.
+    ///
+    /// The error will be boxed internally, but its details will not be exposed
+    /// in the API response.
     #[allow(unused)]
     pub fn internal_error<E>(error: E) -> Self
     where
@@ -809,14 +663,17 @@ impl EndpointError {
         }
     }
 
+    /// Creates an internal server error based on a [`sqlx::Error`].
+    ///
+    /// The details of the error will not be exposed in the API response.
     #[allow(unused)]
     pub fn internal_database_error(error: sqlx::Error) -> Self {
         Self::InternalDatabaseError { error }
     }
 
-    /// Initialize a new internal API error using an internal reason string.
-    /// When constructing an HTTP response using this error variant, the **reason
-    /// is not leaked through the API.**
+    /// Creates an internal server error based on a string describing the cause.
+    ///
+    /// The reason is not exposed in the API response.
     #[inline]
     pub fn internal_error_with_reason<S>(reason: S) -> Self
     where
@@ -827,6 +684,16 @@ impl EndpointError {
         }
     }
 
+    /// Creates an internal server error based on a string describing
+    /// how a database state is invalid or inconsistent.
+    ///
+    /// We tend to use this as sanity checks when performing a sequence
+    /// of operation in e.g. a transaction: we fetch some data, verify that it matches,
+    /// then e.g. delete the row. If we see that the deletion failed, we would consider
+    /// that an invalid database state, because we were in a transaction and the row
+    /// previously existed.
+    ///
+    /// The details of this problem will not be exposed in the API response.
     #[inline]
     pub fn invalid_database_state<S>(problem: S) -> Self
     where
@@ -979,6 +846,8 @@ impl From<JWTCreationError> for EndpointError {
 
 
 
+/// An endpoint response building error
+/// (returned from the [`EndpointResponseBuilder::build`] method).
 #[derive(Debug, Error)]
 pub enum EndpointResponseBuilderError {
     #[error("failed to serialize value as JSON")]
@@ -991,6 +860,7 @@ pub enum EndpointResponseBuilderError {
 
 
 
+/// A builder for HTTP responses returned from endpoint handlers.
 pub struct EndpointResponseBuilder {
     status_code: StatusCode,
 
@@ -999,8 +869,10 @@ pub struct EndpointResponseBuilder {
     additional_headers: Vec<(HeaderName, HeaderValue)>,
 }
 
+/// Endpoint response builder initialization methods, named after
+/// the status codes they initialize with.
 impl EndpointResponseBuilder {
-    pub fn new(status_code: StatusCode) -> Self {
+    fn new(status_code: StatusCode) -> Self {
         Self {
             status_code,
             body: None,
@@ -1008,41 +880,63 @@ impl EndpointResponseBuilder {
         }
     }
 
+    /// Initializes a response builder with [`StatusCode::OK`].
     #[inline]
     pub fn ok() -> Self {
         Self::new(StatusCode::OK)
     }
 
+    /// Initializes a response builder with [`StatusCode::BAD_REQUEST`].
     #[inline]
     pub fn bad_request() -> Self {
         Self::new(StatusCode::BAD_REQUEST)
     }
 
+    /// Initializes a response builder with [`StatusCode::FORBIDDEN`].
     #[inline]
     pub fn forbidden() -> Self {
         Self::new(StatusCode::FORBIDDEN)
     }
 
+    /// Initializes a response builder with [`StatusCode::UNAUTHORIZED`].
+    #[inline]
+    pub fn unauthorized() -> Self {
+        Self::new(StatusCode::UNAUTHORIZED)
+    }
+
+    /// Initializes a response builder with [`StatusCode::CONFLICT`].
     #[inline]
     pub fn conflict() -> Self {
         Self::new(StatusCode::CONFLICT)
     }
 
+    /// Initializes a response builder with [`StatusCode::NOT_FOUND`].
     #[inline]
     pub fn not_found() -> Self {
         Self::new(StatusCode::NOT_FOUND)
     }
 
+    /// Initializes a response builder with [`StatusCode::NOT_MODIFIED`].
     #[inline]
     pub fn not_modified() -> Self {
         Self::new(StatusCode::NOT_MODIFIED)
     }
 
+    /// Initializes a response builder with [`StatusCode::INTERNAL_SERVER_ERROR`].
     #[inline]
     pub fn internal_server_error() -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR)
     }
+}
 
+/// Endpoint response builder response customization methods.
+impl EndpointResponseBuilder {
+    /// Sets the JSON body to be included in the response body.
+    ///
+    /// Potential serialization errors are propagated to the [`build`] method.
+    ///
+    ///
+    /// [`build`]: Self::build
     pub fn with_json_body<D, S>(mut self, data: D) -> Self
     where
         S: Serialize,
@@ -1062,6 +956,14 @@ impl EndpointResponseBuilder {
         }
     }
 
+    /// Sets the JSON body to be included in the response body
+    /// to [`ResponseWithErrorReason`] with the given error reason
+    /// (e.g. [`ErrorReason`], [`CategoryErrorReason`], ...).
+    ///
+    /// Potential serialization errors are propagated to the [`build`] method.
+    ///
+    ///
+    /// [`build`]: Self::build
     pub fn with_error_reason<R>(self, reason: R) -> Self
     where
         R: Into<ErrorReason>,
@@ -1069,6 +971,7 @@ impl EndpointResponseBuilder {
         self.with_json_body(ResponseWithErrorReason::new(reason.into()))
     }
 
+    /// Sets the `Last-Modified` header to the specified date and time.
     pub fn with_last_modified_at(mut self, last_modified_at: &DateTime<Utc>) -> Self {
         self.additional_headers.push((
             header::LAST_MODIFIED,
@@ -1082,6 +985,7 @@ impl EndpointResponseBuilder {
         }
     }
 
+    /// Finalizes the builder into a [`HttpResponse`].
     pub fn build(self) -> Result<HttpResponse<BoxBody>, EndpointError> {
         let optional_body = match self.body {
             Some(body_or_error) => match body_or_error {
@@ -1119,13 +1023,12 @@ impl EndpointResponseBuilder {
 
 
 
-/// Short for [`Result`]`<`[`HttpResponse`]`, `[`APIError`]`>`, intended to be used in most
+/// Short for [`Result`]`<`[`HttpResponse`]`, `[`EndpointError`]`>`, intended to be used in most
 /// places in handlers of the Stari Kolomoni API.
 ///
-/// The generic parameter (`Body`) specifies which body type is used inside [`HttpResponse`]
-/// and defaults to [`BoxBody`], which is what
-/// [`KolomoniResponseBuilder`][super::macros::KolomoniResponseBuilder]
-/// uses and will likely be the most common body type.
+/// The generic parameter (`Body`) specifies which body type is used inside [`HttpResponse`].
+/// It defaults to [`BoxBody`], which is what [`EndpointResponseBuilder`] uses
+/// and will likely be the most common body type.
 ///
-/// See documentation for [`APIError`] for more info.
+/// See documentation for [`EndpointError`] for more info.
 pub type EndpointResult<Body = BoxBody> = Result<HttpResponse<Body>, EndpointError>;

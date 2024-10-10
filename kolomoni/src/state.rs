@@ -8,10 +8,8 @@ use kolomoni_configuration::{Configuration, ForApiDatabaseConfiguration};
 use sqlx::{
     pool::PoolConnection,
     postgres::{PgConnectOptions, PgPoolOptions},
-    Acquire,
     PgPool,
     Postgres,
-    Transaction,
 };
 use thiserror::Error;
 
@@ -240,6 +238,7 @@ impl ApplicationStateInner {
         self.database_pool.acquire().await
     }
 
+    #[allow(dead_code)]
     pub fn configuration(&self) -> &Configuration {
         &self.configuration
     }

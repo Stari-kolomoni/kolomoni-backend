@@ -6,7 +6,7 @@ use crate::{ClientError, ClientResult, HttpClient, ServerResponse};
 
 
 
-pub(crate) struct PostRequestBuilder<'c, HC, const HasUrl: bool>
+pub(crate) struct PostRequestBuilder<'c, HC, const HAS_URL: bool>
 where
     HC: HttpClient,
 {
@@ -18,7 +18,7 @@ where
 }
 
 
-impl<'c, HC, const HasUrl: bool> PostRequestBuilder<'c, HC, HasUrl>
+impl<'c, HC, const HAS_URL: bool> PostRequestBuilder<'c, HC, HAS_URL>
 where
     HC: HttpClient,
 {
@@ -44,7 +44,7 @@ where
         }
     }
 
-    pub(crate) fn json<V>(self, data: &V) -> PostRequestBuilder<'c, HC, HasUrl>
+    pub(crate) fn json<V>(self, data: &V) -> PostRequestBuilder<'c, HC, HAS_URL>
     where
         V: Serialize,
     {

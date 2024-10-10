@@ -45,8 +45,10 @@ pub struct RemoteMigrationDown {
 }
 
 
-/// A partial, remote-only [`Migration`] information,
+/// A partial, remote-only migration information,
 /// including applied status in the database.
+///
+/// See also: [`ConsolidatedMigration`].
 pub(crate) struct RemoteMigration {
     pub(crate) identifier: MigrationIdentifier,
 

@@ -63,16 +63,12 @@
 //! ```
 //!
 
-use std::time::Duration;
-
 use actix_web::error::JsonPayloadError;
 use actix_web::{web, HttpServer};
 use api::errors::InvalidJsonBodyReason;
 use clap::Parser;
-use kolomoni_configuration::{Configuration, ForApiDatabaseConfiguration};
+use kolomoni_configuration::Configuration;
 use miette::{Context, IntoDiagnostic, Result};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::PgPool;
 use tracing::info;
 
 mod api;

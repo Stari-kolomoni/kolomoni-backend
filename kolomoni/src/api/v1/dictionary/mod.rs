@@ -47,6 +47,10 @@ pub mod translations;
 ///     # todo!();
 /// }
 /// ```
+///
+///
+/// [`UserId`]: kolomoni_core::id::UserId
+/// [`CategoryId`]: kolomoni_core::id::CategoryId
 #[inline]
 pub fn parse_uuid<U>(string: impl AsRef<str>) -> Result<U, EndpointError>
 where

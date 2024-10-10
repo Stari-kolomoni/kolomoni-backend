@@ -1577,39 +1577,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kolomoni_test"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "kolomoni_core",
- "kolomoni_test_util",
- "tokio",
-]
-
-[[package]]
-name = "kolomoni_test_util"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-http",
- "actix-service",
- "actix-web",
- "bytes",
- "http 0.2.12",
- "kolomoni_auth",
- "kolomoni_configuration",
- "kolomoni_core",
- "kolomoni_database",
- "miette",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing-actix-web",
- "uuid",
-]
-
-[[package]]
 name = "language-tags"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
