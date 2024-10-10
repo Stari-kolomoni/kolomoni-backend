@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 kolomoni_core = { path = "../kolomoni_core", features = ["serde_impls_for_client_on_models"] }
-kolomoni_auth = { path = "../kolomoni_auth" }
 kolomoni_database = { path = "../kolomoni_database" }
 kolomoni_configuration = { path = "../kolomoni_configuration" }
 

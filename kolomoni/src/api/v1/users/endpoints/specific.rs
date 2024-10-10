@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use actix_web::{delete, get, patch, post, web};
-use kolomoni_auth::{Permission, Role, RoleSet};
+use kolomoni_core::permissions::Permission;
+use kolomoni_core::roles::{Role, RoleSet};
 use kolomoni_core::{
     api_models::{
         UserDisplayNameChangeRequest,
@@ -12,7 +13,7 @@ use kolomoni_core::{
         UserRoleRemoveRequest,
         UserRolesResponse,
     },
-    id::UserId,
+    ids::UserId,
 };
 use kolomoni_database::entities;
 use sqlx::Acquire;

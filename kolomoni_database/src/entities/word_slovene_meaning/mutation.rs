@@ -1,5 +1,5 @@
 use chrono::Utc;
-use kolomoni_core::id::{SloveneWordId, SloveneWordMeaningId};
+use kolomoni_core::ids::{SloveneWordId, SloveneWordMeaningId};
 use sqlx::{PgConnection, Postgres, QueryBuilder};
 
 use super::SloveneWordMeaningModel;

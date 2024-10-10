@@ -1,4 +1,4 @@
-use kolomoni_core::id::{RoleId, UserId};
+use kolomoni_core::ids::{RoleId, UserId};
 use uuid::Uuid;
 
 

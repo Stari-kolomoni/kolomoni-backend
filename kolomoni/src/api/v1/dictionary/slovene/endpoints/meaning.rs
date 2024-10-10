@@ -1,5 +1,5 @@
 use actix_web::{delete, get, patch, post, web, Scope};
-use kolomoni_auth::Permission;
+use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
         NewSloveneWordMeaningCreatedResponse,
@@ -8,7 +8,7 @@ use kolomoni_core::{
         SloveneWordMeaningUpdatedResponse,
         SloveneWordMeaningsResponse,
     },
-    id::{SloveneWordId, SloveneWordMeaningId},
+    ids::{SloveneWordId, SloveneWordMeaningId},
 };
 use kolomoni_database::entities::{self, NewSloveneWordMeaning, SloveneWordMeaningUpdate};
 use sqlx::Acquire;

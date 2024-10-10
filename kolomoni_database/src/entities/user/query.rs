@@ -1,6 +1,5 @@
 use futures_core::stream::BoxStream;
-use kolomoni_auth::ArgonHasher;
-use kolomoni_core::id::UserId;
+use kolomoni_core::{ids::UserId, password_hasher::ArgonHasher};
 use sqlx::PgConnection;
 
 use super::{UserQueryError, UserQueryResult};

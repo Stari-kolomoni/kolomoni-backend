@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-kolomoni_auth = { path = "../kolomoni_auth" }
 kolomoni_core = { path = "../kolomoni_core" }
 
 futures-core = { workspace = true }

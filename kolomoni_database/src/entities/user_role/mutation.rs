@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use kolomoni_auth::{Role, RoleSet};
-use kolomoni_core::id::UserId;
+use kolomoni_core::ids::UserId;
+use kolomoni_core::roles::{Role, RoleSet};
 use sqlx::PgConnection;
 
 use crate::{QueryError, QueryResult};

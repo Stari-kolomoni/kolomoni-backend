@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use kolomoni_core::id::UserId;
+use kolomoni_core::ids::UserId;
 use uuid::Uuid;
 
 use crate::{IntoExternalModel, IntoInternalModel};

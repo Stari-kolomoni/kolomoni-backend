@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use super::SloveneWordMeaningWithCategoriesAndTranslations;
-use crate::id::SloveneWordId;
+use crate::ids::SloveneWordId;
 
 
 

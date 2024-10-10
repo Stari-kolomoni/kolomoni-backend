@@ -1,12 +1,12 @@
 use actix_web::{post, web};
 use chrono::{Duration, Utc};
-use kolomoni_auth::{JWTClaims, JWTTokenType, JWTValidationError};
 use kolomoni_core::api_models::{
     UserLoginRefreshRequest,
     UserLoginRefreshResponse,
     UserLoginRequest,
     UserLoginResponse,
 };
+use kolomoni_core::token::{JWTClaims, JWTTokenType, JWTValidationError};
 use kolomoni_database::entities;
 use tracing::{debug, warn};
 

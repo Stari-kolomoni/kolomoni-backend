@@ -4,12 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-uuid = { workspace = true }
-chrono = { workspace = true }
+thiserror = { workspace = true }
 
 serde = { workspace = true }
 serde_with = { workspace = true }
 serde_json = { workspace = true }
+
+uuid = { workspace = true }
+chrono = { workspace = true }
+argon2 = { workspace = true }
+jsonwebtoken = { workspace = true }
 
 utoipa = { workspace = true }
 

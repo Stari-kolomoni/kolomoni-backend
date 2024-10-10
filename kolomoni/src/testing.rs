@@ -4,7 +4,7 @@
 use actix_web::{post, web, HttpResponse, Scope};
 use kolomoni_auth::{Role, RoleSet, DEFAULT_USER_ROLE};
 use kolomoni_configuration::{Configuration, ForMigrationAtApiRuntimeDatabaseConfiguration};
-use kolomoni_core::id::UserId;
+use kolomoni_core::ids::UserId;
 use kolomoni_database::entities;
 use kolomoni_migrations::{
     core::{

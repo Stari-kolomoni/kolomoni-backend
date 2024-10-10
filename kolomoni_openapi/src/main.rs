@@ -109,20 +109,20 @@ use utoipa_rapidoc::RapiDoc;
             kolomoni::api::errors::ResponseWithErrorReason,
 
             // kolomoni_auth
-            kolomoni_auth::Permission,
+            kolomoni_core::permissions::Permission,
 
             // kolomoni_core::id
-            kolomoni_core::id::CategoryId,
-            kolomoni_core::id::EditId,
-            kolomoni_core::id::UserId,
-            kolomoni_core::id::WordId,
-            kolomoni_core::id::WordMeaningId,
-            kolomoni_core::id::EnglishWordId,
-            kolomoni_core::id::EnglishWordMeaningId,
-            kolomoni_core::id::SloveneWordId,
-            kolomoni_core::id::SloveneWordMeaningId,
-            kolomoni_core::id::PermissionId,
-            kolomoni_core::id::RoleId,
+            kolomoni_core::ids::CategoryId,
+            kolomoni_core::ids::EditId,
+            kolomoni_core::ids::UserId,
+            kolomoni_core::ids::WordId,
+            kolomoni_core::ids::WordMeaningId,
+            kolomoni_core::ids::EnglishWordId,
+            kolomoni_core::ids::EnglishWordMeaningId,
+            kolomoni_core::ids::SloveneWordId,
+            kolomoni_core::ids::SloveneWordMeaningId,
+            kolomoni_core::ids::PermissionId,
+            kolomoni_core::ids::RoleId,
 
             // kolomoni_core::api_models::health
             api_models::PingResponse,

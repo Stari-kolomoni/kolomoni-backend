@@ -4,11 +4,12 @@ use std::ops::Add;
 use chrono::{DateTime, Duration, SubsecRound, Utc};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use kolomoni_core::id::UserId;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::TimestampSeconds;
 use thiserror::Error;
+
+use crate::ids::UserId;
 
 
 // TODO Consider making this dynamic (for example through an environment variable).

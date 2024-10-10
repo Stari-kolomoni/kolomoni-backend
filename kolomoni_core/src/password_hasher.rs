@@ -10,6 +10,7 @@ pub enum ArgonHasherError {
 
 
 
+/// TODO refactor to "password hasher"
 pub struct ArgonHasher {
     salt_string: SaltString,
     argon_hasher: Argon2<'static>,

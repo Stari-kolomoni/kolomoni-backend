@@ -1,4 +1,4 @@
-use kolomoni_core::id::{SloveneWordId, SloveneWordMeaningId};
+use kolomoni_core::ids::{SloveneWordId, SloveneWordMeaningId};
 use sqlx::PgConnection;
 
 use super::SloveneWordMeaningModelWithCategoriesAndTranslations;

@@ -2,7 +2,8 @@ use std::{borrow::Cow, collections::HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Permission, PermissionSet};
+use crate::permissions::{Permission, PermissionSet};
+
 
 
 /// User roles that we have.

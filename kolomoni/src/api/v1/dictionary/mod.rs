@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use actix_web::{web, Scope};
 use english::english_dictionary_router;
-use kolomoni_core::id::KolomoniUuidNewtype;
+use kolomoni_core::ids::KolomoniUuidNewtype;
 use slovene::slovene_dictionary_router;
 
 use self::{

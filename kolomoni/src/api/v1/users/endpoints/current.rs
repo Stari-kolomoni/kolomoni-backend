@@ -1,5 +1,4 @@
 use actix_web::{get, patch, web};
-use kolomoni_auth::Permission;
 use kolomoni_core::api_models::{
     UserDisplayNameChangeRequest,
     UserDisplayNameChangeResponse,
@@ -7,6 +6,7 @@ use kolomoni_core::api_models::{
     UserPermissionsResponse,
     UserRolesResponse,
 };
+use kolomoni_core::permissions::Permission;
 use kolomoni_database::entities;
 use sqlx::Acquire;
 use tracing::info;

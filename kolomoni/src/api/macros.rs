@@ -137,7 +137,7 @@ macro_rules! require_user_authentication {
 /// use kolomoni::api::errors::EndpointResult;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 /// use kolomoni::authentication::AuthenticatedUser;
-/// use kolomoni_auth::Permission;
+/// use kolomoni_core::permissions::Permission;
 ///
 /// #[utoipa::path(
 ///     get,
@@ -200,7 +200,7 @@ macro_rules! require_user_authentication {
 /// [`&mut PgConnection`]: sqlx::PgConnection
 /// [`PoolConnection<Postgres>`]: sqlx::pool::PoolConnection
 /// [mutably deref it]: https://docs.rs/sqlx/0.8.2/sqlx/pool/struct.PoolConnection.html#impl-AsMut%3C%3CDB+as+Database%3E::Connection%3E-for-PoolConnection%3CDB%3E
-/// [`Permission`]: kolomoni_auth::Permission
+/// [`Permission`]: kolomoni_core::permissions::Permission
 /// [`UserAuthenticationExtractor`]: crate::authentication::UserAuthenticationExtractor
 #[macro_export]
 macro_rules! require_permission_with_optional_authentication {
@@ -280,7 +280,7 @@ macro_rules! require_permission_with_optional_authentication {
 /// use kolomoni::api::errors::EndpointResult;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 /// use kolomoni::authentication::AuthenticatedUser;
-/// use kolomoni_auth::Permission;
+/// use kolomoni_core::permissions::Permission;
 ///
 /// #[utoipa::path(
 ///     get,
@@ -318,8 +318,8 @@ macro_rules! require_permission_with_optional_authentication {
 ///
 /// [`ErrorReason::missing_permission(...)`]: crate::api::errors::ErrorReason::missing_permission
 /// [`MissingPermissions`]: crate::api::openapi::response::MissingPermissions
-/// [`Permission`]: kolomoni_auth::Permission
-/// [`PermissionSet`]: kolomoni_auth::PermissionSet
+/// [`Permission`]: kolomoni_core::permissions::Permission
+/// [`PermissionSet`]: kolomoni_core::permissions::PermissionSet
 #[macro_export]
 macro_rules! require_permission_in_set {
     ($permission_set:expr, $required_permission:expr) => {
@@ -377,7 +377,7 @@ macro_rules! require_permission_in_set {
 /// use kolomoni::api::errors::EndpointResult;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 /// use kolomoni::authentication::AuthenticatedUser;
-/// use kolomoni_auth::Permission;
+/// use kolomoni_core::permissions::Permission;
 ///
 /// #[utoipa::path(
 ///     get,
@@ -430,7 +430,7 @@ macro_rules! require_permission_in_set {
 ///
 ///
 /// [`require_user_authentication_and_permissions`]: crate::require_user_authentication_and_permissions
-/// [`Permission`]: kolomoni_auth::Permission
+/// [`Permission`]: kolomoni_core::permissions::Permission
 /// [`MissingAuthentication`]: crate::api::openapi::response::MissingAuthentication
 /// [`AuthenticatedUser`]: crate::authentication::AuthenticatedUser
 /// [`MissingPermissions`]: crate::api::openapi::response::MissingPermissions
@@ -512,7 +512,7 @@ macro_rules! require_permissions_on_user {
 /// use kolomoni::api::errors::EndpointResult;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 /// use kolomoni::authentication::AuthenticatedUser;
-/// use kolomoni_auth::Permission;
+/// use kolomoni_core::permissions::Permission;
 ///
 /// #[utoipa::path(
 ///     get,
@@ -570,7 +570,7 @@ macro_rules! require_permissions_on_user {
 /// [`&mut PgConnection`]: sqlx::PgConnection
 /// [`PoolConnection<Postgres>`]: sqlx::pool::PoolConnection
 /// [mutably deref it]: https://docs.rs/sqlx/0.8.2/sqlx/pool/struct.PoolConnection.html#impl-AsMut%3C%3CDB+as+Database%3E::Connection%3E-for-PoolConnection%3CDB%3E
-/// [`Permission`]: kolomoni_auth::Permission
+/// [`Permission`]: kolomoni_core::permissions::Permission
 /// [`UserAuthenticationExtractor`]: crate::authentication::UserAuthenticationExtractor
 #[macro_export]
 macro_rules! require_user_authentication_and_permissions {

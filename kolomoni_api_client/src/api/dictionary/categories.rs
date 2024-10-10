@@ -1,4 +1,4 @@
-use kolomoni_core::{api_models::CategoryCreationRequest, id::CategoryId};
+use kolomoni_core::{api_models::CategoryCreationRequest, ids::CategoryId};
 use reqwest::StatusCode;
 
 use crate::{request::RequestBuilder, Client, ClientResult};

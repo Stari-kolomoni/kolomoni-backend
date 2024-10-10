@@ -4,7 +4,7 @@ mod query;
 
 use std::borrow::Cow;
 
-use kolomoni_auth::ArgonHasherError;
+use kolomoni_core::password_hasher::ArgonHasherError;
 pub use model::*;
 pub use mutation::*;
 pub use query::*;

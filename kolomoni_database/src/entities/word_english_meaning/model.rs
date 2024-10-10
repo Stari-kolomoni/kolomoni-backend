@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use chrono::{DateTime, Utc};
-use kolomoni_core::id::{CategoryId, EnglishWordMeaningId, SloveneWordMeaningId, UserId};
+use kolomoni_core::ids::{CategoryId, EnglishWordMeaningId, SloveneWordMeaningId, UserId};
 use serde::Deserialize;
 use uuid::Uuid;
 

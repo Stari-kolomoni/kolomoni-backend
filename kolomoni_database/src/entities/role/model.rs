@@ -1,4 +1,4 @@
-use kolomoni_core::id::RoleId;
+use kolomoni_core::ids::RoleId;
 
 pub struct RoleModel {
     pub id: RoleId,

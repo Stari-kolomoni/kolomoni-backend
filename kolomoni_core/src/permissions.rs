@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashSet};
 
-use miette::{miette, Result};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use utoipa::ToSchema;
 
 // TODO Make sure this and roles are synced with the database migrations.
@@ -204,6 +204,12 @@ pub const BLANKET_PERMISSION_GRANT: [Permission; 3] = [
 ];
 
 
+#[derive(Debug, Error)]
+pub enum FromPermissionNamesError {
+    #[error("no such permission (by name): {}", .name)]
+    NoSuchPermissionByName { name: String },
+}
+
 
 /// Set of permissions, usually associated with some user.
 #[derive(Debug)]
@@ -238,7 +244,9 @@ impl PermissionSet {
 
     /// Initialize [`PermissionSet`] given a `Vec` of permission names.
     /// Returns `Err` if a permission name doesn't resolve to a [`Permission`].
-    pub fn from_permission_names<P>(permission_names: Vec<P>) -> Result<Self>
+    pub fn from_permission_names<P>(
+        permission_names: Vec<P>,
+    ) -> Result<Self, FromPermissionNamesError>
     where
         P: AsRef<str>,
     {
@@ -246,13 +254,12 @@ impl PermissionSet {
             .into_iter()
             .map(|permission_name| {
                 Permission::from_name(permission_name.as_ref()).ok_or_else(|| {
-                    miette!(
-                        "BUG: No such permission: {}!",
-                        permission_name.as_ref()
-                    )
+                    FromPermissionNamesError::NoSuchPermissionByName {
+                        name: permission_name.as_ref().to_string(),
+                    }
                 })
             })
-            .collect::<Result<HashSet<Permission>>>()?;
+            .collect::<Result<HashSet<_>, _>>()?;
 
         Ok(Self { permissions })
     }

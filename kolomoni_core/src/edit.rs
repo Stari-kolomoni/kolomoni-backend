@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::id::{
+use crate::ids::{
     CategoryId,
     EnglishWordId,
     EnglishWordMeaningId,

@@ -1,4 +1,4 @@
-use kolomoni_core::id::{EnglishWordId, EnglishWordMeaningId};
+use kolomoni_core::ids::{EnglishWordId, EnglishWordMeaningId};
 use sqlx::PgConnection;
 
 use super::EnglishWordMeaningModelWithCategoriesAndTranslations;

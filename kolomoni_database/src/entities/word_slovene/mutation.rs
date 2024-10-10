@@ -1,5 +1,5 @@
 use chrono::Utc;
-use kolomoni_core::id::SloveneWordId;
+use kolomoni_core::ids::SloveneWordId;
 use sqlx::PgConnection;
 
 use super::SloveneWordModel;

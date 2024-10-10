@@ -1,4 +1,4 @@
-use kolomoni_core::id::WordId;
+use kolomoni_core::ids::WordId;
 use sqlx::PgConnection;
 
 use crate::{QueryError, QueryResult};

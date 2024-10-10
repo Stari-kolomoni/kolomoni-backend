@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use futures_core::stream::BoxStream;
-use kolomoni_core::id::SloveneWordId;
+use kolomoni_core::ids::SloveneWordId;
 use sqlx::PgConnection;
 
 use super::SloveneWordWithMeaningsModel;

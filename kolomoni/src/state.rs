@@ -3,8 +3,11 @@
 use std::time::Duration;
 
 use actix_web::web::Data;
-use kolomoni_auth::{ArgonHasher, ArgonHasherError, JsonWebTokenManager};
 use kolomoni_configuration::{Configuration, ForApiDatabaseConfiguration};
+use kolomoni_core::{
+    password_hasher::{ArgonHasher, ArgonHasherError},
+    token::JsonWebTokenManager,
+};
 use sqlx::{
     pool::PoolConnection,
     postgres::{PgConnectOptions, PgPoolOptions},

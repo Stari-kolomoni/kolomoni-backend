@@ -1,6 +1,6 @@
 use actix_web::{delete, get, patch, post, web};
 use futures_util::StreamExt;
-use kolomoni_auth::Permission;
+use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
         CategoriesResponse,
@@ -9,7 +9,7 @@ use kolomoni_core::{
         CategoryResponse,
         CategoryUpdateRequest,
     },
-    id::CategoryId,
+    ids::CategoryId,
 };
 use kolomoni_database::entities::{self, CategoryValuesToUpdate, NewCategory};
 use sqlx::Acquire;

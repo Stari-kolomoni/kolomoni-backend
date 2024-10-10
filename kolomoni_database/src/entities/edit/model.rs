@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use chrono::{DateTime, Utc};
 use kolomoni_core::{
     edit::Edit,
-    id::{EditId, UserId},
+    ids::{EditId, UserId},
 };
 use uuid::Uuid;
 

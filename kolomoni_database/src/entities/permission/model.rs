@@ -1,4 +1,4 @@
-use kolomoni_core::id::PermissionId;
+use kolomoni_core::ids::PermissionId;
 
 pub struct PermissionModel {
     /// Internal ID of the permission, don't expose externally.

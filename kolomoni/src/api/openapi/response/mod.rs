@@ -286,7 +286,7 @@ impl utoipa::IntoResponses for MissingAuthentication {
 ///
 ///
 /// [module-level documentation]: self
-/// [`Permission::WordRead`]: kolomoni_auth::Permission::WordRead
+/// [`Permission::WordRead`]: kolomoni_core::permissions::Permission::WordRead
 #[allow(private_bounds)]
 pub struct MissingPermissions<P, const N: usize>
 where

@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 
 use crate::{
     api_models::ShallowEnglishWordMeaning,
-    id::{CategoryId, SloveneWordMeaningId},
+    ids::{CategoryId, SloveneWordMeaningId},
 };
 
 

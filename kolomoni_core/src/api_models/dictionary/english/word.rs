@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use super::EnglishWordMeaningWithCategoriesAndTranslations;
-use crate::id::EnglishWordId;
+use crate::ids::EnglishWordId;
 
 // TODO needs updated example
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]

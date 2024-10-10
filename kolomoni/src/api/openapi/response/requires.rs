@@ -6,7 +6,7 @@
 
 use std::marker::PhantomData;
 
-use kolomoni_auth::Permission;
+use kolomoni_core::permissions::Permission;
 
 /// An [`openapi`] module-internal trait to aid in
 /// declaring a required permission for an endpoint's
@@ -78,7 +78,7 @@ where
 ///
 /// ```no_run
 /// # use kolomoni::api::openapi::RequiredPermission;
-/// # use kolomoni_auth::Permission;
+/// # use kolomoni_core::permissions::Permission;
 /// pub struct RequiresUserSelfRead;
 /// impl RequiredPermission for RequiresUserSelfRead {
 ///     fn name() -> &'static str {
@@ -93,7 +93,7 @@ macro_rules! generate_standalone_requirement_struct {
             #[doc = concat!(
                 "Corresponds to the [`Permission::",
                 stringify!($permission_variant),
-                "`][kolomoni_auth::Permission::",
+                "`][kolomoni_core::permissions::Permission::",
                 stringify!($permission_variant),
                 "] permission.")
             ]
@@ -104,13 +104,13 @@ macro_rules! generate_standalone_requirement_struct {
             pub struct $permission_variant;
 
             impl RequiredPermission for $permission_variant {
-                fn permission() -> kolomoni_auth::Permission {
-                    kolomoni_auth::Permission::$permission_variant
+                fn permission() -> kolomoni_core::permissions::Permission {
+                    kolomoni_core::permissions::Permission::$permission_variant
                 }
             }
 
             impl RequiredPermissionSet<1> for $permission_variant {
-                fn permissions() -> [kolomoni_auth::Permission; 1] {
+                fn permissions() -> [kolomoni_core::permissions::Permission; 1] {
                     [Self::permission()]
                 }
             }

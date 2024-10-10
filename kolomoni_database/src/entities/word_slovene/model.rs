@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use chrono::{DateTime, Utc};
-use kolomoni_core::id::SloveneWordId;
+use kolomoni_core::ids::SloveneWordId;
 use uuid::Uuid;
 
 use crate::{

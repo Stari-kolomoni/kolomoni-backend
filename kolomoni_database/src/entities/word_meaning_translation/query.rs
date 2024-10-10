@@ -1,4 +1,4 @@
-use kolomoni_core::id::{EnglishWordMeaningId, SloveneWordMeaningId};
+use kolomoni_core::ids::{EnglishWordMeaningId, SloveneWordMeaningId};
 use sqlx::PgConnection;
 
 use crate::QueryResult;

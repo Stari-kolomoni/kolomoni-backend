@@ -1,7 +1,7 @@
 use actix_web::get;
 use futures_util::StreamExt;
-use kolomoni_auth::Permission;
 use kolomoni_core::api_models::RegisteredUsersListResponse;
+use kolomoni_core::permissions::Permission;
 use kolomoni_database::entities;
 
 use crate::{

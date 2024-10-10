@@ -1,5 +1,5 @@
 use futures_core::stream::BoxStream;
-use kolomoni_core::id::CategoryId;
+use kolomoni_core::ids::CategoryId;
 use sqlx::PgConnection;
 
 use super::CategoryModel;

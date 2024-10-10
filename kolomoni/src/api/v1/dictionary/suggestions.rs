@@ -1,6 +1,6 @@
 use actix_http::StatusCode;
 use actix_web::{delete, post, web, HttpResponse, Scope};
-use kolomoni_auth::Permission;
+use kolomoni_core::permissions::Permission;
 use kolomoni_database::{
     mutation::{
         NewTranslationSuggestion,

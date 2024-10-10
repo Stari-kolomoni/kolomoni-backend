@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use futures_core::stream::BoxStream;
-use kolomoni_core::id::EnglishWordId;
+use kolomoni_core::ids::EnglishWordId;
 use sqlx::PgConnection;
 
 use crate::{IntoExternalModel, QueryError, QueryResult, TryIntoExternalModel};

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use chrono::Utc;
-use kolomoni_core::id::CategoryId;
+use kolomoni_core::ids::CategoryId;
 use sqlx::{PgConnection, Postgres, QueryBuilder};
 
 use super::CategoryModel;

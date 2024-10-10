@@ -1,5 +1,5 @@
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
-use kolomoni_auth::Permission;
+use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
         EnglishWordMeaningUpdateRequest,
@@ -8,7 +8,7 @@ use kolomoni_core::{
         NewEnglishWordMeaningCreatedResponse,
         NewEnglishWordMeaningRequest,
     },
-    id::{EnglishWordId, EnglishWordMeaningId},
+    ids::{EnglishWordId, EnglishWordMeaningId},
 };
 use kolomoni_database::entities::{self, EnglishWordMeaningUpdate, NewEnglishWordMeaning};
 use sqlx::{types::Uuid, Acquire};

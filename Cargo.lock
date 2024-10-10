@@ -1398,7 +1398,6 @@ dependencies = [
  "futures-util",
  "httpdate",
  "itertools",
- "kolomoni_auth",
  "kolomoni_configuration",
  "kolomoni_core",
  "kolomoni_database",
@@ -1433,26 +1432,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kolomoni_auth"
-version = "0.1.0"
-dependencies = [
- "actix-utils",
- "actix-web",
- "argon2",
- "chrono",
- "jsonwebtoken",
- "kolomoni_core",
- "miette",
- "serde",
- "serde_with",
- "thiserror",
- "tokio",
- "tracing",
- "utoipa",
- "uuid",
-]
-
-[[package]]
 name = "kolomoni_configuration"
 version = "0.1.0"
 dependencies = [
@@ -1467,10 +1446,13 @@ dependencies = [
 name = "kolomoni_core"
 version = "0.1.0"
 dependencies = [
+ "argon2",
  "chrono",
+ "jsonwebtoken",
  "serde",
  "serde_json",
  "serde_with",
+ "thiserror",
  "utoipa",
  "uuid",
 ]
@@ -1483,7 +1465,6 @@ dependencies = [
  "chrono",
  "futures-core",
  "futures-util",
- "kolomoni_auth",
  "kolomoni_core",
  "pin-project-lite",
  "serde",
@@ -1558,7 +1539,6 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "kolomoni",
- "kolomoni_auth",
  "kolomoni_core",
  "miette",
  "tracing",

@@ -1,8 +1,8 @@
 use actix_web::{delete, post, web, Scope};
-use kolomoni_auth::Permission;
+use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{TranslationCreationRequest, TranslationDeletionRequest},
-    id::{EnglishWordMeaningId, SloveneWordMeaningId},
+    ids::{EnglishWordMeaningId, SloveneWordMeaningId},
 };
 use kolomoni_database::entities;
 use sqlx::Acquire;

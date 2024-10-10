@@ -9,7 +9,6 @@ publish = false
 [dependencies]
 kolomoni = { path = ".." }
 kolomoni_core = { path = "../kolomoni_core" }
-kolomoni_auth = { path = "../kolomoni_auth" }
 
 actix-web = { workspace = true }
 tracing = { workspace = true }
