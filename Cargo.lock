@@ -1423,12 +1423,14 @@ dependencies = [
 name = "kolomoni_api_client"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "kolomoni_core",
  "reqwest",
  "serde",
  "serde_json",
  "thiserror",
  "url",
+ "uuid",
 ]
 
 [[package]]

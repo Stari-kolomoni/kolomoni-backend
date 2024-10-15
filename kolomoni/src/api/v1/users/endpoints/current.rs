@@ -5,6 +5,7 @@ use kolomoni_core::api_models::{
     UserInfoResponse,
     UserPermissionsResponse,
     UserRolesResponse,
+    UsersErrorReason,
 };
 use kolomoni_core::permissions::Permission;
 use kolomoni_database::entities;
@@ -13,7 +14,7 @@ use tracing::info;
 
 use crate::{
     api::{
-        errors::{EndpointResponseBuilder, EndpointResult, UsersErrorReason},
+        errors::{EndpointResponseBuilder, EndpointResult},
         openapi::{
             self,
             response::{requires, AsErrorReason},

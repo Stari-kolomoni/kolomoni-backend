@@ -1,11 +1,15 @@
 use actix_web::{post, web};
-use kolomoni_core::api_models::{UserRegistrationRequest, UserRegistrationResponse};
+use kolomoni_core::api_models::{
+    UserRegistrationRequest,
+    UserRegistrationResponse,
+    UsersErrorReason,
+};
 use kolomoni_database::entities::{self, UserRegistrationInfo};
 use sqlx::Acquire;
 
 use crate::{
     api::{
-        errors::{EndpointResponseBuilder, EndpointResult, UsersErrorReason},
+        errors::{EndpointResponseBuilder, EndpointResult},
         openapi::{self, response::AsErrorReason},
         traits::IntoApiModel,
     },

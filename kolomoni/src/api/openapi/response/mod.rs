@@ -73,6 +73,12 @@ use std::{collections::BTreeMap, marker::PhantomData};
 
 use actix_http::StatusCode;
 use itertools::Itertools;
+use kolomoni_core::api_models::{
+    ErrorReason,
+    ErrorReasonName,
+    InvalidJsonBodyReason,
+    ResponseWithErrorReason,
+};
 use requires::RequiredPermissionSet;
 use utoipa::{
     openapi::{
@@ -85,12 +91,6 @@ use utoipa::{
     ToSchema,
 };
 
-use crate::api::errors::{
-    ErrorReason,
-    ErrorReasonName,
-    InvalidJsonBodyReason,
-    ResponseWithErrorReason,
-};
 
 pub mod requires;
 
@@ -782,7 +782,7 @@ macro_rules! declare_openapi_error_reason_response {
                 $description
             }
 
-            fn stateless_error_reason() -> $crate::api::errors::ErrorReason {
+            fn stateless_error_reason() -> kolomoni_core::api_models::ErrorReason {
                 $error_reason.into()
             }
         }

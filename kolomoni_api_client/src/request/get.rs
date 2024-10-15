@@ -42,7 +42,7 @@ where
         let request_url = match self.url.unwrap() {
             Ok(request_url) => request_url,
             Err(url_parse_error) => {
-                return Err(ClientError::UrlParseError {
+                return Err(ClientError::UrlPreparationError {
                     error: url_parse_error,
                 })
             }

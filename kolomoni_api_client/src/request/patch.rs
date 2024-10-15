@@ -6,7 +6,7 @@ use crate::{ClientError, ClientResult, HttpClient, ServerResponse};
 
 
 
-pub(crate) struct PostRequestBuilder<'c, HC, const HAS_URL: bool>
+pub(crate) struct PatchRequestBuilder<'c, HC, const HAS_URL: bool>
 where
     HC: HttpClient,
 {
@@ -18,23 +18,26 @@ where
 }
 
 
-impl<'c, HC, const HAS_URL: bool> PostRequestBuilder<'c, HC, HAS_URL>
+impl<'c, HC, const HAS_URL: bool> PatchRequestBuilder<'c, HC, HAS_URL>
 where
     HC: HttpClient,
 {
-    pub(crate) fn new(client: &'c HC) -> PostRequestBuilder<'c, HC, false> {
-        PostRequestBuilder {
+    pub(crate) fn new(client: &'c HC) -> PatchRequestBuilder<'c, HC, false> {
+        PatchRequestBuilder {
             client,
             url: None,
             body: None,
         }
     }
 
-    pub(crate) fn endpoint_url<U>(self, relative_endpoint_url: U) -> PostRequestBuilder<'c, HC, true>
+    pub(crate) fn endpoint_url<U>(
+        self,
+        relative_endpoint_url: U,
+    ) -> PatchRequestBuilder<'c, HC, true>
     where
         U: AsRef<str>,
     {
-        PostRequestBuilder {
+        PatchRequestBuilder {
             client: self.client,
             url: Some(build_request_url(
                 self.client.server(),
@@ -44,13 +47,13 @@ where
         }
     }
 
-    pub(crate) fn json<V>(self, data: &V) -> PostRequestBuilder<'c, HC, HAS_URL>
+    pub(crate) fn json<V>(self, data: &V) -> PatchRequestBuilder<'c, HC, HAS_URL>
     where
         V: Serialize,
     {
         let serialized_data = serde_json::to_vec(data);
 
-        PostRequestBuilder {
+        PatchRequestBuilder {
             client: self.client,
             url: self.url,
             body: Some(serialized_data),
@@ -58,7 +61,7 @@ where
     }
 }
 
-impl<'c, HC> PostRequestBuilder<'c, HC, true>
+impl<'c, HC> PatchRequestBuilder<'c, HC, true>
 where
     HC: HttpClient,
 {
@@ -82,6 +85,6 @@ where
         };
 
 
-        self.client.post(request_url, body).await
+        self.client.patch(request_url, body).await
     }
 }

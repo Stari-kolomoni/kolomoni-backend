@@ -65,9 +65,9 @@
 
 use actix_web::error::JsonPayloadError;
 use actix_web::{web, HttpServer};
-use api::errors::InvalidJsonBodyReason;
 use clap::Parser;
 use kolomoni_configuration::Configuration;
+use kolomoni_core::api_models::InvalidJsonBodyReason;
 use miette::{Context, IntoDiagnostic, Result};
 use tracing::info;
 

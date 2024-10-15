@@ -92,7 +92,9 @@ macro_rules! require_user_authentication {
             Some(user) => user,
             None => {
                 return $crate::api::errors::EndpointResponseBuilder::unauthorized()
-                    .with_error_reason($crate::api::errors::ErrorReason::missing_authentication())
+                    .with_error_reason(
+                        kolomoni_core::api_models::ErrorReason::missing_authentication(),
+                    )
                     .build();
             }
         }
@@ -215,7 +217,7 @@ macro_rules! require_permission_with_optional_authentication {
                 if !$user_auth_extractor.is_permission_granted_to_all($permission) {
                     return $crate::api::errors::EndpointResponseBuilder::forbidden()
                         .with_error_reason(
-                            $crate::api::errors::ErrorReason::missing_permission($permission),
+                            kolomoni_core::api_models::ErrorReason::missing_permission($permission),
                         )
                         .build();
                 }
@@ -326,7 +328,7 @@ macro_rules! require_permission_in_set {
         if !$permission_set.has_permission_or_is_blanket_granted($required_permission) {
             return $crate::api::errors::EndpointResponseBuilder::forbidden()
                 .with_error_reason(
-                    $crate::api::errors::ErrorReason::missing_permission($required_permission),
+                    kolomoni_core::api_models::ErrorReason::missing_permission($required_permission),
                 )
                 .build();
         }
@@ -446,7 +448,7 @@ macro_rules! require_permissions_on_user {
         {
             return $crate::api::errors::EndpointResponseBuilder::forbidden()
                 .with_error_reason(
-                    $crate::api::errors::ErrorReason::missing_permission($required_permission),
+                    kolomoni_core::api_models::ErrorReason::missing_permission($required_permission),
                 )
                 .build();
         }

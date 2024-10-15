@@ -1,10 +1,12 @@
 use get::GetRequestBuilder;
+use patch::PatchRequestBuilder;
 use post::PostRequestBuilder;
 use url::Url;
 
 use crate::{server::ApiServer, HttpClient};
 
 pub(crate) mod get;
+pub(crate) mod patch;
 pub(crate) mod post;
 
 
@@ -23,6 +25,13 @@ impl RequestBuilder {
         HC: HttpClient,
     {
         PostRequestBuilder::<'c, HC, false>::new(client)
+    }
+
+    pub(crate) fn patch<'c, HC>(client: &'c HC) -> PatchRequestBuilder<'c, HC, false>
+    where
+        HC: HttpClient,
+    {
+        PatchRequestBuilder::<'c, HC, false>::new(client)
     }
 }
 

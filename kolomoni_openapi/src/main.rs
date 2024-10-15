@@ -99,14 +99,14 @@ use utoipa_rapidoc::RapiDoc;
     ),
     components(
         schemas(
-            // kolomoni::api::errors
-            kolomoni::api::errors::ErrorReason,
-            kolomoni::api::errors::CategoryErrorReason,
-            kolomoni::api::errors::LoginErrorReason,
-            kolomoni::api::errors::UsersErrorReason,
-            kolomoni::api::errors::TranslationsErrorReason,
-            kolomoni::api::errors::WordErrorReason,
-            kolomoni::api::errors::ResponseWithErrorReason,
+            // kolomoni_core::api_models::error_reason
+            api_models::ErrorReason,
+            api_models::CategoryErrorReason,
+            api_models::LoginErrorReason,
+            api_models::UsersErrorReason,
+            api_models::TranslationsErrorReason,
+            api_models::WordErrorReason,
+            api_models::ResponseWithErrorReason,
 
             // kolomoni_auth
             kolomoni_core::permissions::Permission,

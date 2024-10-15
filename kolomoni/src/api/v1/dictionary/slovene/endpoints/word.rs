@@ -1,5 +1,6 @@
 use actix_web::{delete, get, patch, post, web, Scope};
 use futures_util::StreamExt;
+use kolomoni_core::api_models::WordErrorReason;
 use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
@@ -24,7 +25,7 @@ use uuid::Uuid;
 
 use crate::{
     api::{
-        errors::{EndpointError, EndpointResponseBuilder, EndpointResult, WordErrorReason},
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
         openapi::{
             self,
             response::{requires, AsErrorReason},

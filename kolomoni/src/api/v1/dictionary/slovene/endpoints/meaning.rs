@@ -1,4 +1,5 @@
 use actix_web::{delete, get, patch, post, web, Scope};
+use kolomoni_core::api_models::WordErrorReason;
 use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
@@ -15,7 +16,7 @@ use sqlx::Acquire;
 
 use crate::{
     api::{
-        errors::{EndpointError, EndpointResponseBuilder, EndpointResult, WordErrorReason},
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
         traits::IntoApiModel,
         v1::dictionary::parse_uuid,
     },

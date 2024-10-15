@@ -1,4 +1,5 @@
 use actix_web::{delete, post, web, Scope};
+use kolomoni_core::api_models::TranslationsErrorReason;
 use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{TranslationCreationRequest, TranslationDeletionRequest},
@@ -10,7 +11,7 @@ use tracing::info;
 
 use crate::{
     api::{
-        errors::{EndpointError, EndpointResponseBuilder, EndpointResult, TranslationsErrorReason},
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
         openapi::{
             self,
             response::{requires, AsErrorReason},

@@ -1,6 +1,7 @@
 use actix_web::{post, web};
 use chrono::{Duration, Utc};
 use kolomoni_core::api_models::{
+    LoginErrorReason,
     UserLoginRefreshRequest,
     UserLoginRefreshResponse,
     UserLoginRequest,
@@ -10,7 +11,7 @@ use kolomoni_core::token::{JWTClaims, JWTTokenType, JWTValidationError};
 use kolomoni_database::entities;
 use tracing::{debug, warn};
 
-use crate::api::errors::{EndpointResponseBuilder, EndpointResult, LoginErrorReason};
+use crate::api::errors::{EndpointResponseBuilder, EndpointResult};
 use crate::api::openapi;
 use crate::api::openapi::response::AsErrorReason;
 use crate::declare_openapi_error_reason_response;

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use actix_web::{delete, get, patch, post, web};
+use kolomoni_core::api_models::UsersErrorReason;
 use kolomoni_core::permissions::Permission;
 use kolomoni_core::roles::{Role, RoleSet};
 use kolomoni_core::{
@@ -21,7 +22,7 @@ use tracing::info;
 
 use crate::{
     api::{
-        errors::{EndpointResponseBuilder, EndpointResult, UsersErrorReason},
+        errors::{EndpointResponseBuilder, EndpointResult},
         openapi::{
             self,
             response::{requires, AsErrorReason},

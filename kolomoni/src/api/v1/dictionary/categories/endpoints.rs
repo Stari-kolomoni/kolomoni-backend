@@ -1,5 +1,6 @@
 use actix_web::{delete, get, patch, post, web};
 use futures_util::StreamExt;
+use kolomoni_core::api_models::CategoryErrorReason;
 use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
@@ -16,7 +17,7 @@ use sqlx::Acquire;
 
 use crate::{
     api::{
-        errors::{CategoryErrorReason, EndpointError, EndpointResponseBuilder, EndpointResult},
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
         openapi::{
             self,
             response::{requires, AsErrorReason},
