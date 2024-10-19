@@ -76,3 +76,10 @@ ALTER DEFAULT PRIVILEGES
         SELECT, INSERT, UPDATE, DELETE
         ON TABLES
         TO kolomoni_backend;
+
+
+DO $$
+BEGIN
+   execute 'ALTER DATABASE '||current_database()||' SET default_transaction_isolation TO ''repeatable read''';
+END
+$$;
