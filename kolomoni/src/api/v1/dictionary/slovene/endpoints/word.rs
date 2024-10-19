@@ -19,7 +19,6 @@ use kolomoni_database::entities::{
     SloveneWordFieldsToUpdate,
     SloveneWordsQueryOptions,
 };
-use sqlx::Acquire;
 use tracing::info;
 use uuid::Uuid;
 
@@ -158,7 +157,7 @@ pub async fn create_slovene_word(
     creation_request: web::Json<SloveneWordCreationRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     let authenticated_user = require_user_authentication_and_permissions!(
         &mut transaction,
@@ -420,7 +419,7 @@ pub async fn update_slovene_word(
     request_data: web::Json<SloveneWordUpdateRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,
@@ -540,7 +539,7 @@ pub async fn delete_slovene_word(
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,

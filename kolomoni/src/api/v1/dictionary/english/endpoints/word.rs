@@ -19,7 +19,6 @@ use kolomoni_database::entities::{
     EnglishWordsQueryOptions,
     NewEnglishWord,
 };
-use sqlx::Acquire;
 use tracing::info;
 
 use crate::{
@@ -216,7 +215,7 @@ pub async fn create_english_word(
 
 declare_openapi_error_reason_response!(
     pub struct EnglishWordNotFound {
-        description => "The requested english word does not exist.",
+        description => "The specified english word does not exist.",
         reason => WordErrorReason::word_not_found()
     }
 );
@@ -422,7 +421,7 @@ pub async fn update_english_word(
     request_data: web::Json<EnglishWordUpdateRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,
@@ -539,7 +538,7 @@ pub async fn delete_english_word(
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,

@@ -201,7 +201,7 @@ pub async fn give_full_permissions_to_user(
     request_body: web::Json<GiveFullUserPermissionsRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     let target_user_id = UserId::new(request_body.user_id);
 
@@ -239,7 +239,7 @@ pub async fn reset_user_roles_to_starting_user_roles(
     request_body: web::Json<ResetUserRolesRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     let target_user_id = UserId::new(request_body.user_id);
 

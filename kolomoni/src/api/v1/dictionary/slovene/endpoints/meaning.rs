@@ -12,7 +12,6 @@ use kolomoni_core::{
     ids::{SloveneWordId, SloveneWordMeaningId},
 };
 use kolomoni_database::entities::{self, NewSloveneWordMeaning, SloveneWordMeaningUpdate};
-use sqlx::Acquire;
 
 use crate::{
     api::{
@@ -74,7 +73,7 @@ pub async fn create_slovene_word_meaning(
     request_data: web::Json<NewSloveneWordMeaningRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,
@@ -122,7 +121,7 @@ pub async fn update_slovene_word_meaning(
     request_data: web::Json<SloveneWordMeaningUpdateRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,
@@ -199,7 +198,7 @@ pub async fn delete_slovene_word_meaning(
     parameters: web::Path<(String, String)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,

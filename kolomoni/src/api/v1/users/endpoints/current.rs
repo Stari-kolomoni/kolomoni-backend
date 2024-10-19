@@ -9,7 +9,6 @@ use kolomoni_core::api_models::{
 };
 use kolomoni_core::permissions::Permission;
 use kolomoni_database::entities;
-use sqlx::Acquire;
 use tracing::info;
 
 use crate::{
@@ -335,7 +334,7 @@ async fn update_current_user_display_name(
     request_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
 
     // To access this endpoint, the user:

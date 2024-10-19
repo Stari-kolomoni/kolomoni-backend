@@ -6,7 +6,6 @@ use kolomoni_core::{
     ids::{EnglishWordMeaningId, SloveneWordMeaningId},
 };
 use kolomoni_database::entities;
-use sqlx::Acquire;
 use tracing::info;
 
 use crate::{
@@ -95,7 +94,7 @@ pub async fn create_translation(
     request_body: web::Json<TranslationCreationRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     let authenticated_user = require_user_authentication_and_permissions!(
         &mut transaction,
@@ -234,7 +233,7 @@ pub async fn delete_translation(
     request_body: web::Query<TranslationDeletionRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     let authenticated_user = require_user_authentication_and_permissions!(
         &mut transaction,

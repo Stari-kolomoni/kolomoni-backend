@@ -5,7 +5,6 @@ use kolomoni_core::api_models::{
     UsersErrorReason,
 };
 use kolomoni_database::entities::{self, UserRegistrationInfo};
-use sqlx::Acquire;
 
 use crate::{
     api::{
@@ -74,7 +73,7 @@ pub async fn register_user(
     request_data: web::Json<UserRegistrationRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
 
     let registration_request_data = request_data.into_inner();

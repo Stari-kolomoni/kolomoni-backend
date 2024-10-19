@@ -12,8 +12,10 @@ use kolomoni_core::{
     ids::{EnglishWordId, EnglishWordMeaningId},
 };
 use kolomoni_database::entities::{self, EnglishWordMeaningUpdate, NewEnglishWordMeaning};
-use sqlx::{types::Uuid, Acquire};
+use sqlx::types::Uuid;
 
+use crate::api::openapi::response::AsErrorReason;
+use crate::api::v1::dictionary::english::EnglishWordNotFound;
 use crate::{
     api::{
         errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
@@ -28,6 +30,40 @@ use crate::{
 
 
 
+/// Get all word meanings for a given english word
+///
+/// This endpoint returns a list of all word meanings
+/// that the specified english word has.
+///
+///
+/// # Authentication & Required permissions
+/// - Authentication is not required.
+/// - The caller must have the `word:read` permission, which is currently
+///   blanket-granted to both unauthenticated and authenticated users.
+#[utoipa::path(
+    get,
+    path = "/dictionary/english/{english_word_id}/meaning",
+    tag = "dictionary:english:meaning",
+    params(
+        (
+            "english_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word to get meanings for."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Requested english word meanings.",
+            body = EnglishWordMeaningsResponse
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordNotFound>)
+        )
+    )
+)]
 #[get("")]
 pub async fn get_all_english_word_meanings(
     state: ApplicationState,
@@ -44,6 +80,17 @@ pub async fn get_all_english_word_meanings(
 
 
     let target_english_word_id = EnglishWordId::new(parameters.into_inner().0);
+
+
+    let english_word_exists =
+        entities::EnglishWordQuery::exists_by_id(&mut database_connection, target_english_word_id)
+            .await?;
+
+    if !english_word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
 
 
     let english_word_meanings = entities::EnglishWordMeaningQuery::get_all_by_english_word_id(
@@ -74,7 +121,7 @@ pub async fn create_english_word_meaning(
     request_data: web::Json<NewEnglishWordMeaningRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,
@@ -121,7 +168,7 @@ pub async fn update_english_word_meaning(
     request_data: web::Json<EnglishWordMeaningUpdateRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,
@@ -203,7 +250,7 @@ pub async fn delete_english_word_meaning(
     parameters: web::Path<(Uuid, Uuid)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,

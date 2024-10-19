@@ -13,7 +13,6 @@ use kolomoni_core::{
     ids::CategoryId,
 };
 use kolomoni_database::entities::{self, CategoryValuesToUpdate, NewCategory};
-use sqlx::Acquire;
 
 use crate::{
     api::{
@@ -94,7 +93,7 @@ pub async fn create_category(
     request_body: web::Json<CategoryCreationRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,
@@ -375,9 +374,8 @@ pub async fn update_specific_category(
     authentication: UserAuthenticationExtractor,
     request_body: web::Json<CategoryUpdateRequest>,
 ) -> EndpointResult {
-    let mut database_connection: sqlx::pool::PoolConnection<sqlx::Postgres> =
-        state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut database_connection = state.acquire_database_connection().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
 
     require_user_authentication_and_permissions!(
@@ -539,7 +537,7 @@ pub async fn delete_specific_category(
     parameters: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     require_user_authentication_and_permissions!(
         &mut transaction,

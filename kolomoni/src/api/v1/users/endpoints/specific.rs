@@ -17,7 +17,6 @@ use kolomoni_core::{
     ids::UserId,
 };
 use kolomoni_database::entities;
-use sqlx::Acquire;
 use tracing::info;
 
 use crate::{
@@ -177,6 +176,7 @@ pub async fn get_specific_user_roles(
     path_info: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
 
     // Users don't need to authenticate due to a
@@ -185,7 +185,7 @@ pub async fn get_specific_user_roles(
     // in the future - it will fall back to requiring authentication
     // AND the `user.any:read` permission.
     require_permission_with_optional_authentication!(
-        &mut database_connection,
+        &mut transaction,
         authentication_extractor,
         Permission::UserAnyRead
     );
@@ -195,7 +195,7 @@ pub async fn get_specific_user_roles(
 
 
     let target_user_exists =
-        entities::UserQuery::exists_by_id(&mut database_connection, requested_user_id).await?;
+        entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !target_user_exists {
         return EndpointResponseBuilder::not_found()
@@ -205,7 +205,7 @@ pub async fn get_specific_user_roles(
 
 
     let target_user_role_set =
-        entities::UserRoleQuery::roles_for_user(&mut database_connection, requested_user_id).await?;
+        entities::UserRoleQuery::roles_for_user(&mut transaction, requested_user_id).await?;
 
 
     EndpointResponseBuilder::ok()
@@ -396,7 +396,7 @@ async fn update_specific_user_display_name(
     request_data: web::Json<UserDisplayNameChangeRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
 
     // To access this endpoint, the user:
@@ -558,7 +558,7 @@ pub async fn add_roles_to_specific_user(
     json_data: web::Json<UserRoleAddRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
 
     // To access this endpoint, the user:
@@ -733,7 +733,7 @@ pub async fn remove_roles_from_specific_user(
     request_data: web::Query<UserRoleRemoveRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
-    let mut transaction = database_connection.begin().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
 
     // To access this endpoint, the user:
