@@ -80,7 +80,7 @@ macro_rules! handle_error_reasons_or_catch_unexpected_status {
             // If none of the error reason handlers matched, we should return an error
             // indicating that there was an unexpected error.
             return Err(
-                $crate::ClientError::unexpected_status_code(__context.response_status_code).into()
+                $crate::errors::ClientError::unexpected_status_code(__context.response_status_code).into()
             );
         }
     };
@@ -92,7 +92,7 @@ pub(crate) use handle_error_reasons_or_catch_unexpected_status;
 
 macro_rules! internal_server_error {
     () => {{
-        return Err($crate::ClientError::internal_server_error().into());
+        return Err($crate::errors::ClientError::internal_server_error().into());
     }};
 }
 
@@ -101,7 +101,9 @@ pub(crate) use internal_server_error;
 
 macro_rules! unexpected_status_code {
     ($response_status_code:expr) => {{
-        return Err($crate::ClientError::unexpected_status_code($response_status_code).into());
+        return Err(
+            $crate::errors::ClientError::unexpected_status_code($response_status_code).into(),
+        );
     }};
 }
 
@@ -111,11 +113,13 @@ pub(crate) use unexpected_status_code;
 
 macro_rules! unexpected_error_reason {
     ($error_reason:expr, $response_status:expr) => {
-        return Err($crate::ClientError::unexpected_error_reason(
-            $error_reason.into(),
-            $response_status,
+        return Err(
+            $crate::errors::ClientError::unexpected_error_reason(
+                $error_reason.into(),
+                $response_status,
+            )
+            .into(),
         )
-        .into())
     };
 }
 

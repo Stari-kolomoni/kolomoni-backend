@@ -1,7 +1,11 @@
 use url::Url;
 
 use super::build_request_url;
-use crate::{ClientError, ClientResult, HttpClient, ServerResponse};
+use crate::{
+    errors::{ClientError, ClientResult},
+    response::ServerResponse,
+    HttpClient,
+};
 
 pub(crate) struct GetRequestBuilder<'c, HC, const HAS_URL: bool>
 where

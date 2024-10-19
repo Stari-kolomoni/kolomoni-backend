@@ -7,6 +7,18 @@ use thiserror::Error;
 
 
 #[derive(Debug, Error)]
+pub enum ClientInitializationError {
+    #[error("unable to initialize reqwest HTTP client")]
+    UnableToInitializeReqwestClient {
+        #[from]
+        #[source]
+        error: reqwest::Error,
+    },
+}
+
+
+
+#[derive(Debug, Error)]
 pub enum ClientError {
     #[error("failed to prepare a URL")]
     UrlPreparationError {

@@ -54,11 +54,11 @@ impl ErrorResponseHandler for MissingPermissions {
 
     fn handle_error_reason(
         error_reason: ErrorReason,
-        context: &ErrorReasonHandlerContext,
+        _context: &ErrorReasonHandlerContext,
     ) -> ErrorReasonHandlerDecision<Self::Error> {
-        if let ErrorReason::MissingPermissions { .. } = &error_reason {
+        if let ErrorReason::MissingPermissions { permissions } = error_reason {
             return ErrorReasonHandlerDecision::early_return_error(
-                ClientError::unexpected_error_reason(error_reason, context.response_status_code),
+                ClientError::missing_permissions(permissions),
             );
         }
 

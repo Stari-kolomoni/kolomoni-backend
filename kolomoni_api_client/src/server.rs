@@ -34,17 +34,27 @@ impl From<&str> for ServerHost {
 
 
 
+pub struct ApiServerOptions {
+    pub use_https: bool,
+}
+
+impl Default for ApiServerOptions {
+    fn default() -> Self {
+        Self { use_https: true }
+    }
+}
+
 
 pub struct ApiServer {
     base_api_url: String,
 }
 
 impl ApiServer {
-    pub fn new<S>(server_host: S, use_https: bool) -> Self
+    pub fn new<S>(server_host: S, options: ApiServerOptions) -> Self
     where
         S: Into<ServerHost>,
     {
-        let protocol = match use_https {
+        let protocol = match options.use_https {
             true => "https",
             false => "http",
         };

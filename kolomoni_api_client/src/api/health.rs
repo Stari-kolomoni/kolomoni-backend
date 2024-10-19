@@ -1,6 +1,6 @@
 use kolomoni_core::api_models::PingResponse;
 
-use crate::{request::RequestBuilder, Client, ClientResult};
+use crate::{errors::ClientResult, request::RequestBuilder, Client};
 
 pub struct HealthApi<'c> {
     client: &'c Client,

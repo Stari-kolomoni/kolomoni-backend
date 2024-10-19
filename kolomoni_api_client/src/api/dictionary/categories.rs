@@ -15,6 +15,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
+    errors::{ClientError, ClientResult},
     macros::{
         handle_error_reasons_or_catch_unexpected_status,
         handlers,
@@ -25,8 +26,6 @@ use crate::{
     request::RequestBuilder,
     AuthenticatedClient,
     Client,
-    ClientError,
-    ClientResult,
     HttpClient,
 };
 

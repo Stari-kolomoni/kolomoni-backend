@@ -2,7 +2,7 @@ use kolomoni_core::api_models::{UserLoginRequest, UserLoginResponse};
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::{request::RequestBuilder, Client, ClientError};
+use crate::{errors::ClientError, request::RequestBuilder, Client};
 
 
 #[derive(Debug, Error)]
