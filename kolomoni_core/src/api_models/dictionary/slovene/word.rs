@@ -20,6 +20,7 @@ use crate::ids::SloveneWordId;
 )]
 pub struct SloveneWordWithMeanings {
     /// Internal UUID of the word.
+    #[schema(value_type = uuid::Uuid)]
     pub id: SloveneWordId,
 
     /// An abstract or base form of the word.

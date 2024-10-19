@@ -9,6 +9,7 @@ use crate::{
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct ShallowEnglishWordMeaning {
+    #[schema(value_type = uuid::Uuid)]
     pub meaning_id: EnglishWordMeaningId,
 
     pub disambiguation: Option<String>,
@@ -17,6 +18,7 @@ pub struct ShallowEnglishWordMeaning {
 
     pub description: Option<String>,
 
+    #[schema(value_type = Vec<uuid::Uuid>)]
     pub categories: Vec<CategoryId>,
 
     pub created_at: DateTime<Utc>,
@@ -26,6 +28,7 @@ pub struct ShallowEnglishWordMeaning {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct EnglishWordMeaning {
+    #[schema(value_type = uuid::Uuid)]
     pub meaning_id: EnglishWordMeaningId,
 
     pub disambiguation: Option<String>,
@@ -42,6 +45,7 @@ pub struct EnglishWordMeaning {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct EnglishWordMeaningWithCategoriesAndTranslations {
+    #[schema(value_type = uuid::Uuid)]
     pub meaning_id: EnglishWordMeaningId,
 
     pub disambiguation: Option<String>,
@@ -54,6 +58,7 @@ pub struct EnglishWordMeaningWithCategoriesAndTranslations {
 
     pub last_modified_at: DateTime<Utc>,
 
+    #[schema(value_type = Vec<uuid::Uuid>)]
     pub categories: Vec<CategoryId>,
 
     pub translates_into: Vec<ShallowSloveneWordMeaning>,

@@ -8,6 +8,7 @@ use crate::ids::CategoryId;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct Category {
+    #[schema(value_type = uuid::Uuid)]
     pub id: CategoryId,
 
     pub slovene_name: String,

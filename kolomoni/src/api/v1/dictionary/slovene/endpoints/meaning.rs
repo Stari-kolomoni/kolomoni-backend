@@ -11,8 +11,17 @@ use kolomoni_core::{
     },
     ids::{SloveneWordId, SloveneWordMeaningId},
 };
-use kolomoni_database::entities::{self, NewSloveneWordMeaning, SloveneWordMeaningUpdate};
+use kolomoni_database::entities::{
+    self,
+    NewSloveneWordMeaning,
+    SloveneWordMeaningLookup,
+    SloveneWordMeaningUpdate,
+};
 
+use crate::api::openapi;
+use crate::api::openapi::response::{requires, AsErrorReason};
+use crate::api::v1::dictionary::slovene::SloveneWordNotFound;
+use crate::declare_openapi_error_reason_response;
 use crate::{
     api::{
         errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
@@ -28,6 +37,43 @@ use crate::{
 
 
 
+/// Get all word meanings for a given slovene word
+///
+/// This endpoint returns a list of all word meanings
+/// that the specified slovene word has.
+///
+///
+/// # Authentication & Required permissions
+/// - Authentication **is not** required.
+/// - The caller must have the `word:read` permission, which is currently
+///   blanket-granted to both unauthenticated and authenticated users.
+#[utoipa::path(
+    get,
+    path = "/dictionary/slovene/{slovene_word_id}/meaning",
+    tag = "dictionary:slovene:meaning",
+    params(
+        (
+            "slovene_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the slovene word to get meanings for."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Requested slovene word meanings.",
+            body = SloveneWordMeaningsResponse,
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordNotFound>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingPermissions<requires::WordRead, 1>,
+        openapi::response::InternalServerError,
+    )
+)]
 #[get("")]
 pub async fn get_all_slovene_word_meanings(
     state: ApplicationState,
@@ -44,6 +90,18 @@ pub async fn get_all_slovene_word_meanings(
 
 
     let target_slovene_word_id = parse_uuid::<SloveneWordId>(parameters.into_inner().0)?;
+
+
+    let slovene_word_exists =
+        entities::SloveneWordQuery::exists_by_id(&mut database_connection, target_slovene_word_id)
+            .await?;
+
+    if !slovene_word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
+
 
     let slovene_word_meanings = entities::SloveneWordMeaningQuery::get_all_by_slovene_word_id(
         &mut database_connection,
@@ -64,7 +122,54 @@ pub async fn get_all_slovene_word_meanings(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct SloveneWordMeaningAlreadyExists {
+        description => "A slovene word meaning with the given fields already exists.",
+        reason => WordErrorReason::identical_word_meaning_already_exists()
+    }
+);
 
+
+/// Create a new slovene word meaning
+///
+/// This endpoint creates a new slovene word meaning with
+/// the given disambiguation, abbreviation, and description.
+///
+/// Just to clarify: word meanings are *always* linked
+/// to specified words, and cannot exist by themselves.
+///
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    post,
+    path = "/dictionary/slovene/{slovene_word_id}/meaning",
+    tag = "dictionary:slovene:meaning",
+    params(
+        (
+            "slovene_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the slovene word to associate the meaning with."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Newly-created slovene word meaning.",
+            body = NewSloveneWordMeaningCreatedResponse
+        ),
+        (
+            status = 409,
+            response = inline(AsErrorReason<SloveneWordMeaningAlreadyExists>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError,
+    )
+)]
 #[post("")]
 pub async fn create_slovene_word_meaning(
     state: ApplicationState,
@@ -85,6 +190,24 @@ pub async fn create_slovene_word_meaning(
     let target_slovene_word_id = parse_uuid::<SloveneWordId>(parameters.into_inner().0)?;
 
     let new_word_meaning_data = request_data.into_inner();
+
+
+    let identical_meaning_already_exists =
+        entities::SloveneWordMeaningQuery::exists_by_distinguishing_fields(
+            &mut transaction,
+            SloveneWordMeaningLookup {
+                abbreviation: new_word_meaning_data.abbreviation.clone(),
+                disambiguation: new_word_meaning_data.disambiguation.clone(),
+                description: new_word_meaning_data.description.clone(),
+            },
+        )
+        .await?;
+
+    if identical_meaning_already_exists {
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(WordErrorReason::identical_word_meaning_already_exists())
+            .build();
+    }
 
 
 
@@ -112,7 +235,67 @@ pub async fn create_slovene_word_meaning(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct SloveneWordMeaningNotFound {
+        description => "The slovene word exists, but its associated word meaning does not.",
+        reason => WordErrorReason::word_meaning_not_found()
+    }
+);
 
+
+
+/// Modifies a slovene word meaning
+///
+/// This endpoint modifies a slovene word meaning.
+///
+///
+/// # Double option
+/// Note the use of double options - leaving a field undefined
+/// semantically means "leave it alone", while setting it to `null`
+/// semantically means "clear the field".
+///
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    patch,
+    path = "/dictionary/slovene/{slovene_word_id}/meaning/{slovene_word_meaning_id}",
+    tag = "dictionary:slovene:meaning",
+    params(
+        (
+            "slovene_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the slovene word to related to the meaning."
+        ),
+        (
+            "slovene_word_meaning_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the slovene word meaning to modify."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Updated slovene word meaning.",
+            body = SloveneWordMeaningUpdatedResponse
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordMeaningNotFound>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError,
+    )
+)]
 #[patch("/{slovene_word_meaning_id}")]
 pub async fn update_slovene_word_meaning(
     state: ApplicationState,
@@ -139,8 +322,31 @@ pub async fn update_slovene_word_meaning(
 
     let new_word_meaning_data = request_data.into_inner();
 
-    // TODO we don't verify slovene word ID validity here, is that okay?
 
+
+    let word_exists =
+        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
+
+    if !word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
+
+
+    let word_and_meaning_id_pair_exists =
+        entities::SloveneWordMeaningQuery::exists_by_meaning_and_word_id(
+            &mut transaction,
+            target_slovene_word_id,
+            target_slovene_word_meaning_id,
+        )
+        .await?;
+
+    if !word_and_meaning_id_pair_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
+    }
 
 
     let successfully_updated_meaning = entities::SloveneWordMeaningMutation::update(
@@ -191,6 +397,51 @@ pub async fn update_slovene_word_meaning(
 
 
 
+/// Delete a slovene word meaning
+///
+/// This endpoint deletes a slovene word meaning.
+///
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    delete,
+    path = "/dictionary/slovene/{slovene_word_id}/meaning/{slovene_word_meaning_id}",
+    tag = "dictionary:slovene:meaning",
+    params(
+        (
+            "slovene_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the slovene word to related to the meaning."
+        ),
+        (
+            "slovene_word_meaning_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the slovene word meaning to modify."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "The requested slovene word meaning has been deleted."
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordMeaningNotFound>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError,
+    )
+)]
 #[delete("/{slovene_word_meaning_id}")]
 pub async fn delete_slovene_word_meaning(
     state: ApplicationState,

@@ -30,6 +30,7 @@ use crate::ids::EnglishWordId;
 )]
 pub struct EnglishWordWithMeanings {
     /// Word UUID.
+    #[schema(value_type = uuid::Uuid)]
     pub id: EnglishWordId,
 
     /// An abstract or base form of the word.

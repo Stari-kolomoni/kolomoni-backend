@@ -337,8 +337,13 @@ CREATE TABLE kolomoni.word_slovene_meaning (
         ON UPDATE CASCADE
         ON DELETE CASCADE,
     CONSTRAINT check__word_slovene_meaning__last_modified_at_ge_created_at
-        CHECK (last_modified_at >= created_at)
+        CHECK (last_modified_at >= created_at),
+    CONSTRAINT unique__word_slovene_meaning__no_duplicates
+        UNIQUE (disambiguation, abbreviation, description)
 );
+
+CREATE INDEX index__word_slovene_meaning__distinguishing_fields
+    ON kolomoni.word_slovene_meaning (disambiguation, abbreviation, description);
 
 
 
@@ -361,9 +366,14 @@ CREATE TABLE kolomoni.word_english_meaning (
         ON UPDATE CASCADE
         ON DELETE CASCADE,
     CONSTRAINT check__word_english_meaning__last_modified_at_ge_created_at
-        CHECK (last_modified_at >= created_at)
+        CHECK (last_modified_at >= created_at),
+    CONSTRAINT unique__word_english_meaning__no_duplicates
+        UNIQUE (disambiguation, abbreviation, description)
 );
 
+
+CREATE INDEX index__word_english_meaning__distinguishing_fields
+    ON kolomoni.word_english_meaning (disambiguation, abbreviation, description);
 
 
 

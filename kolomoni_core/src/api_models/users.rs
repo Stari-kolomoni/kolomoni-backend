@@ -120,6 +120,7 @@ pub struct UserLoginResponse {
 }))]
 pub struct UserInfo {
     /// Internal user ID.
+    #[schema(value_type = uuid::Uuid)]
     pub id: UserId,
 
     /// Unique username for login.

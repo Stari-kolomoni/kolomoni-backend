@@ -10,6 +10,16 @@ use crate::{
     TryIntoStronglyTypedInternalModel,
 };
 
+
+pub struct EnglishWordMeaningLookup {
+    pub disambiguation: Option<String>,
+
+    pub abbreviation: Option<String>,
+
+    pub description: Option<String>,
+}
+
+
 pub struct EnglishWordMeaningQuery;
 
 impl EnglishWordMeaningQuery {
@@ -211,6 +221,28 @@ impl EnglishWordMeaningQuery {
                     WHERE word_meaning_id = $1
             )",
             english_word_meaning_id.into_uuid()
+        )
+        .fetch_one(database_connection)
+        .await?;
+
+        Ok(exists.unwrap_or(false))
+    }
+
+    pub async fn exists_by_distinguishing_fields(
+        database_connection: &mut PgConnection,
+        distinguishing_fields: EnglishWordMeaningLookup,
+    ) -> QueryResult<bool> {
+        let exists = sqlx::query_scalar!(
+            "SELECT EXISTS (\
+                SELECT 1 \
+                    FROM kolomoni.word_english_meaning \
+                    WHERE disambiguation = $1 \
+                        AND abbreviation = $2 \
+                        AND description = $3
+            )",
+            distinguishing_fields.disambiguation,
+            distinguishing_fields.abbreviation,
+            distinguishing_fields.description,
         )
         .fetch_one(database_connection)
         .await?;

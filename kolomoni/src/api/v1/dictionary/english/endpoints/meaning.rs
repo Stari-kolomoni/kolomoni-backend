@@ -11,11 +11,18 @@ use kolomoni_core::{
     },
     ids::{EnglishWordId, EnglishWordMeaningId},
 };
-use kolomoni_database::entities::{self, EnglishWordMeaningUpdate, NewEnglishWordMeaning};
-use sqlx::types::Uuid;
+use kolomoni_database::entities::{
+    self,
+    EnglishWordMeaningLookup,
+    EnglishWordMeaningUpdate,
+    NewEnglishWordMeaning,
+};
 
-use crate::api::openapi::response::AsErrorReason;
+use crate::api::openapi;
+use crate::api::openapi::response::{requires, AsErrorReason};
 use crate::api::v1::dictionary::english::EnglishWordNotFound;
+use crate::api::v1::dictionary::parse_uuid;
+use crate::declare_openapi_error_reason_response;
 use crate::{
     api::{
         errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
@@ -37,7 +44,7 @@ use crate::{
 ///
 ///
 /// # Authentication & Required permissions
-/// - Authentication is not required.
+/// - Authentication **is not** required.
 /// - The caller must have the `word:read` permission, which is currently
 ///   blanket-granted to both unauthenticated and authenticated users.
 #[utoipa::path(
@@ -61,14 +68,17 @@ use crate::{
         (
             status = 404,
             response = inline(AsErrorReason<EnglishWordNotFound>)
-        )
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingPermissions<requires::WordRead, 1>,
+        openapi::response::InternalServerError,
     )
 )]
 #[get("")]
 pub async fn get_all_english_word_meanings(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid,)>,
+    parameters: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
 
@@ -79,7 +89,7 @@ pub async fn get_all_english_word_meanings(
     );
 
 
-    let target_english_word_id = EnglishWordId::new(parameters.into_inner().0);
+    let target_english_word_id = parse_uuid::<EnglishWordId>(parameters.into_inner().0)?;
 
 
     let english_word_exists =
@@ -111,13 +121,60 @@ pub async fn get_all_english_word_meanings(
 }
 
 
+declare_openapi_error_reason_response!(
+    pub struct EnglishWordMeaningAlreadyExists {
+        description => "An english word meaning with the given fields already exists.",
+        reason => WordErrorReason::identical_word_meaning_already_exists()
+    }
+);
 
 
+
+/// Create a new english word meaning
+///
+/// This endpoint creates a new english word meaning with
+/// the given disambiguation, abbreviation, and description.
+///
+/// Just to clarify: word meanings are *always* linked
+/// to specified words, and cannot exist by themselves.
+///
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    post,
+    path = "/dictionary/english/{english_word_id}/meaning",
+    tag = "dictionary:english:meaning",
+    params(
+        (
+            "english_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word to associate the meaning with."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Newly-created english word meaning.",
+            body = NewEnglishWordMeaningCreatedResponse
+        ),
+        (
+            status = 409,
+            response = inline(AsErrorReason<EnglishWordMeaningAlreadyExists>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError,
+    )
+)]
 #[post("")]
 pub async fn create_english_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid,)>,
+    parameters: web::Path<(String,)>,
     request_data: web::Json<NewEnglishWordMeaningRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
@@ -130,11 +187,28 @@ pub async fn create_english_word_meaning(
     );
 
 
-    let target_english_word_id = EnglishWordId::new(parameters.into_inner().0);
+    let target_english_word_id = parse_uuid::<EnglishWordId>(parameters.into_inner().0)?;
+
     let new_word_meaning_data = request_data.into_inner();
 
 
-    // TODO need to check for duplicate meanings (+ in slovene as well)
+    let identical_meaning_already_exists =
+        entities::EnglishWordMeaningQuery::exists_by_distinguishing_fields(
+            &mut transaction,
+            EnglishWordMeaningLookup {
+                abbreviation: new_word_meaning_data.abbreviation.clone(),
+                disambiguation: new_word_meaning_data.disambiguation.clone(),
+                description: new_word_meaning_data.description.clone(),
+            },
+        )
+        .await?;
+
+    if identical_meaning_already_exists {
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(WordErrorReason::identical_word_meaning_already_exists())
+            .build();
+    }
+
 
     let newly_created_meaning = entities::EnglishWordMeaningMutation::create(
         &mut transaction,
@@ -159,12 +233,72 @@ pub async fn create_english_word_meaning(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct EnglishWordMeaningNotFound {
+        description => "The english word exists, but its associated word meaning does not.",
+        reason => WordErrorReason::word_meaning_not_found()
+    }
+);
 
+
+
+/// Modifies an english word meaning
+///
+/// This endpoint modifies an english word meaning.
+///
+///
+/// # Double option
+/// Note the use of double options - leaving a field undefined
+/// semantically means "leave it alone", while setting it to `null`
+/// semantically means "clear the field".
+///
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    patch,
+    path = "/dictionary/english/{english_word_id}/meaning/{english_word_meaning_id}",
+    tag = "dictionary:english:meaning",
+    params(
+        (
+            "english_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word related to the meaning."
+        ),
+        (
+            "english_word_meaning_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word meaning to modify."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Updated english word meaning.",
+            body = EnglishWordMeaningUpdatedResponse
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordMeaningNotFound>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError,
+    )
+)]
 #[patch("/{english_word_meaning_id}")]
 pub async fn update_english_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid, Uuid)>,
+    parameters: web::Path<(String, String)>,
     request_data: web::Json<EnglishWordMeaningUpdateRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
@@ -177,21 +311,36 @@ pub async fn update_english_word_meaning(
     );
 
 
-    let (target_english_word_id, target_english_word_meaning_id) = {
-        let url_parameters = parameters.into_inner();
-
-        let target_english_word_id = EnglishWordId::new(url_parameters.0);
-        let target_english_word_meaning_id = EnglishWordMeaningId::new(url_parameters.1);
-
-        (
-            target_english_word_id,
-            target_english_word_meaning_id,
-        )
-    };
+    let target_english_word_id = parse_uuid::<EnglishWordId>(&parameters.0)?;
+    let target_english_word_meaning_id = parse_uuid::<EnglishWordMeaningId>(&parameters.1)?;
 
     let new_word_meaning_data = request_data.into_inner();
 
-    // TODO we don't verify english word ID validity here, is that okay?
+
+
+    let word_exists =
+        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
+
+    if !word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
+
+
+    let word_and_meaning_id_pair_exists =
+        entities::EnglishWordMeaningQuery::exists_by_meaning_and_word_id(
+            &mut transaction,
+            target_english_word_id,
+            target_english_word_meaning_id,
+        )
+        .await?;
+
+    if !word_and_meaning_id_pair_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
+    }
 
 
     let updated_meaning_successfully = entities::EnglishWordMeaningMutation::update(
@@ -206,11 +355,12 @@ pub async fn update_english_word_meaning(
     .await?;
 
 
-    // When zero rows are affected by the query, that means there is no such english word meaning.
+    // When zero rows are affected by the query, that means there is no such english word meaning,
+    // but because we run this in a repeatable read transaction, this should be impossible.
     if !updated_meaning_successfully {
-        return EndpointResponseBuilder::not_found()
-            .with_error_reason(WordErrorReason::word_meaning_not_found())
-            .build();
+        return Err(EndpointError::invalid_database_state(
+            "english word mutation should have updated at least one row",
+        ));
     }
 
 
@@ -243,11 +393,56 @@ pub async fn update_english_word_meaning(
 
 
 
+/// Delete an english word meaning
+///
+/// This endpoint deletes an english word meaning.
+///
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    delete,
+    path = "/dictionary/slovene/{english_word_id}/meaning/{english_word_meaning_id}",
+    tag = "dictionary:english:meaning",
+    params(
+        (
+            "english_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word related to the meaning."
+        ),
+        (
+            "english_word_meaning_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word meaning to modify."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "The requested english word meaning has been deleted.",
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordMeaningNotFound>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError,
+    )
+)]
 #[delete("/{english_word_meaning_id}")]
 pub async fn delete_english_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid, Uuid)>,
+    parameters: web::Path<(String, String)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.transaction().begin().await?;
@@ -259,17 +454,18 @@ pub async fn delete_english_word_meaning(
     );
 
 
-    let (target_english_word_id, target_english_word_meaning_id) = {
-        let url_parameters = parameters.into_inner();
+    let target_english_word_id = parse_uuid::<EnglishWordId>(&parameters.0)?;
+    let target_english_word_meaning_id = parse_uuid::<EnglishWordMeaningId>(&parameters.1)?;
 
-        let target_english_word_id = EnglishWordId::new(url_parameters.0);
-        let target_english_word_meaning_id = EnglishWordMeaningId::new(url_parameters.1);
 
-        (
-            target_english_word_id,
-            target_english_word_meaning_id,
-        )
-    };
+    let word_exists =
+        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
+
+    if !word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
 
 
     let word_to_meaning_relationship_exists =

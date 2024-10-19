@@ -335,6 +335,9 @@ declare_openapi_error_reason_response!(
             description = "UUID of the category to update."
         )
     ),
+    request_body(
+        content = CategoryUpdateRequest
+    ),
     responses(
         (
             status = 200,

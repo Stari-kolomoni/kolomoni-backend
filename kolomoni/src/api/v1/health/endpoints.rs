@@ -13,7 +13,7 @@ use crate::api::errors::{EndpointResponseBuilder, EndpointResult};
         (
             status = 200,
             description = "Server is alive and well.",
-            body = inline(PingResponse),
+            body = PingResponse,
             example = json!({ "ok": true })
         )
     )

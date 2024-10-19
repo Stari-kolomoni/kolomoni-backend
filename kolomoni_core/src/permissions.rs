@@ -43,45 +43,55 @@ pub enum Permission {
     UserAnyRead = 3,
 
     /// Allows the user to update public account information of any other user and
-    /// give or remove their permissions.
+    /// give or remove their permissions (but only if they have them themselves).
     #[serde(rename = "user.any:write")]
     UserAnyWrite = 4,
 
+    /// Allows the user to create a new word.
     #[serde(rename = "word:create")]
     WordCreate = 5,
 
+    /// Allows the user to see information about individual words
+    /// and  obtain list of all of them.
     #[serde(rename = "word:read")]
     WordRead = 6,
 
+    /// Allows the user to update an existing word's information.
+    ///
+    /// This includes creating, updating, and deleting meanings for an existing word).
+    ///
+    /// This also includes linking and unlinking categores from a word meaning.
     #[serde(rename = "word:update")]
     WordUpdate = 7,
 
+    /// Allows the user to delete a word from the dictionary.
     #[serde(rename = "word:delete")]
     WordDelete = 8,
 
-    // TODO Remove.
-    #[serde(rename = "word.suggestion:create")]
-    SuggestionCreate = 9,
-
-    // TODO Remove.
-    #[serde(rename = "word.suggestion:delete")]
-    SuggestionDelete = 10,
-
+    /// Allows the user to create a translation relationship between
+    /// an english and slovene word.
     #[serde(rename = "word.translation:create")]
     TranslationCreate = 11,
 
+    /// Allows the user to remove a translation relationship between
+    /// an english and slovene word.
     #[serde(rename = "word.translation:delete")]
     TranslationDelete = 12,
 
+    /// Allows the user to create a category.
     #[serde(rename = "category:create")]
     CategoryCreate = 13,
 
+    /// Allows the user to see information about individual categories
+    /// and obtain a list of all of them.
     #[serde(rename = "category:read")]
     CategoryRead = 14,
 
+    /// Allows the user to update an existing category's information.
     #[serde(rename = "category:update")]
     CategoryUpdate = 15,
 
+    /// Allows the user to delete a category from the dictionary.
     #[serde(rename = "category:delete")]
     CategoryDelete = 16,
 }
@@ -98,8 +108,6 @@ impl Permission {
             id if id == (Self::WordRead as u16) => Some(Self::WordRead),
             id if id == (Self::WordUpdate as u16) => Some(Self::WordUpdate),
             id if id == (Self::WordDelete as u16) => Some(Self::WordDelete),
-            id if id == (Self::SuggestionCreate as u16) => Some(Self::SuggestionCreate),
-            id if id == (Self::SuggestionDelete as u16) => Some(Self::SuggestionDelete),
             id if id == (Self::TranslationCreate as u16) => Some(Self::TranslationCreate),
             id if id == (Self::TranslationDelete as u16) => Some(Self::TranslationDelete),
             id if id == (Self::CategoryCreate as u16) => Some(Self::CategoryCreate),
@@ -127,8 +135,6 @@ impl Permission {
             "word:read" => Some(Self::WordRead),
             "word:update" => Some(Self::WordUpdate),
             "word:delete" => Some(Self::WordDelete),
-            "word.suggestion:create" => Some(Self::SuggestionCreate),
-            "word.suggestion:delete" => Some(Self::SuggestionDelete),
             "word.translation:create" => Some(Self::TranslationCreate),
             "word.translation:delete" => Some(Self::TranslationDelete),
             "category:create" => Some(Self::CategoryCreate),
@@ -150,8 +156,6 @@ impl Permission {
             Self::WordRead => "word:read",
             Self::WordUpdate => "word:update",
             Self::WordDelete => "word:delete",
-            Self::SuggestionCreate => "word.suggestion:create",
-            Self::SuggestionDelete => "word.suggestion:delete",
             Self::TranslationCreate => "word.translation:create",
             Self::TranslationDelete => "word.translation:delete",
             Self::CategoryCreate => "category:create",
@@ -176,8 +180,6 @@ impl Permission {
                 "Allows the user to update existing words in the dictionary (but not delete them)."
             }
             Self::WordDelete => "Allows the user to delete words from the dictionary.",
-            Self::SuggestionCreate => "Allows the user to create a translation suggestion.",
-            Self::SuggestionDelete => "Allows the user to remove a translation suggestion.",
             Self::TranslationCreate => "Allows the user to translate a word.",
             Self::TranslationDelete => "Allows the user to remove a word translation.",
             Self::CategoryCreate => "Allows the user to create a word category.",

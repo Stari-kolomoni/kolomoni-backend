@@ -65,11 +65,10 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::slovene::delete_slovene_word,
 
         // kolomoni::api::v1::dictionary::slovene::endpoints::meaning
-        // TODO
-        // dictionary::slovene::get_all_slovene_word_meanings,
-        // dictionary::slovene::create_slovene_word_meaning,
-        // dictionary::slovene::update_slovene_word_meaning,
-        // dictionary::slovene::delete_slovene_word_meaning,
+        dictionary::slovene::get_all_slovene_word_meanings,
+        dictionary::slovene::create_slovene_word_meaning,
+        dictionary::slovene::update_slovene_word_meaning,
+        dictionary::slovene::delete_slovene_word_meaning,
 
 
         // kolomoni::api::v1::dictionary::english::endpoints::word
@@ -81,16 +80,23 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::english::delete_english_word,
 
         // kolomoni::api::v1::dictionary::english::endpoints::meaning
-        // TODO
-        // dictionary::english::get_all_english_word_meanings,
-        // dictionary::english::create_english_word_meaning,
-        // dictionary::english::update_english_word_meaning,
-        // dictionary::english::delete_english_word_meaning,
+        dictionary::english::get_all_english_word_meanings,
+        dictionary::english::create_english_word_meaning,
+        dictionary::english::update_english_word_meaning,
+        dictionary::english::delete_english_word_meaning,
 
 
         // kolomoni::api::v1::dictionary::translations
         dictionary::translations::create_translation,
         dictionary::translations::delete_translation,
+
+        
+        // kolomoni::api::v1::dictionary::categories
+        dictionary::categories::create_category,
+        dictionary::categories::get_all_categories,
+        dictionary::categories::get_specific_category,
+        dictionary::categories::update_specific_category,
+        dictionary::categories::delete_specific_category,
 
 
         // dictionary/search.rs
@@ -106,12 +112,14 @@ use utoipa_rapidoc::RapiDoc;
             api_models::UsersErrorReason,
             api_models::TranslationsErrorReason,
             api_models::WordErrorReason,
-            api_models::ResponseWithErrorReason,
+            // Not needed.
+            // api_models::ResponseWithErrorReason,
 
             // kolomoni_auth
             kolomoni_core::permissions::Permission,
 
             // kolomoni_core::id
+            /* Not needed.
             kolomoni_core::ids::CategoryId,
             kolomoni_core::ids::EditId,
             kolomoni_core::ids::UserId,
@@ -122,7 +130,7 @@ use utoipa_rapidoc::RapiDoc;
             kolomoni_core::ids::SloveneWordId,
             kolomoni_core::ids::SloveneWordMeaningId,
             kolomoni_core::ids::PermissionId,
-            kolomoni_core::ids::RoleId,
+            kolomoni_core::ids::RoleId, */
 
             // kolomoni_core::api_models::health
             api_models::PingResponse,
@@ -143,7 +151,8 @@ use utoipa_rapidoc::RapiDoc;
             api_models::UserRegistrationRequest,
             api_models::UserRegistrationResponse,
             api_models::UserRoleAddRequest,
-            api_models::UserRoleRemoveRequest,
+            // Implements IntoParams, not needed.
+            // api_models::UserRoleRemoveRequest,
 
 
             // kolomoni_core::dictionary::categories
@@ -157,13 +166,15 @@ use utoipa_rapidoc::RapiDoc;
 
             // kolomoni_core::dictionary::translations
             api_models::TranslationCreationRequest,
-            api_models::TranslationDeletionRequest,
+            // Implements IntoParams, not needed.
+            // api_models::TranslationDeletionRequest,
 
 
             // kolomoni_core::dictionary::slovene::word
             api_models::SloveneWordWithMeanings,
             api_models::SloveneWordsResponse,
-            api_models::SloveneWordsListRequest,
+            // Implements IntoParams, not needed.
+            // api_models::SloveneWordsListRequest,
             api_models::SloveneWordCreationRequest,
             api_models::SloveneWordCreationResponse,
             api_models::SloveneWordInfoResponse,
@@ -183,7 +194,8 @@ use utoipa_rapidoc::RapiDoc;
             // kolomoni_core::dictionary::english::word
             api_models::EnglishWordWithMeanings,
             api_models::EnglishWordsResponse,
-            api_models::EnglishWordsListRequest,
+            // Not needed.
+            // api_models::EnglishWordsListRequest,
             api_models::EnglishWordCreationRequest,
             api_models::EnglishWordCreationResponse,
             api_models::EnglishWordInfoResponse,

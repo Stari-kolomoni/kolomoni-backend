@@ -51,8 +51,6 @@ impl WordErrorReason {
         Self::WordNotFound
     }
 
-    // TODO
-    #[allow(dead_code)]
     pub const fn identical_word_meaning_already_exists() -> Self {
         Self::IdenticalWordMeaningAlreadyExists
     }

@@ -130,8 +130,6 @@ generate_standalone_requirement_struct!(WordCreate);
 generate_standalone_requirement_struct!(WordRead);
 generate_standalone_requirement_struct!(WordUpdate);
 generate_standalone_requirement_struct!(WordDelete);
-generate_standalone_requirement_struct!(SuggestionCreate);
-generate_standalone_requirement_struct!(SuggestionDelete);
 generate_standalone_requirement_struct!(TranslationCreate);
 generate_standalone_requirement_struct!(TranslationDelete);
 generate_standalone_requirement_struct!(CategoryCreate);

@@ -11,6 +11,7 @@ use crate::{
 // TODO this should actually probably be named SloveneWordMeaningWithCategories
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct ShallowSloveneWordMeaning {
+    #[schema(value_type = uuid::Uuid)]
     pub meaning_id: SloveneWordMeaningId,
 
     pub disambiguation: Option<String>,
@@ -19,6 +20,7 @@ pub struct ShallowSloveneWordMeaning {
 
     pub description: Option<String>,
 
+    #[schema(value_type = Vec<uuid::Uuid>)]
     pub categories: Vec<CategoryId>,
 
     pub created_at: DateTime<Utc>,
@@ -30,6 +32,7 @@ pub struct ShallowSloveneWordMeaning {
 // TODO refactor these names, this one is the same as ShallowSloveneWordMeaning, but without categories
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct SloveneWordMeaning {
+    #[schema(value_type = uuid::Uuid)]
     pub meaning_id: SloveneWordMeaningId,
 
     pub disambiguation: Option<String>,
@@ -45,6 +48,7 @@ pub struct SloveneWordMeaning {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct SloveneWordMeaningWithCategoriesAndTranslations {
+    #[schema(value_type = uuid::Uuid)]
     pub meaning_id: SloveneWordMeaningId,
 
     pub disambiguation: Option<String>,
@@ -57,6 +61,7 @@ pub struct SloveneWordMeaningWithCategoriesAndTranslations {
 
     pub last_modified_at: DateTime<Utc>,
 
+    #[schema(value_type = Vec<uuid::Uuid>)]
     pub categories: Vec<CategoryId>,
 
     pub translates_into: Vec<ShallowEnglishWordMeaning>,
