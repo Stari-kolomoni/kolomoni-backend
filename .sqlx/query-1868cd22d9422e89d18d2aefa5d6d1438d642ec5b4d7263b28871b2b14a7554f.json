@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET TRANSACTION READ WRITE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "1868cd22d9422e89d18d2aefa5d6d1438d642ec5b4d7263b28871b2b14a7554f"
+}
