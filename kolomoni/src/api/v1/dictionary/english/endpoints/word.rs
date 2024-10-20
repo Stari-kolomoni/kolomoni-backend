@@ -137,7 +137,6 @@ declare_openapi_error_reason_response!(
         ),
         (
             status = 409,
-            // FIXME these error reasons aren't rendering properly in the openapi schema, fix that
             response = inline(AsErrorReason<EnglishWordWithGivenLemmaAlreadyExists>)
         ),
         openapi::response::RequiredJsonBodyErrors,
@@ -403,6 +402,10 @@ pub async fn get_english_word_by_lemma(
             status = 404,
             response = inline(AsErrorReason<EnglishWordNotFound>)
         ),
+        (
+            status = 409,
+            response = inline(AsErrorReason<EnglishWordWithGivenLemmaAlreadyExists>)
+        ),
         openapi::response::UuidUrlParameterError,
         openapi::response::RequiredJsonBodyErrors,
         openapi::response::MissingAuthentication,
@@ -446,21 +449,33 @@ pub async fn update_english_word(
     }
 
 
-    let updated_successfully = entities::EnglishWordMutation::update(
-        &mut transaction,
-        target_word_uuid,
-        EnglishWordFieldsToUpdate {
-            new_lemma: request_data.lemma,
-        },
-    )
-    .await?;
+    if let Some(new_lemma) = request_data.lemma {
+        let new_lemma_already_exists =
+            entities::EnglishWordQuery::exists_by_exact_lemma(&mut transaction, &new_lemma).await?;
 
-    if !updated_successfully {
-        transaction.rollback().await?;
+        if new_lemma_already_exists {
+            return EndpointResponseBuilder::conflict()
+                .with_error_reason(WordErrorReason::word_with_given_lemma_already_exists())
+                .build();
+        }
 
-        return Err(EndpointError::internal_error_with_reason(
-            "Failed to update english word.",
-        ));
+
+        let updated_successfully = entities::EnglishWordMutation::update(
+            &mut transaction,
+            target_word_uuid,
+            EnglishWordFieldsToUpdate {
+                new_lemma: Some(new_lemma),
+            },
+        )
+        .await?;
+
+        if !updated_successfully {
+            transaction.rollback().await?;
+
+            return Err(EndpointError::internal_error_with_reason(
+                "Failed to update english word.",
+            ));
+        }
     }
 
 
@@ -592,6 +607,6 @@ pub fn english_word_router() -> Scope {
         .service(create_english_word)
         .service(get_english_word_by_id)
         .service(get_english_word_by_lemma)
-        // .service(update_specific_english_word)
+        .service(update_english_word)
         .service(delete_english_word)
 }

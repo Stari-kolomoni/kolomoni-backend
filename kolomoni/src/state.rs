@@ -199,6 +199,7 @@ impl DatabaseConnection {
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn into_inner(self) -> PoolConnection<Postgres> {
         self.connection
     }
