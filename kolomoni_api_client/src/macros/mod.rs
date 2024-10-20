@@ -1,6 +1,7 @@
 pub(crate) mod handlers;
 
 
+#[allow(unused)]
 macro_rules! handle_error_reasons_or_ignore {
     ($response_status:expr, $error_reason:expr, [$($handler_type:ty),+]) => {
         {
@@ -40,6 +41,7 @@ macro_rules! handle_error_reasons_or_ignore {
     };
 }
 
+#[allow(unused)]
 pub(crate) use handle_error_reasons_or_ignore;
 
 
@@ -54,7 +56,7 @@ macro_rules! handle_error_reasons_or_catch_unexpected_status {
                 response_status_code: $response.status()
             };
 
-            let __error_reason = $response.json_error_reason().await?;
+            let __error_reason = $response.error_reason().await?;
 
             // Execute each error handler sequentially - if a given one matches,
             // it will return [`ErrorReasonHandlerDecision::EarlyReturnError`],

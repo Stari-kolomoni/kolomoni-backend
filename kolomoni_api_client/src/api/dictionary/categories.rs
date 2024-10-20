@@ -170,7 +170,7 @@ where
 
         Ok(response_data.category)
     } else if response_status == StatusCode::NOT_FOUND {
-        let category_error_reason = response.json_category_error_reason().await?;
+        let category_error_reason = response.category_error_reason().await?;
 
         match category_error_reason {
             CategoryErrorReason::CategoryNotFound => Err(CategoryFetchingError::NotFound),
@@ -220,14 +220,14 @@ async fn update_category(
     } else if response_status == StatusCode::BAD_REQUEST {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::InvalidUuidFormat]);
     } else if response_status == StatusCode::NOT_FOUND {
-        let category_error_reason = response.json_category_error_reason().await?;
+        let category_error_reason = response.category_error_reason().await?;
 
         match category_error_reason {
             CategoryErrorReason::CategoryNotFound => Err(CategoryUpdatingError::NotFound),
             _ => unexpected_error_reason!(category_error_reason, response_status),
         }
     } else if response_status == StatusCode::CONFLICT {
-        let category_error_reason = response.json_category_error_reason().await?;
+        let category_error_reason = response.category_error_reason().await?;
 
         match category_error_reason {
             CategoryErrorReason::SloveneNameAlreadyExists => {
@@ -270,7 +270,7 @@ async fn create_category(
 
         Ok(response_data.category)
     } else if response_status == StatusCode::CONFLICT {
-        let category_error_reason = response.json_category_error_reason().await?;
+        let category_error_reason = response.category_error_reason().await?;
 
         match category_error_reason {
             CategoryErrorReason::EnglishNameAlreadyExists => {
@@ -295,7 +295,7 @@ async fn delete_category(
     client: &AuthenticatedClient,
     category_id: CategoryId,
 ) -> ClientResult<(), CategoryDeletionError> {
-    let response = RequestBuilder::post(client)
+    let response = RequestBuilder::delete(client)
         .endpoint_url(format!(
             "/dictionary/category/{}",
             category_id.into_uuid()
@@ -309,7 +309,7 @@ async fn delete_category(
     if response_status == StatusCode::OK {
         Ok(())
     } else if response_status == StatusCode::NOT_FOUND {
-        let category_error_response = response.json_category_error_reason().await?;
+        let category_error_response = response.category_error_reason().await?;
 
         match category_error_response {
             CategoryErrorReason::CategoryNotFound => Err(CategoryDeletionError::NotFound),

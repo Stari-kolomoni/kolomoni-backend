@@ -15,5 +15,6 @@ thiserror = { workspace = true }
 reqwest = { workspace = true, features = ["zstd", "json"]}
 url = { workspace = true }
 
+chrono = { workspace = true }
 bytes = { workspace = true }
 uuid = { workspace = true }

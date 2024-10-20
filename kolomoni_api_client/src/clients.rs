@@ -22,6 +22,8 @@ pub(crate) trait HttpClient {
     async fn patch<B>(&self, url: Url, json_body: Option<B>) -> ClientResult<ServerResponse>
     where
         B: Into<Body>;
+
+    async fn delete(&self, url: Url) -> ClientResult<ServerResponse>;
 }
 
 
@@ -108,6 +110,15 @@ impl HttpClient for Client {
             .map(ServerResponse::from_reqwest_response)
             .map_err(|error| ClientError::RequestExecutionError { error })
     }
+
+    async fn delete(&self, url: Url) -> ClientResult<ServerResponse> {
+        self.http_client
+            .delete(url)
+            .send()
+            .await
+            .map(ServerResponse::from_reqwest_response)
+            .map_err(|error| ClientError::RequestExecutionError { error })
+    }
 }
 
 
@@ -181,6 +192,16 @@ impl HttpClient for AuthenticatedClient {
         }
 
         request_builder
+            .send()
+            .await
+            .map(ServerResponse::from_reqwest_response)
+            .map_err(|error| ClientError::RequestExecutionError { error })
+    }
+
+    async fn delete(&self, url: Url) -> ClientResult<ServerResponse> {
+        self.http_client
+            .delete(url)
+            .bearer_auth(self.authentication.access_token())
             .send()
             .await
             .map(ServerResponse::from_reqwest_response)

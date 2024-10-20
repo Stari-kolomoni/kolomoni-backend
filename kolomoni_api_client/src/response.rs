@@ -1,4 +1,9 @@
-use kolomoni_core::api_models::{CategoryErrorReason, ErrorReason, ResponseWithErrorReason};
+use kolomoni_core::api_models::{
+    CategoryErrorReason,
+    ErrorReason,
+    ResponseWithErrorReason,
+    WordErrorReason,
+};
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 
@@ -15,6 +20,7 @@ impl ServerResponse {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn into_reqwest_response(self) -> reqwest::Response {
         self.http_response
     }
@@ -58,15 +64,15 @@ impl ServerResponse {
             .map_err(|error| ClientError::ResponseJsonBodyError { error })
     }
 
-    pub(crate) async fn json_error_reason(self) -> ClientResult<ErrorReason> {
+    pub(crate) async fn error_reason(self) -> ClientResult<ErrorReason> {
         let response_with_error_reason = self.json::<ResponseWithErrorReason>().await?;
 
         Ok(response_with_error_reason.reason)
     }
 
-    pub(crate) async fn json_category_error_reason(self) -> ClientResult<CategoryErrorReason> {
+    pub(crate) async fn category_error_reason(self) -> ClientResult<CategoryErrorReason> {
         let response_status = self.status();
-        let error_reason = self.json_error_reason().await?;
+        let error_reason = self.error_reason().await?;
 
         let ErrorReason::Category(category_error_reason) = error_reason else {
             return Err(ClientError::unexpected_error_reason(
@@ -76,6 +82,20 @@ impl ServerResponse {
         };
 
         Ok(category_error_reason)
+    }
+
+    pub(crate) async fn word_error_reason(self) -> ClientResult<WordErrorReason> {
+        let response_status = self.status();
+        let error_reason = self.error_reason().await?;
+
+        let ErrorReason::Word(word_error_reason) = error_reason else {
+            return Err(ClientError::unexpected_error_reason(
+                error_reason,
+                response_status,
+            ));
+        };
+
+        Ok(word_error_reason)
     }
 }
 

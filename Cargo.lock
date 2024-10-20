@@ -1424,6 +1424,7 @@ name = "kolomoni_api_client"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "chrono",
  "kolomoni_core",
  "reqwest",
  "serde",
