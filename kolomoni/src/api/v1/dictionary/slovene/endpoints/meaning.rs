@@ -154,6 +154,9 @@ declare_openapi_error_reason_response!(
             description = "UUID of the slovene word to associate the meaning with."
         )
     ),
+    request_body(
+        content = NewSloveneWordMeaningRequest
+    ),
     responses(
         (
             status = 200,
@@ -275,6 +278,9 @@ declare_openapi_error_reason_response!(
             format = Uuid,
             description = "UUID of the slovene word meaning to modify."
         )
+    ),
+    request_body(
+        content = SloveneWordMeaningUpdateRequest
     ),
     responses(
         (

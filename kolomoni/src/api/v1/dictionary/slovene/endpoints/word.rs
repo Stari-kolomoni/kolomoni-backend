@@ -20,7 +20,6 @@ use kolomoni_database::entities::{
     SloveneWordsQueryOptions,
 };
 use tracing::info;
-use uuid::Uuid;
 
 use crate::{
     api::{
@@ -258,7 +257,7 @@ declare_openapi_error_reason_response!(
 pub async fn get_slovene_word_by_id(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
-    parameters: web::Path<(Uuid,)>,
+    parameters: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
 
@@ -269,7 +268,7 @@ pub async fn get_slovene_word_by_id(
     );
 
 
-    let target_word_uuid = SloveneWordId::new(parameters.into_inner().0);
+    let target_word_uuid = parse_uuid::<SloveneWordId>(parameters.into_inner().0)?;
 
 
     let potential_slovene_word = entities::SloveneWordQuery::get_by_id_with_meanings(
