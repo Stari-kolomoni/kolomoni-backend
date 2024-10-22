@@ -154,6 +154,9 @@ declare_openapi_error_reason_response!(
             description = "UUID of the english word to associate the meaning with."
         )
     ),
+    request_body(
+        content = NewEnglishWordMeaningRequest
+    ),
     responses(
         (
             status = 200,
@@ -273,6 +276,9 @@ declare_openapi_error_reason_response!(
             format = Uuid,
             description = "UUID of the english word meaning to modify."
         )
+    ),
+    request_body(
+        content = EnglishWordMeaningUpdateRequest
     ),
     responses(
         (
@@ -403,7 +409,7 @@ pub async fn update_english_word_meaning(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/slovene/{english_word_id}/meaning/{english_word_meaning_id}",
+    path = "/dictionary/english/{english_word_id}/meaning/{english_word_meaning_id}",
     tag = "dictionary:english:meaning",
     params(
         (

@@ -92,24 +92,29 @@ pub(crate) use handle_error_reasons_or_catch_unexpected_status;
 
 
 
-macro_rules! internal_server_error {
+macro_rules! handle_internal_server_error {
     () => {{
         return Err($crate::errors::ClientError::internal_server_error().into());
     }};
 }
 
-pub(crate) use internal_server_error;
+pub(crate) use handle_internal_server_error;
 
 
-macro_rules! unexpected_status_code {
-    ($response_status_code:expr) => {{
-        return Err(
-            $crate::errors::ClientError::unexpected_status_code($response_status_code).into(),
-        );
-    }};
+// TODO Document (this also catches internal server errors)
+macro_rules! handle_unexpected_status_code {
+    ($response_status_code:expr) => {
+        if $response_status_code == reqwest::StatusCode::INTERNAL_SERVER_ERROR {
+            handle_internal_server_error!();
+        } else {
+            return Err(
+                $crate::errors::ClientError::unexpected_status_code($response_status_code).into(),
+            );
+        }
+    };
 }
 
-pub(crate) use unexpected_status_code;
+pub(crate) use handle_unexpected_status_code;
 
 
 

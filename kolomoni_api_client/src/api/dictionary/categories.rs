@@ -18,10 +18,10 @@ use crate::{
     errors::{ClientError, ClientResult},
     macros::{
         handle_error_reasons_or_catch_unexpected_status,
+        handle_internal_server_error,
+        handle_unexpected_status_code,
         handlers,
-        internal_server_error,
         unexpected_error_reason,
-        unexpected_status_code,
     },
     request::RequestBuilder,
     AuthenticatedClient,
@@ -143,10 +143,8 @@ where
         Ok(response_data.categories)
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else if response_status == StatusCode::INTERNAL_SERVER_ERROR {
-        internal_server_error!()
     } else {
-        unexpected_status_code!(response_status)
+        handle_unexpected_status_code!(response_status)
     }
 }
 
@@ -185,7 +183,7 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        unexpected_status_code!(response_status)
+        handle_unexpected_status_code!(response_status)
     }
 }
 
@@ -240,10 +238,8 @@ async fn update_category(
         }
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else if response_status == StatusCode::INTERNAL_SERVER_ERROR {
-        internal_server_error!()
     } else {
-        unexpected_status_code!(response_status)
+        handle_unexpected_status_code!(response_status)
     }
 }
 
@@ -283,10 +279,8 @@ async fn create_category(
         }
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else if response_status == StatusCode::INTERNAL_SERVER_ERROR {
-        internal_server_error!();
     } else {
-        unexpected_status_code!(response_status);
+        handle_unexpected_status_code!(response_status);
     }
 }
 
@@ -320,9 +314,9 @@ async fn delete_category(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else if response_status == StatusCode::INTERNAL_SERVER_ERROR {
-        internal_server_error!();
+        handle_internal_server_error!();
     } else {
-        unexpected_status_code!(response_status);
+        handle_unexpected_status_code!(response_status);
     }
 }
 
