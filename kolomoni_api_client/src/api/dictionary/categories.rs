@@ -21,7 +21,7 @@ use crate::{
         handle_internal_server_error,
         handle_unexpected_status_code,
         handlers,
-        unexpected_error_reason,
+        handle_unexpected_error_reason,
     },
     request::RequestBuilder,
     AuthenticatedClient,
@@ -222,7 +222,7 @@ async fn update_category(
 
         match category_error_reason {
             CategoryErrorReason::CategoryNotFound => Err(CategoryUpdatingError::NotFound),
-            _ => unexpected_error_reason!(category_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(category_error_reason, response_status),
         }
     } else if response_status == StatusCode::CONFLICT {
         let category_error_reason = response.category_error_reason().await?;
@@ -234,7 +234,7 @@ async fn update_category(
             CategoryErrorReason::EnglishNameAlreadyExists => {
                 Err(CategoryUpdatingError::EnglishNameAlreadyExists)
             }
-            _ => unexpected_error_reason!(category_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(category_error_reason, response_status),
         }
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
@@ -275,7 +275,7 @@ async fn create_category(
             CategoryErrorReason::SloveneNameAlreadyExists => {
                 Err(CategoryCreationError::SloveneNameAlreadyExists)
             }
-            _ => unexpected_error_reason!(category_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(category_error_reason, response_status),
         }
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
@@ -307,7 +307,7 @@ async fn delete_category(
 
         match category_error_response {
             CategoryErrorReason::CategoryNotFound => Err(CategoryDeletionError::NotFound),
-            _ => unexpected_error_reason!(category_error_response, response_status),
+            _ => handle_unexpected_error_reason!(category_error_response, response_status),
         }
     } else if response_status == StatusCode::BAD_REQUEST {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::InvalidUuidFormat]);

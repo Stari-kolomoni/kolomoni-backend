@@ -105,7 +105,7 @@ pub(crate) use handle_internal_server_error;
 macro_rules! handle_unexpected_status_code {
     ($response_status_code:expr) => {
         if $response_status_code == reqwest::StatusCode::INTERNAL_SERVER_ERROR {
-            handle_internal_server_error!();
+            $crate::macros::handle_internal_server_error!();
         } else {
             return Err(
                 $crate::errors::ClientError::unexpected_status_code($response_status_code).into(),
@@ -118,7 +118,7 @@ pub(crate) use handle_unexpected_status_code;
 
 
 
-macro_rules! unexpected_error_reason {
+macro_rules! handle_unexpected_error_reason {
     ($error_reason:expr, $response_status:expr) => {
         return Err(
             $crate::errors::ClientError::unexpected_error_reason(
@@ -130,4 +130,4 @@ macro_rules! unexpected_error_reason {
     };
 }
 
-pub(crate) use unexpected_error_reason;
+pub(crate) use handle_unexpected_error_reason;

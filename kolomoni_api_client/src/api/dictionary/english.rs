@@ -25,10 +25,9 @@ use crate::{
     errors::{ClientError, ClientResult},
     macros::{
         handle_error_reasons_or_catch_unexpected_status,
-        handle_internal_server_error,
+        handle_unexpected_error_reason,
         handle_unexpected_status_code,
         handlers,
-        unexpected_error_reason,
     },
     request::RequestBuilder,
     AuthenticatedClient,
@@ -90,7 +89,7 @@ pub enum EnglishWordUpdatingError {
     #[error("english word not found")]
     NotFound,
 
-    #[error("english word with this lemma already exists")]
+    #[error("an english word with this lemma already exists")]
     LemmaAlreadyExists,
 
     #[error("there were no fields to update")]
@@ -183,7 +182,7 @@ where
 
         match error_reason {
             WordErrorReason::WordNotFound => Err(EnglishWordFetchingError::NotFound),
-            _ => unexpected_error_reason!(error_reason, response_status),
+            _ => handle_unexpected_error_reason!(error_reason, response_status),
         }
     } else if response_status == StatusCode::BAD_REQUEST {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::InvalidUuidFormat]);
@@ -195,13 +194,16 @@ where
 
 async fn get_english_word_by_lemma<C>(
     client: &C,
-    lemma: &str,
+    english_word_lemma: &str,
 ) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError>
 where
     C: HttpClient,
 {
     let response = RequestBuilder::get(client)
-        .endpoint_url(format!("/dictionary/english/by-lemma/{}", lemma))
+        .endpoint_url(format!(
+            "/dictionary/english/by-lemma/{}",
+            english_word_lemma
+        ))
         .send()
         .await?;
 
@@ -217,7 +219,7 @@ where
 
         match word_error_reason {
             WordErrorReason::WordNotFound => Err(EnglishWordFetchingError::NotFound),
-            _ => unexpected_error_reason!(word_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
         }
     } else if response_status == StatusCode::BAD_REQUEST {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::InvalidUuidFormat]);
@@ -231,11 +233,13 @@ where
 
 async fn create_english_word(
     client: &AuthenticatedClient,
-    word: EnglishWordToCreate,
+    word_to_create: EnglishWordToCreate,
 ) -> ClientResult<EnglishWordWithMeanings, EnglishWordCreationError> {
     let response = RequestBuilder::post(client)
         .endpoint_url("/dictionary/english")
-        .json(&EnglishWordCreationRequest { lemma: word.lemma })
+        .json(&EnglishWordCreationRequest {
+            lemma: word_to_create.lemma,
+        })
         .send()
         .await?;
 
@@ -253,7 +257,7 @@ async fn create_english_word(
             WordErrorReason::WordWithGivenLemmaAlreadyExists => {
                 Err(EnglishWordCreationError::LemmaAlreadyExists)
             }
-            _ => unexpected_error_reason!(word_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
         }
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
@@ -293,7 +297,7 @@ async fn update_english_word(
 
         match word_error_reason {
             WordErrorReason::WordNotFound => Err(EnglishWordUpdatingError::NotFound),
-            _ => unexpected_error_reason!(word_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
         }
     } else if response_status == StatusCode::CONFLICT {
         let word_error_reason = response.word_error_reason().await?;
@@ -302,7 +306,7 @@ async fn update_english_word(
             WordErrorReason::WordWithGivenLemmaAlreadyExists => {
                 Err(EnglishWordUpdatingError::LemmaAlreadyExists)
             }
-            _ => unexpected_error_reason!(word_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
         }
     } else {
         handle_unexpected_status_code!(response_status);
@@ -328,7 +332,7 @@ async fn delete_english_word(
 
         match word_error_reason {
             WordErrorReason::WordNotFound => Err(EnglishWordDeletionError::NotFound),
-            _ => unexpected_error_reason!(word_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
         }
     } else if response_status == StatusCode::BAD_REQUEST {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::InvalidUuidFormat]);
@@ -463,7 +467,7 @@ where
 
         match word_error_response {
             WordErrorReason::WordNotFound => Err(EnglishWordMeaningsFetchingError::WordNotFound),
-            _ => unexpected_error_reason!(word_error_response, response_status),
+            _ => handle_unexpected_error_reason!(word_error_response, response_status),
         }
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
@@ -507,7 +511,7 @@ async fn create_english_word_meaning(
             WordErrorReason::IdenticalWordMeaningAlreadyExists => {
                 Err(EnglishWordMeaningCreationError::IdenticalWordMeaningAlreadyExists)
             }
-            _ => unexpected_error_reason!(word_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
         }
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
@@ -556,7 +560,7 @@ async fn update_english_word_meaning(
             WordErrorReason::WordMeaningNotFound => {
                 Err(EnglishWordMeaningUpdatingError::WordMeaningNotFound)
             }
-            _ => unexpected_error_reason!(word_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
         }
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
@@ -592,7 +596,7 @@ async fn delete_english_word_meaning(
             WordErrorReason::WordMeaningNotFound => {
                 Err(EnglishWordMeaningDeletionError::WordMeaningNotFound)
             }
-            _ => unexpected_error_reason!(word_error_reason, response_status),
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
         }
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
@@ -603,11 +607,11 @@ async fn delete_english_word_meaning(
 
 
 
-pub struct EnglishApi<'c> {
+pub struct EnglishDictionaryApi<'c> {
     client: &'c Client,
 }
 
-impl<'c> EnglishApi<'c> {
+impl<'c> EnglishDictionaryApi<'c> {
     /*
      * Word-related (word meanings are in the next section)
      */
@@ -649,11 +653,11 @@ impl<'c> EnglishApi<'c> {
 
 
 
-pub struct EnglishAuthenticatedApi<'c> {
+pub struct EnglishDictionaryAuthenticatedApi<'c> {
     client: &'c AuthenticatedClient,
 }
 
-impl<'c> EnglishAuthenticatedApi<'c> {
+impl<'c> EnglishDictionaryAuthenticatedApi<'c> {
     /*
      * Word-related (word meanings are in the next section)
      */
