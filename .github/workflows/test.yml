@@ -9,7 +9,7 @@ on:
 
 jobs:
   run-unit-tests:
-    runs-on: "self-hosted"
+    runs-on: ubuntu-latest
     name: "Run doc and unit tests"
     steps:
       - name: "Set up required tools"
@@ -32,7 +32,7 @@ jobs:
         # Excludes the end-to-end testing crate (tested separately).
         run: cargo test --verbose --workspace --exclude kolomoni_test --all-features --doc
   run-end-to-end-tests:
-    runs-on: "self-hosted"
+    runs-on: ubuntu-latest
     name: "Run end-to-end tests"
     steps:
       - name: "Set up required tools"
