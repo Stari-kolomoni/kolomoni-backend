@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM kolomoni.word_meaning_category wmc INNER JOIN kolomoni.word_meaning wm ON wmc.word_meaning_id = wm.id WHERE wm.word_id = $1 AND wmc.word_meaning_id = $2 AND wmc.category_id = $3\n            )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7ec5d2d5a77541bfde76d82ed2adb527f5b7ff05b31fcdff9f3959cbcf665467"
+}

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO kolomoni.word_meaning_category (word_meaning_id, category_id) VALUES ($1, $2) RETURNING word_meaning_id, category_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "word_meaning_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "category_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c93ef9aba23065accc81c83b910c947635f9419e097e5ba703c35844fb933999"
+}
