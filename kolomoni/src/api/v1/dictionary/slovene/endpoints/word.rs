@@ -112,7 +112,7 @@ pub async fn get_all_slovene_words(
 declare_openapi_error_reason_response!(
     pub struct SloveneWordWithGivenLemmaAlreadyExists {
         description => "A slovene word with the given lemma already exists.",
-        reason => WordErrorReason::word_with_given_lemma_already_exists()
+        reason => WordErrorReason::word_with_this_lemma_already_exists()
     }
 );
 
@@ -175,7 +175,7 @@ pub async fn create_slovene_word(
 
     if word_lemma_already_exists {
         return EndpointResponseBuilder::conflict()
-            .with_error_reason(WordErrorReason::word_with_given_lemma_already_exists())
+            .with_error_reason(WordErrorReason::word_with_this_lemma_already_exists())
             .build();
     }
 

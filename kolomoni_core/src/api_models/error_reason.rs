@@ -23,25 +23,42 @@ pub trait ErrorReasonName {
 #[serde(tag = "word-error-type")]
 #[non_exhaustive]
 pub enum WordErrorReason {
-    #[serde(rename = "word-with-given-lemma-already-exists")]
-    WordWithGivenLemmaAlreadyExists,
-
     #[serde(rename = "word-not-found")]
     WordNotFound,
 
-    #[serde(rename = "identical-word-meaning-already-exists")]
-    IdenticalWordMeaningAlreadyExists,
-
     #[serde(rename = "word-meaning-not-found")]
     WordMeaningNotFound,
+
+    #[serde(rename = "word-meaning-category-relationship-not-found")]
+    WordMeaningCategoryRelationshipNotFound,
+
+    #[serde(rename = "word-with-this-lemma-already-exists")]
+    WordWithThisLemmaAlreadyExists,
+
+    #[serde(rename = "word-meaning-already-has-this-category")]
+    WordMeaningAlreadyHasThisCategory,
+
+    #[serde(rename = "identical-word-meaning-already-exists")]
+    IdenticalWordMeaningAlreadyExists,
 }
 
 impl WordErrorReason {
     /// Encountered when:
     /// - an english word with a given lemma already exists,
     /// - a slovene word with a given lemma already exists.
-    pub const fn word_with_given_lemma_already_exists() -> Self {
-        Self::WordWithGivenLemmaAlreadyExists
+    pub const fn word_with_this_lemma_already_exists() -> Self {
+        Self::WordWithThisLemmaAlreadyExists
+    }
+
+    pub const fn word_meaning_already_has_this_category() -> Self {
+        Self::WordMeaningAlreadyHasThisCategory
+    }
+
+    /// Encountered when:
+    /// - trying to unlink a category from a word meaning,
+    ///   but that meaning-to-category relationship didn't exist in the first place.
+    pub const fn word_meaning_category_relationship_not_found() -> Self {
+        Self::WordMeaningCategoryRelationshipNotFound
     }
 
     /// Encountered when:
@@ -66,7 +83,11 @@ impl WordErrorReason {
 impl ErrorReasonName for WordErrorReason {
     fn reason_description(&self) -> &'static str {
         match self {
-            Self::WordWithGivenLemmaAlreadyExists => "word with given lemma already exists",
+            Self::WordWithThisLemmaAlreadyExists => "word with given lemma already exists",
+            Self::WordMeaningAlreadyHasThisCategory => "word already has this category",
+            Self::WordMeaningCategoryRelationshipNotFound => {
+                "word meaning-category relationship not found"
+            }
             Self::WordNotFound => "word not found",
             Self::IdenticalWordMeaningAlreadyExists => "identical word meaning already exists",
             Self::WordMeaningNotFound => "word meaning not found",

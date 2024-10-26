@@ -231,7 +231,7 @@ async fn create_slovene_word(
         let word_error_reason = response.word_error_reason().await?;
 
         match word_error_reason {
-            WordErrorReason::WordWithGivenLemmaAlreadyExists => {
+            WordErrorReason::WordWithThisLemmaAlreadyExists => {
                 Err(SloveneWordCreationError::LemmaAlreadyExists)
             }
             _ => handle_unexpected_error_reason!(word_error_reason, response_status),
@@ -417,7 +417,7 @@ where
 {
     let response = RequestBuilder::get(client)
         .endpoint_url(format!(
-            "/dictionary/slovene/{}/meaning",
+            "/dictionary/slovene/{}/meanings",
             slovene_word_id
         ))
         .send()
@@ -452,7 +452,7 @@ async fn create_slovene_word_meaning(
 ) -> ClientResult<SloveneWordMeaning, SloveneWordMeaningCreationError> {
     let response = RequestBuilder::post(client)
         .endpoint_url(format!(
-            "/dictionary/slovene/{}/meaning",
+            "/dictionary/slovene/{}/meanings",
             slovene_word_id
         ))
         .json(&NewSloveneWordMeaningRequest {
@@ -502,7 +502,7 @@ async fn update_slovene_word_meaning(
 
     let response = RequestBuilder::patch(client)
         .endpoint_url(format!(
-            "/dictionary/slovene/{}/meaning/{}",
+            "/dictionary/slovene/{}/meanings/{}",
             slovene_word_id, slovene_word_meaning_id
         ))
         .json(&SloveneWordMeaningUpdateRequest {
@@ -545,7 +545,7 @@ async fn delete_slovene_word_meaning(
 ) -> ClientResult<(), SloveneWordMeaningDeletionError> {
     let response = RequestBuilder::delete(client)
         .endpoint_url(format!(
-            "/dictionary/slovene/{}/meaning/{}",
+            "/dictionary/slovene/{}/meanings/{}",
             slovene_word_id, slovene_word_meaning_id
         ))
         .send()

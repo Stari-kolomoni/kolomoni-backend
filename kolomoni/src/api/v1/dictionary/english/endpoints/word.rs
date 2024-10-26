@@ -50,7 +50,7 @@ use crate::{
 /// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
-    path = "/dictionary/english",
+    path = "/dictionary/english/words",
     tag = "dictionary:english",
     params(
         EnglishWordsListRequest
@@ -111,7 +111,7 @@ pub async fn get_all_english_words(
 declare_openapi_error_reason_response!(
     pub struct EnglishWordWithGivenLemmaAlreadyExists {
         description => "An english word with the given lemma already exists.",
-        reason => WordErrorReason::word_with_given_lemma_already_exists()
+        reason => WordErrorReason::word_with_this_lemma_already_exists()
     }
 );
 
@@ -124,7 +124,7 @@ declare_openapi_error_reason_response!(
 /// This endpoint requires authentication and the `word:create` permission.
 #[utoipa::path(
     post,
-    path = "/dictionary/english",
+    path = "/dictionary/english/words",
     tag = "dictionary:english",
     request_body(
         content = EnglishWordCreationRequest
@@ -174,7 +174,7 @@ pub async fn create_english_word(
 
     if word_lemma_already_exists {
         return EndpointResponseBuilder::conflict()
-            .with_error_reason(WordErrorReason::word_with_given_lemma_already_exists())
+            .with_error_reason(WordErrorReason::word_with_this_lemma_already_exists())
             .build();
     }
 
@@ -228,7 +228,7 @@ declare_openapi_error_reason_response!(
 /// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
-    path = "/dictionary/english/{word_uuid}",
+    path = "/dictionary/english/words/{word_uuid}",
     tag = "dictionary:english",
     params(
         (
@@ -306,7 +306,7 @@ pub async fn get_english_word_by_id(
 /// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
-    path = "/dictionary/english/by-lemma/{word_lemma}",
+    path = "/dictionary/english/words/by-lemma/{word_lemma}",
     tag = "dictionary:english",
     params(
         (
@@ -379,7 +379,7 @@ pub async fn get_english_word_by_lemma(
 /// This endpoint requires authentication and the `word:update` permission.
 #[utoipa::path(
     patch,
-    path = "/dictionary/english/{word_uuid}",
+    path = "/dictionary/english/words/{word_uuid}",
     tag = "dictionary:english",
     params(
         (
@@ -455,7 +455,7 @@ pub async fn update_english_word(
 
         if new_lemma_already_exists {
             return EndpointResponseBuilder::conflict()
-                .with_error_reason(WordErrorReason::word_with_given_lemma_already_exists())
+                .with_error_reason(WordErrorReason::word_with_this_lemma_already_exists())
                 .build();
         }
 
@@ -518,7 +518,7 @@ pub async fn update_english_word(
 /// This endpoint requires authentication and the `word:delete` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/english/{word_uuid}",
+    path = "/dictionary/english/words/{word_uuid}",
     tag = "dictionary:english",
     params(
         (
@@ -602,7 +602,7 @@ pub async fn delete_english_word(
 
 #[rustfmt::skip]
 pub fn english_word_router() -> Scope {
-    web::scope("")
+    web::scope("/words")
         .service(get_all_english_words)
         .service(create_english_word)
         .service(get_english_word_by_id)

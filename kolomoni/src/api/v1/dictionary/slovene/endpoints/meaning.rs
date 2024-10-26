@@ -1,5 +1,6 @@
 use actix_web::{delete, get, patch, post, web, Scope};
 use kolomoni_core::api_models::WordErrorReason;
+use kolomoni_core::ids::CategoryId;
 use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
@@ -49,7 +50,7 @@ use crate::{
 ///   blanket-granted to both unauthenticated and authenticated users.
 #[utoipa::path(
     get,
-    path = "/dictionary/slovene/{slovene_word_id}/meaning",
+    path = "/dictionary/slovene/{slovene_word_id}/meanings",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -144,7 +145,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     post,
-    path = "/dictionary/slovene/{slovene_word_id}/meaning",
+    path = "/dictionary/slovene/{slovene_word_id}/meanings",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -263,7 +264,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     patch,
-    path = "/dictionary/slovene/{slovene_word_id}/meaning/{slovene_word_meaning_id}",
+    path = "/dictionary/slovene/{slovene_word_id}/meanings/{slovene_word_meaning_id}",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -413,7 +414,7 @@ pub async fn update_slovene_word_meaning(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/slovene/{slovene_word_id}/meaning/{slovene_word_meaning_id}",
+    path = "/dictionary/slovene/{slovene_word_id}/meanings/{slovene_word_meaning_id}",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -505,14 +506,309 @@ pub async fn delete_slovene_word_meaning(
     EndpointResponseBuilder::ok().build()
 }
 
-// TODO next up: refactor names and structure, then look at aligning the utoipa docs with the actual endpoints again
+
+
+declare_openapi_error_reason_response!(
+    pub struct SloveneWordMeaningCategoryRelationshipAlreadyExists {
+        description => "The specified category is already linked to this slovene word meaning.",
+        reason => WordErrorReason::word_meaning_already_has_this_category()
+    }
+);
+
+
+/// Link a category to a slovene word meaning
+///
+/// This endpoints links a category to a slovene word meaning.
+/// A single meaning can have zero or more categories it belongs to.
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    post,
+    path = "/dictionary/slovene/{slovene_word_id}/meanings/{slovene_word_meaning_id}/category/{category_id}",
+    tag = "dictionary:slovene:meaning",
+    params(
+        (
+            "slovene_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the slovene word related to the meaning."
+        ),
+        (
+            "slovene_word_meaning_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the sslovene word meaning."
+        ),
+        (
+            "category_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the category to link to."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "The category has been linked to the slovene word meaning.",
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordMeaningNotFound>)
+        ),
+        (
+            status = 409,
+            response = inline(AsErrorReason<SloveneWordMeaningCategoryRelationshipAlreadyExists>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError
+    )
+)]
+#[post("/{slovene_word_meaning_id}/category/{category_id}")]
+pub async fn link_category_to_slovene_word_meaning(
+    state: ApplicationState,
+    authentication: UserAuthenticationExtractor,
+    parameters: web::Path<(String, String, String)>,
+) -> EndpointResult {
+    let mut database_connection = state.acquire_database_connection().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
+
+
+    require_user_authentication_and_permissions!(
+        &mut transaction,
+        authentication,
+        Permission::WordUpdate
+    );
+
+
+    let target_slovene_word_id = parse_uuid::<SloveneWordId>(&parameters.0)?;
+    let target_slovene_word_meaning_id = parse_uuid::<SloveneWordMeaningId>(&parameters.1)?;
+    let target_category_id = parse_uuid::<CategoryId>(&parameters.2)?;
+
+
+
+    let english_word_exists =
+        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
+
+    if !english_word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
+
+
+
+    let english_word_meaning_exists = entities::SloveneWordMeaningQuery::exists_by_id(
+        &mut transaction,
+        target_slovene_word_meaning_id,
+    )
+    .await?;
+
+    if !english_word_meaning_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
+    }
+
+
+
+    let category_relationship_already_exists =
+        entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
+            &mut transaction,
+            target_slovene_word_id.into_word_id(),
+            target_slovene_word_meaning_id.into_word_meaning_id(),
+            target_category_id,
+        )
+        .await?;
+
+    if category_relationship_already_exists {
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(WordErrorReason::word_meaning_already_has_this_category())
+            .build();
+    }
+
+
+    entities::WordMeaningCategoryMutation::link_category_with_word_meaning(
+        &mut transaction,
+        target_slovene_word_meaning_id.into_word_meaning_id(),
+        target_category_id,
+    )
+    .await?;
+
+
+    transaction.commit().await?;
+
+
+    EndpointResponseBuilder::ok().build()
+}
+
+
+
+
+declare_openapi_error_reason_response!(
+    pub struct SloveneWordMeaningCategoryRelationshipNotFound {
+        description => "The specified category is not linked to this slovene word meaning.",
+        reason => WordErrorReason::word_meaning_category_relationship_not_found()
+    }
+);
+
+
+/// Unlink a category from a slovene word meaning
+///
+/// This endpoint unlinks a category from a slovene word meaning.
+/// A single meaning can have zero or more categories it belongs to.
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    delete,
+    path = "/dictionary/slovene/{slovene_word_id}/meanings/{slovene_word_meaning_id}/category/{category_id}",
+    tag = "dictionary:slovene:meaning",
+    params(
+        (
+            "slovene_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the slovene word related to the meaning."
+        ),
+        (
+            "slovene_word_meaning_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the sslovene word meaning."
+        ),
+        (
+            "category_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the category to link to."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "The category has been unlinked from the english word meaning."
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordMeaningNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordMeaningCategoryRelationshipNotFound>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError
+    )
+)]
+#[delete("/{slovene_word_meaning_id}/category/{category_id}")]
+pub async fn unlink_category_from_slovene_word_meaning(
+    state: ApplicationState,
+    authentication: UserAuthenticationExtractor,
+    parameters: web::Path<(String, String, String)>,
+) -> EndpointResult {
+    let mut database_connection = state.acquire_database_connection().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
+
+
+    require_user_authentication_and_permissions!(
+        &mut transaction,
+        authentication,
+        Permission::WordUpdate
+    );
+
+
+    let target_slovene_word_id = parse_uuid::<SloveneWordId>(&parameters.0)?;
+    let target_slovene_word_meaning_id = parse_uuid::<SloveneWordMeaningId>(&parameters.1)?;
+    let target_category_id = parse_uuid::<CategoryId>(&parameters.2)?;
+
+
+
+    let english_word_exists =
+        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
+
+    if !english_word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
+
+
+
+    let english_word_meaning_exists = entities::SloveneWordMeaningQuery::exists_by_id(
+        &mut transaction,
+        target_slovene_word_meaning_id,
+    )
+    .await?;
+
+    if !english_word_meaning_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
+    }
+
+
+
+    let category_relationship_exists =
+        entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
+            &mut transaction,
+            target_slovene_word_id.into_word_id(),
+            target_slovene_word_meaning_id.into_word_meaning_id(),
+            target_category_id,
+        )
+        .await?;
+
+    if !category_relationship_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_category_relationship_not_found())
+            .build();
+    }
+
+
+    let unlinked_successfully =
+        entities::WordMeaningCategoryMutation::unlink_category_from_word_meaning(
+            &mut transaction,
+            target_slovene_word_meaning_id.into_word_meaning_id(),
+            target_category_id,
+        )
+        .await?;
+
+    if !unlinked_successfully {
+        return Err(EndpointError::invalid_database_state(
+            "failed to remove a word meaning-relationship relationship \
+            that we'd checked existed inside the same transaction",
+        ));
+    }
+
+
+    transaction.commit().await?;
+
+
+    EndpointResponseBuilder::ok().build()
+}
 
 
 
 pub fn slovene_word_meaning_router() -> Scope {
-    web::scope("/{slovene_word_id}/meaning")
+    web::scope("/{slovene_word_id}/meanings")
         .service(get_all_slovene_word_meanings)
         .service(create_slovene_word_meaning)
         .service(update_slovene_word_meaning)
         .service(delete_slovene_word_meaning)
+        .service(link_category_to_slovene_word_meaning)
+        .service(unlink_category_from_slovene_word_meaning)
 }

@@ -586,9 +586,11 @@ pub async fn delete_specific_category(
 
 
 
-/* TODO needs to be restructured/rewritten
+// TODO continue from here
+// TODO needs to be restructured/rewritten
 
-/// Link category to a word
+/*
+/// Link category to a word meaning
 ///
 /// This endpoint allows a user with enough permissions
 /// to add a category to a word.
@@ -715,10 +717,10 @@ pub async fn link_word_to_category(
 
 
     Ok(HttpResponse::Ok().finish())
-}
+} */
 
 
-
+/*
 /// Unlink a category from a word
 ///
 /// This endpoint allows a user with enough permissions

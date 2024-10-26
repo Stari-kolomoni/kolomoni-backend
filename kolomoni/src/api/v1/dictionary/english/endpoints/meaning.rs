@@ -1,5 +1,6 @@
 use actix_web::{delete, get, patch, post, web, HttpResponse, Scope};
 use kolomoni_core::api_models::WordErrorReason;
+use kolomoni_core::ids::CategoryId;
 use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
@@ -49,7 +50,7 @@ use crate::{
 ///   blanket-granted to both unauthenticated and authenticated users.
 #[utoipa::path(
     get,
-    path = "/dictionary/english/{english_word_id}/meaning",
+    path = "/dictionary/english/words/{english_word_id}/meanings",
     tag = "dictionary:english:meaning",
     params(
         (
@@ -144,7 +145,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     post,
-    path = "/dictionary/english/{english_word_id}/meaning",
+    path = "/dictionary/english/words/{english_word_id}/meanings",
     tag = "dictionary:english:meaning",
     params(
         (
@@ -261,7 +262,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     patch,
-    path = "/dictionary/english/{english_word_id}/meaning/{english_word_meaning_id}",
+    path = "/dictionary/english/words/{english_word_id}/meanings/{english_word_meaning_id}",
     tag = "dictionary:english:meaning",
     params(
         (
@@ -409,7 +410,7 @@ pub async fn update_english_word_meaning(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/english/{english_word_id}/meaning/{english_word_meaning_id}",
+    path = "/dictionary/english/words/{english_word_id}/meanings/{english_word_meaning_id}",
     tag = "dictionary:english:meaning",
     params(
         (
@@ -512,11 +513,307 @@ pub async fn delete_english_word_meaning(
 
 
 
+declare_openapi_error_reason_response!(
+    pub struct EnglishWordMeaningCategoryRelationshipAlreadyExists {
+        description => "The specified category is already linked to this english word meaning.",
+        reason => WordErrorReason::word_meaning_already_has_this_category()
+    }
+);
+
+
+/// Link a category to an english word meaning
+///
+/// This endpoints links a category to an english word meaning.
+/// A single meaning can have zero or more categories it belongs to.
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    post,
+    path = "/dictionary/english/words/{english_word_id}/meanings/{english_word_meaning_id}/category/{category_id}",
+    tag = "dictionary:english:meaning",
+    params(
+        (
+            "english_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word related to the meaning."
+        ),
+        (
+            "english_word_meaning_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word meaning."
+        ),
+        (
+            "category_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the category to link to."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "The category has been linked to the english word meaning.",
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordMeaningNotFound>)
+        ),
+        (
+            status = 409,
+            response = inline(AsErrorReason<EnglishWordMeaningCategoryRelationshipAlreadyExists>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError
+    )
+)]
+#[post("/{english_word_meaning_id}/category/{category_id}")]
+pub async fn link_category_to_english_word_meaning(
+    state: ApplicationState,
+    authentication: UserAuthenticationExtractor,
+    parameters: web::Path<(String, String, String)>,
+) -> EndpointResult {
+    let mut database_connection = state.acquire_database_connection().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
+
+
+    require_user_authentication_and_permissions!(
+        &mut transaction,
+        authentication,
+        Permission::WordUpdate
+    );
+
+
+    let target_english_word_id = parse_uuid::<EnglishWordId>(&parameters.0)?;
+    let target_english_word_meaning_id = parse_uuid::<EnglishWordMeaningId>(&parameters.1)?;
+    let target_category_id = parse_uuid::<CategoryId>(&parameters.2)?;
+
+
+
+    let english_word_exists =
+        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
+
+    if !english_word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
+
+
+
+    let english_word_meaning_exists = entities::EnglishWordMeaningQuery::exists_by_id(
+        &mut transaction,
+        target_english_word_meaning_id,
+    )
+    .await?;
+
+    if !english_word_meaning_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
+    }
+
+
+
+    let category_relationship_already_exists =
+        entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
+            &mut transaction,
+            target_english_word_id.into_word_id(),
+            target_english_word_meaning_id.into_word_meaning_id(),
+            target_category_id,
+        )
+        .await?;
+
+    if category_relationship_already_exists {
+        return EndpointResponseBuilder::conflict()
+            .with_error_reason(WordErrorReason::word_meaning_already_has_this_category())
+            .build();
+    }
+
+
+    entities::WordMeaningCategoryMutation::link_category_with_word_meaning(
+        &mut transaction,
+        target_english_word_meaning_id.into_word_meaning_id(),
+        target_category_id,
+    )
+    .await?;
+
+
+    transaction.commit().await?;
+
+
+    EndpointResponseBuilder::ok().build()
+}
+
+
+
+
+declare_openapi_error_reason_response!(
+    pub struct EnglishWordMeaningCategoryRelationshipNotFound {
+        description => "The specified category is not linked to this english word meaning.",
+        reason => WordErrorReason::word_meaning_category_relationship_not_found()
+    }
+);
+
+
+/// Unlink a category from an english word meaning
+///
+/// This endpoint unlinks a category from an english word meaning.
+/// A single meaning can have zero or more categories it belongs to.
+///
+/// # Authentication & Required permissions
+/// - Authentication **is** required.
+/// - The caller must have the `word:update` permission.
+#[utoipa::path(
+    delete,
+    path = "/dictionary/english/words/{english_word_id}/meanings/{english_word_meaning_id}/category/{category_id}",
+    tag = "dictionary:english:meaning",
+    params(
+        (
+            "english_word_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word related to the meaning."
+        ),
+        (
+            "english_word_meaning_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the english word meaning."
+        ),
+        (
+            "category_id" = String,
+            Path,
+            format = Uuid,
+            description = "UUID of the category to unlink from."
+        )
+    ),
+    responses(
+        (
+            status = 200,
+            description = "The category has been unlinked from the english word meaning."
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordMeaningNotFound>)
+        ),
+        (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordMeaningCategoryRelationshipNotFound>)
+        ),
+        openapi::response::UuidUrlParameterError,
+        openapi::response::MissingAuthentication,
+        openapi::response::MissingPermissions<requires::WordUpdate, 1>,
+        openapi::response::InternalServerError
+    )
+)]
+#[delete("/{english_word_meaning_id}/category/{category_id}")]
+pub async fn unlink_category_from_english_word_meaning(
+    state: ApplicationState,
+    authentication: UserAuthenticationExtractor,
+    parameters: web::Path<(String, String, String)>,
+) -> EndpointResult {
+    let mut database_connection = state.acquire_database_connection().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
+
+
+    require_user_authentication_and_permissions!(
+        &mut transaction,
+        authentication,
+        Permission::WordUpdate
+    );
+
+
+    let target_english_word_id = parse_uuid::<EnglishWordId>(&parameters.0)?;
+    let target_english_word_meaning_id = parse_uuid::<EnglishWordMeaningId>(&parameters.1)?;
+    let target_category_id = parse_uuid::<CategoryId>(&parameters.2)?;
+
+
+
+    let english_word_exists =
+        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
+
+    if !english_word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
+
+
+
+    let english_word_meaning_exists = entities::EnglishWordMeaningQuery::exists_by_id(
+        &mut transaction,
+        target_english_word_meaning_id,
+    )
+    .await?;
+
+    if !english_word_meaning_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_not_found())
+            .build();
+    }
+
+
+
+    let category_relationship_exists =
+        entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
+            &mut transaction,
+            target_english_word_id.into_word_id(),
+            target_english_word_meaning_id.into_word_meaning_id(),
+            target_category_id,
+        )
+        .await?;
+
+    if !category_relationship_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_meaning_category_relationship_not_found())
+            .build();
+    }
+
+
+    let unlinked_successfully =
+        entities::WordMeaningCategoryMutation::unlink_category_from_word_meaning(
+            &mut transaction,
+            target_english_word_meaning_id.into_word_meaning_id(),
+            target_category_id,
+        )
+        .await?;
+
+    if !unlinked_successfully {
+        return Err(EndpointError::invalid_database_state(
+            "failed to remove a word meaning-relationship relationship \
+            that we'd checked existed inside the same transaction",
+        ));
+    }
+
+
+    transaction.commit().await?;
+
+
+    EndpointResponseBuilder::ok().build()
+}
+
+
 
 pub fn english_word_meaning_router() -> Scope {
-    web::scope("/{english_word_id}/meaning")
+    web::scope("/words/{english_word_id}/meanings")
         .service(get_all_english_word_meanings)
         .service(create_english_word_meaning)
         .service(update_english_word_meaning)
         .service(delete_english_word_meaning)
+        .service(link_category_to_english_word_meaning)
+        .service(unlink_category_from_english_word_meaning)
 }

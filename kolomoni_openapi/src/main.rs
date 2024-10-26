@@ -69,6 +69,8 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::slovene::create_slovene_word_meaning,
         dictionary::slovene::update_slovene_word_meaning,
         dictionary::slovene::delete_slovene_word_meaning,
+        dictionary::slovene::link_category_to_slovene_word_meaning,
+        dictionary::slovene::unlink_category_from_slovene_word_meaning,
 
 
         // kolomoni::api::v1::dictionary::english::endpoints::word
@@ -84,6 +86,8 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::english::create_english_word_meaning,
         dictionary::english::update_english_word_meaning,
         dictionary::english::delete_english_word_meaning,
+        dictionary::english::link_category_to_english_word_meaning,
+        dictionary::english::unlink_category_from_english_word_meaning,
 
 
         // kolomoni::api::v1::dictionary::translations

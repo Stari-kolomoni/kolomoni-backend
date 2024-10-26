@@ -254,7 +254,7 @@ async fn create_english_word(
         let word_error_reason = response.word_error_reason().await?;
 
         match word_error_reason {
-            WordErrorReason::WordWithGivenLemmaAlreadyExists => {
+            WordErrorReason::WordWithThisLemmaAlreadyExists => {
                 Err(EnglishWordCreationError::LemmaAlreadyExists)
             }
             _ => handle_unexpected_error_reason!(word_error_reason, response_status),
@@ -303,7 +303,7 @@ async fn update_english_word(
         let word_error_reason = response.word_error_reason().await?;
 
         match word_error_reason {
-            WordErrorReason::WordWithGivenLemmaAlreadyExists => {
+            WordErrorReason::WordWithThisLemmaAlreadyExists => {
                 Err(EnglishWordUpdatingError::LemmaAlreadyExists)
             }
             _ => handle_unexpected_error_reason!(word_error_reason, response_status),
@@ -449,7 +449,7 @@ where
 {
     let response = RequestBuilder::get(client)
         .endpoint_url(format!(
-            "/dictionary/english/{}/meaning",
+            "/dictionary/english/{}/meanings",
             english_word_id
         ))
         .send()
@@ -484,7 +484,7 @@ async fn create_english_word_meaning(
 ) -> ClientResult<EnglishWordMeaning, EnglishWordMeaningCreationError> {
     let response = RequestBuilder::post(client)
         .endpoint_url(format!(
-            "/dictionary/english/{}/meaning",
+            "/dictionary/english/{}/meanings",
             english_word_id
         ))
         .json(&NewEnglishWordMeaningRequest {
@@ -534,7 +534,7 @@ async fn update_english_word_meaning(
 
     let response = RequestBuilder::patch(client)
         .endpoint_url(format!(
-            "/dictionary/english/{}/meaning/{}",
+            "/dictionary/english/{}/meanings/{}",
             english_word_id, english_word_meaning_id
         ))
         .json(&EnglishWordMeaningUpdateRequest {
@@ -577,7 +577,7 @@ async fn delete_english_word_meaning(
 ) -> ClientResult<(), EnglishWordMeaningDeletionError> {
     let response = RequestBuilder::delete(client)
         .endpoint_url(format!(
-            "/dictionary/english/{}/meaning/{}",
+            "/dictionary/english/{}/meanings/{}",
             english_word_id, english_word_meaning_id
         ))
         .send()
