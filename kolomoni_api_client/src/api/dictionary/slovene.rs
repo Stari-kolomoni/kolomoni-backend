@@ -15,7 +15,7 @@ use kolomoni_core::{
         SloveneWordsResponse,
         WordErrorReason,
     },
-    ids::{SloveneWordId, SloveneWordMeaningId},
+    ids::{CategoryId, SloveneWordId, SloveneWordMeaningId},
 };
 use reqwest::StatusCode;
 use thiserror::Error;
@@ -403,6 +403,43 @@ pub enum SloveneWordMeaningDeletionError {
     },
 }
 
+#[derive(Debug, Error)]
+pub enum SloveneWordMeaningCategoryLinkingError {
+    #[error("slovene word does not exist")]
+    WordNotFound,
+
+    #[error("slovene word meaning does not exist")]
+    WordMeaningNotFound,
+
+    #[error("slovene word meaning is already linked to the given category")]
+    CategoryRelationshipAlreadyExists,
+
+    #[error(transparent)]
+    ClientError {
+        #[from]
+        error: ClientError,
+    },
+}
+
+#[derive(Debug, Error)]
+pub enum SloveneWordMeaningCategoryUnlinkingError {
+    #[error("slovene word does not exist")]
+    WordNotFound,
+
+    #[error("slovene word meaning does not exist")]
+    WordMeaningNotFound,
+
+    #[error("slovene word meaning-category relationship does not exist")]
+    CategoryRelationshipNotFound,
+
+    #[error(transparent)]
+    ClientError {
+        #[from]
+        error: ClientError,
+    },
+}
+
+
 
 
 async fn get_slovene_word_meanings<C>(
@@ -575,6 +612,97 @@ async fn delete_slovene_word_meaning(
 
 
 
+async fn link_category_to_slovene_word_meaning(
+    client: &AuthenticatedClient,
+    slovene_word_id: SloveneWordId,
+    slovene_word_meaning_id: SloveneWordMeaningId,
+    category_id: CategoryId,
+) -> ClientResult<(), SloveneWordMeaningCategoryLinkingError> {
+    let response = RequestBuilder::post(client)
+        .endpoint_url(format!(
+            "/dictionary/slovene/words/{}/meanings/{}/category/{}",
+            slovene_word_id, slovene_word_meaning_id, category_id
+        ))
+        .send()
+        .await?;
+
+    let response_status = response.status();
+
+
+    if response_status == StatusCode::OK {
+        Ok(())
+    } else if response_status == StatusCode::NOT_FOUND {
+        let word_error_reason = response.word_error_reason().await?;
+
+        match word_error_reason {
+            WordErrorReason::WordNotFound => {
+                Err(SloveneWordMeaningCategoryLinkingError::WordNotFound)
+            }
+            WordErrorReason::WordMeaningNotFound => {
+                Err(SloveneWordMeaningCategoryLinkingError::WordMeaningNotFound)
+            }
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
+        }
+    } else if response_status == StatusCode::CONFLICT {
+        let word_error_reason = response.word_error_reason().await?;
+
+        match word_error_reason {
+            WordErrorReason::WordMeaningAlreadyHasThisCategory => {
+                Err(SloveneWordMeaningCategoryLinkingError::CategoryRelationshipAlreadyExists)
+            }
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
+        }
+    } else if response_status == StatusCode::FORBIDDEN {
+        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
+    } else {
+        handle_unexpected_status_code!(response_status);
+    }
+}
+
+
+async fn unlink_category_from_slovene_word_meaning(
+    client: &AuthenticatedClient,
+    slovene_word_id: SloveneWordId,
+    slovene_word_meaning_id: SloveneWordMeaningId,
+    category_id: CategoryId,
+) -> ClientResult<(), SloveneWordMeaningCategoryUnlinkingError> {
+    let response = RequestBuilder::delete(client)
+        .endpoint_url(format!(
+            "/dictionary/slovene/words/{}/meanings/{}/category/{}",
+            slovene_word_id, slovene_word_meaning_id, category_id
+        ))
+        .send()
+        .await?;
+
+    let response_status = response.status();
+
+
+    if response_status == StatusCode::OK {
+        Ok(())
+    } else if response_status == StatusCode::NOT_FOUND {
+        let word_error_reason = response.word_error_reason().await?;
+
+        match word_error_reason {
+            WordErrorReason::WordNotFound => {
+                Err(SloveneWordMeaningCategoryUnlinkingError::WordNotFound)
+            }
+            WordErrorReason::WordMeaningNotFound => {
+                Err(SloveneWordMeaningCategoryUnlinkingError::WordMeaningNotFound)
+            }
+            WordErrorReason::WordMeaningCategoryRelationshipNotFound => {
+                Err(SloveneWordMeaningCategoryUnlinkingError::CategoryRelationshipNotFound)
+            }
+            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
+        }
+    } else if response_status == StatusCode::FORBIDDEN {
+        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
+    } else {
+        handle_unexpected_status_code!(response_status);
+    }
+}
+
+
+
 
 pub struct SloveneDictionaryApi<'c> {
     client: &'c Client,
@@ -719,6 +847,36 @@ impl<'c> SloveneDictionaryAuthenticatedApi<'c> {
             self.client,
             slovene_word_id,
             slovene_word_meaning_id,
+        )
+        .await
+    }
+
+    pub async fn link_category_to_slovene_word_meaning(
+        &self,
+        slovene_word_id: SloveneWordId,
+        slovene_word_meaning_id: SloveneWordMeaningId,
+        category_id: CategoryId,
+    ) -> ClientResult<(), SloveneWordMeaningCategoryLinkingError> {
+        link_category_to_slovene_word_meaning(
+            self.client,
+            slovene_word_id,
+            slovene_word_meaning_id,
+            category_id,
+        )
+        .await
+    }
+
+    pub async fn unlink_category_from_slovene_word_meaning(
+        &self,
+        slovene_word_id: SloveneWordId,
+        slovene_word_meaning_id: SloveneWordMeaningId,
+        category_id: CategoryId,
+    ) -> ClientResult<(), SloveneWordMeaningCategoryUnlinkingError> {
+        unlink_category_from_slovene_word_meaning(
+            self.client,
+            slovene_word_id,
+            slovene_word_meaning_id,
+            category_id,
         )
         .await
     }

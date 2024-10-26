@@ -12,7 +12,4 @@ pub fn categories_router() -> actix_web::Scope {
         .service(get_specific_category)
         .service(update_specific_category)
         .service(delete_specific_category)
-        // TODO
-        // .service(link_word_to_category)
-        // .service(unlink_word_from_category)
 }
