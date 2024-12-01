@@ -27,6 +27,10 @@ pub struct AccessToken {
 }
 
 impl AccessToken {
+    pub fn new(access_token: String) -> Self {
+        Self { access_token }
+    }
+
     pub async fn log_in<U, P>(
         client: &Client,
         username: U,

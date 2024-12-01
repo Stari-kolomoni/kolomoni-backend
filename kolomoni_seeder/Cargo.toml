@@ -4,6 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = { workspace = true }
+kolomoni_core = { path = "../kolomoni_core" }
+kolomoni_api_client = { path = "../kolomoni_api_client" }
 
+tokio = { workspace = true }
+
+parking_lot = { workspace = true, features = ["arc_lock"] }
+
+serde = { workspace = true }
+csv = { workspace = true }
+
+clap = { workspace = true }
+
+miette = { workspace = true, features = ["fancy"] }
 thiserror = { workspace = true }
+
+fastrand = { workspace = true }

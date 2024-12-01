@@ -67,4 +67,8 @@ impl ApiServer {
     pub(crate) fn base_url(&self) -> &str {
         &self.base_api_url
     }
+
+    pub(crate) fn is_https(&self) -> bool {
+        self.base_api_url.starts_with("https")
+    }
 }

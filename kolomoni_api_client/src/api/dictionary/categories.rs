@@ -12,16 +12,15 @@ use kolomoni_core::{
 };
 use reqwest::StatusCode;
 use thiserror::Error;
-use uuid::Uuid;
 
 use crate::{
     errors::{ClientError, ClientResult},
     macros::{
         handle_error_reasons_or_catch_unexpected_status,
         handle_internal_server_error,
+        handle_unexpected_error_reason,
         handle_unexpected_status_code,
         handlers,
-        handle_unexpected_error_reason,
     },
     request::RequestBuilder,
     AuthenticatedClient,
@@ -42,7 +41,7 @@ pub struct CategoryToCreate {
 
 
 pub struct CategoryFieldsToUpdate {
-    pub new_parent_category_id: Option<Option<Uuid>>,
+    pub new_parent_category_id: Option<Option<CategoryId>>,
 
     pub new_slovene_name: Option<String>,
 
@@ -197,11 +196,14 @@ async fn update_category(
         return Err(CategoryUpdatingError::NoFieldsToUpdate);
     }
 
+    let new_parent_category_id = category_fields_to_update
+        .new_parent_category_id
+        .map(|outer| outer.map(|inner| inner.into_uuid()));
 
     let response = RequestBuilder::patch(client)
         .endpoint_url(format!("/dictionary/category/{}", category_id))
         .json(&CategoryUpdateRequest {
-            new_parent_category_id: category_fields_to_update.new_parent_category_id,
+            new_parent_category_id,
             new_english_name: category_fields_to_update.new_english_name,
             new_slovene_name: category_fields_to_update.new_slovene_name,
         })
@@ -328,6 +330,10 @@ pub struct DictionaryCategoriesApi<'c> {
 
 
 impl<'c> DictionaryCategoriesApi<'c> {
+    pub(crate) const fn new(client: &'c Client) -> Self {
+        Self { client }
+    }
+
     pub async fn get_categories(&self) -> ClientResult<Vec<Category>, ClientError> {
         get_categories(self.client).await
     }
@@ -347,6 +353,10 @@ pub struct DictionaryCategoriesAuthenticatedApi<'c> {
 }
 
 impl<'c> DictionaryCategoriesAuthenticatedApi<'c> {
+    pub(crate) const fn new(client: &'c AuthenticatedClient) -> Self {
+        Self { client }
+    }
+
     pub async fn get_categories(&self) -> ClientResult<Vec<Category>, ClientError> {
         get_categories(self.client).await
     }

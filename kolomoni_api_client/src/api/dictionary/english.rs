@@ -745,6 +745,10 @@ pub struct EnglishDictionaryApi<'c> {
 }
 
 impl<'c> EnglishDictionaryApi<'c> {
+    pub(crate) const fn new(client: &'c Client) -> Self {
+        Self { client }
+    }
+
     /*
      * Word-related (word meanings are in the next section)
      */
@@ -791,6 +795,10 @@ pub struct EnglishDictionaryAuthenticatedApi<'c> {
 }
 
 impl<'c> EnglishDictionaryAuthenticatedApi<'c> {
+    pub(crate) const fn new(client: &'c AuthenticatedClient) -> Self {
+        Self { client }
+    }
+
     /*
      * Word-related (word meanings are in the next section)
      */

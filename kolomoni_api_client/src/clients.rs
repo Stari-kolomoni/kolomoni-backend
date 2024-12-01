@@ -4,6 +4,14 @@ use reqwest::Body;
 use url::Url;
 
 use crate::{
+    api::{
+        dictionary::{
+            categories::{DictionaryCategoriesApi, DictionaryCategoriesAuthenticatedApi},
+            english::{EnglishDictionaryApi, EnglishDictionaryAuthenticatedApi},
+            slovene::{SloveneDictionaryApi, SloveneDictionaryAuthenticatedApi},
+        },
+        health::{HealthApi, HealthAuthenticatedApi},
+    },
     authentication::AccessToken,
     errors::{ClientError, ClientInitializationError, ClientResult},
     response::ServerResponse,
@@ -41,15 +49,22 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(server: Rc<ApiServer>) -> Result<Self, ClientInitializationError> {
-        let http_client = reqwest::Client::builder()
+    pub fn new(server: &Rc<ApiServer>) -> Result<Self, ClientInitializationError> {
+        let http_client_partial = reqwest::Client::builder()
             .zstd(true)
-            .user_agent(build_client_user_agent())
+            .user_agent(build_client_user_agent());
+
+        let http_client_partial = match server.is_https() {
+            true => http_client_partial.https_only(true),
+            false => http_client_partial,
+        };
+
+        let http_client = http_client_partial
             .build()
             .map_err(|error| ClientInitializationError::UnableToInitializeReqwestClient { error })?;
 
         Ok(Self {
-            server,
+            server: server.clone(),
             http_client,
         })
     }
@@ -60,6 +75,24 @@ impl Client {
             authentication.clone(),
             self.http_client.clone(),
         )
+    }
+}
+
+impl Client {
+    pub fn health(&self) -> HealthApi<'_> {
+        HealthApi::new(self)
+    }
+
+    pub fn categories(&self) -> DictionaryCategoriesApi<'_> {
+        DictionaryCategoriesApi::new(self)
+    }
+
+    pub fn english_dictionary(&self) -> EnglishDictionaryApi<'_> {
+        EnglishDictionaryApi::new(self)
+    }
+
+    pub fn slovene_dictionary(&self) -> SloveneDictionaryApi<'_> {
+        SloveneDictionaryApi::new(self)
     }
 }
 
@@ -142,6 +175,23 @@ impl AuthenticatedClient {
     }
 }
 
+impl AuthenticatedClient {
+    pub fn health(&self) -> HealthAuthenticatedApi<'_> {
+        HealthAuthenticatedApi::new(self)
+    }
+
+    pub fn categories(&self) -> DictionaryCategoriesAuthenticatedApi<'_> {
+        DictionaryCategoriesAuthenticatedApi::new(self)
+    }
+
+    pub fn english_dictionary(&self) -> EnglishDictionaryAuthenticatedApi<'_> {
+        EnglishDictionaryAuthenticatedApi::new(self)
+    }
+
+    pub fn slovene_dictionary(&self) -> SloveneDictionaryAuthenticatedApi<'_> {
+        SloveneDictionaryAuthenticatedApi::new(self)
+    }
+}
 
 impl HttpClient for AuthenticatedClient {
     fn server(&self) -> &ApiServer {

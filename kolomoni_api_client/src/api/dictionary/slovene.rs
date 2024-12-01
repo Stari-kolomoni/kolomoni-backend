@@ -709,6 +709,10 @@ pub struct SloveneDictionaryApi<'c> {
 }
 
 impl<'c> SloveneDictionaryApi<'c> {
+    pub(crate) const fn new(client: &'c Client) -> Self {
+        Self { client }
+    }
+
     /*
      * Word-related (word meanings are in the next section)
      */
@@ -752,6 +756,10 @@ pub struct SloveneDictionaryAuthenticatedApi<'c> {
 }
 
 impl<'c> SloveneDictionaryAuthenticatedApi<'c> {
+    pub(crate) const fn new(client: &'c AuthenticatedClient) -> Self {
+        Self { client }
+    }
+
     /*
      * Word-related (word meanings are in the next section)
      */
