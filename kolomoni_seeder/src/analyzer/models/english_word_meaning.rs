@@ -1,17 +1,16 @@
-use parking_lot::MappedRwLockReadGuard;
 use thiserror::Error;
 
 use super::{
-    category::{Category, CategoryResolutionContext, CategoryResolutionError, ResolvedCategory},
+    category::Category,
     english_word::EnglishWord,
     InternalCategoryId,
     InternalEnglishWordId,
     InternalEnglishWordMeaningId,
     TryToOutputModelWithContext,
-    TryToResolvedModelWithContext,
 };
 use crate::analyzer::{
-    clean_up_str,
+    clean_up_optional_string,
+    clean_up_string,
     insert_only_set::{GrowingKeyedSet, InternalId},
 };
 
@@ -20,6 +19,7 @@ use crate::analyzer::{
 pub struct IntermediateEnglishWordMeaning {
     internal_id: InternalEnglishWordMeaningId,
 
+    description: Option<String>,
     disambiguation: Option<String>,
     example: Option<String>,
     abbreviation: Option<String>,
@@ -31,25 +31,27 @@ pub struct IntermediateEnglishWordMeaning {
 impl IntermediateEnglishWordMeaning {
     pub fn from_raw_data(
         raw_referenced_english_word_by_lemma: String,
+        raw_description: Option<String>,
         raw_disambiguation: Option<String>,
         raw_example: Option<String>,
         raw_abbreviation: Option<String>,
         raw_referenced_categories_by_english_name: Vec<String>,
     ) -> Self {
-        let referenced_english_word_by_lemma =
-            clean_up_str(&raw_referenced_english_word_by_lemma).to_string();
+        let referenced_english_word_by_lemma = clean_up_string(raw_referenced_english_word_by_lemma);
 
-        let disambiguation = raw_disambiguation.map(|string| clean_up_str(&string).to_string());
-        let example = raw_example.map(|string| clean_up_str(&string).to_string());
-        let abbreviation = raw_abbreviation.map(|string| clean_up_str(&string).to_string());
+        let description = clean_up_optional_string(raw_description);
+        let disambiguation = clean_up_optional_string(raw_disambiguation);
+        let example = clean_up_optional_string(raw_example);
+        let abbreviation = clean_up_optional_string(raw_abbreviation);
 
         let referenced_categories_by_english_name = raw_referenced_categories_by_english_name
             .into_iter()
-            .map(|string| clean_up_str(&string).to_string())
+            .map(clean_up_string)
             .collect();
 
         Self {
             internal_id: InternalEnglishWordMeaningId::generate(),
+            description,
             disambiguation,
             example,
             abbreviation,
@@ -69,34 +71,13 @@ impl InternalId for IntermediateEnglishWordMeaning {
 
 
 
-#[derive(Debug, Clone)]
-pub struct EnglishWordMeaning {
-    internal_id: InternalEnglishWordMeaningId,
 
-    pub word: InternalEnglishWordId,
-
-    pub disambiguation: Option<String>,
-    pub example: Option<String>,
-    pub abbreviation: Option<String>,
-
-    pub categories: Vec<InternalCategoryId>,
-}
-
-impl InternalId for EnglishWordMeaning {
-    type InternalId = InternalEnglishWordMeaningId;
-
-    fn internal_id(&self) -> Self::InternalId {
-        self.internal_id
-    }
-}
-
-
-pub struct IntermediateEnglishWordMeaningResolutionContext<'c> {
+pub struct IntermediateEnglishWordMeaningOutputContext<'c> {
     english_words: &'c GrowingKeyedSet<EnglishWord>,
     categories: &'c GrowingKeyedSet<Category>,
 }
 
-impl<'c> IntermediateEnglishWordMeaningResolutionContext<'c> {
+impl<'c> IntermediateEnglishWordMeaningOutputContext<'c> {
     pub fn new(
         english_words: &'c GrowingKeyedSet<EnglishWord>,
         categories: &'c GrowingKeyedSet<Category>,
@@ -107,44 +88,31 @@ impl<'c> IntermediateEnglishWordMeaningResolutionContext<'c> {
         }
     }
 
-    fn english_word_by_lemma(
-        &self,
-        english_word_lemma: &str,
-    ) -> Option<MappedRwLockReadGuard<'_, EnglishWord>> {
+    fn english_word_by_lemma(&self, english_word_lemma: &str) -> Option<&EnglishWord> {
         let mut target_english_word_internal_id = None;
 
-        for english_word in self.english_words.read_inner().values() {
+        for english_word in self.english_words.values() {
             if english_word.lemma == english_word_lemma {
                 target_english_word_internal_id = Some(english_word.internal_id());
                 break;
             }
         }
 
-        let Some(target_english_word_internal_id) = target_english_word_internal_id else {
-            return None;
-        };
-
-
+        let target_english_word_internal_id = target_english_word_internal_id?;
         self.english_words.get(&target_english_word_internal_id)
     }
 
-    fn category_by_english_name(
-        &self,
-        english_category_name: &str,
-    ) -> Option<MappedRwLockReadGuard<'_, Category>> {
+    fn category_by_english_name(&self, english_category_name: &str) -> Option<&Category> {
         let mut target_category_internal_id = None;
 
-        for category in self.categories.read_inner().values() {
+        for category in self.categories.values() {
             if english_category_name == category.english_name {
                 target_category_internal_id = Some(category.internal_id());
                 break;
             }
         }
 
-        let Some(target_category_internal_id) = target_category_internal_id else {
-            return None;
-        };
-
+        let target_category_internal_id = target_category_internal_id?;
         self.categories.get(&target_category_internal_id)
     }
 }
@@ -161,7 +129,7 @@ pub enum IntermediateEnglishWordMeaningOutputError {
 
 
 impl TryToOutputModelWithContext for IntermediateEnglishWordMeaning {
-    type Context<'c> = IntermediateEnglishWordMeaningResolutionContext<'c>;
+    type Context<'c> = IntermediateEnglishWordMeaningOutputContext<'c>;
     type OutputModel = EnglishWordMeaning;
     type Error = IntermediateEnglishWordMeaningOutputError;
 
@@ -184,7 +152,7 @@ impl TryToOutputModelWithContext for IntermediateEnglishWordMeaning {
 
         for referenced_category_english_name in &self.referenced_categories_by_english_name {
             let Some(target_category) =
-                context.category_by_english_name(&referenced_category_english_name)
+                context.category_by_english_name(referenced_category_english_name)
             else {
                 return Err(
                     IntermediateEnglishWordMeaningOutputError::CategoryNotFoundByEnglishName {
@@ -199,6 +167,7 @@ impl TryToOutputModelWithContext for IntermediateEnglishWordMeaning {
 
         Ok(Self::OutputModel {
             internal_id: self.internal_id,
+            description: self.description.clone(),
             word: english_word.internal_id(),
             disambiguation: self.disambiguation.clone(),
             abbreviation: self.abbreviation.clone(),
@@ -211,119 +180,80 @@ impl TryToOutputModelWithContext for IntermediateEnglishWordMeaning {
 
 
 #[derive(Debug, Clone)]
-pub struct ResolvedEnglishWordMeaning {
+pub struct EnglishWordMeaning {
     internal_id: InternalEnglishWordMeaningId,
 
-    pub word: EnglishWord,
+    word: InternalEnglishWordId,
 
+    pub description: Option<String>,
     pub disambiguation: Option<String>,
+
+    // TODO Integrate english word meaning examples into the backend.
+    #[allow(dead_code)]
     pub example: Option<String>,
+
     pub abbreviation: Option<String>,
 
-    pub categories: Vec<ResolvedCategory>,
+    categories: Vec<InternalCategoryId>,
 }
 
+impl InternalId for EnglishWordMeaning {
+    type InternalId = InternalEnglishWordMeaningId;
 
-
-pub struct EnglishWordMeaningResolutionContext<'a> {
-    english_words: &'a GrowingKeyedSet<EnglishWord>,
-    categories: &'a GrowingKeyedSet<Category>,
-}
-
-impl<'a> EnglishWordMeaningResolutionContext<'a> {
-    pub fn new(
-        english_words: &'a GrowingKeyedSet<EnglishWord>,
-        categories: &'a GrowingKeyedSet<Category>,
-    ) -> Self {
-        Self {
-            english_words,
-            categories,
-        }
-    }
-
-    fn english_word_by_internal_id(
-        &self,
-        internal_english_word_id: &InternalEnglishWordId,
-    ) -> Option<MappedRwLockReadGuard<'a, EnglishWord>> {
-        self.english_words.get(internal_english_word_id)
-    }
-
-    fn category_by_internal_id(
-        &self,
-        internal_category_id: &InternalCategoryId,
-    ) -> Option<MappedRwLockReadGuard<'a, Category>> {
-        self.categories.get(internal_category_id)
+    fn internal_id(&self) -> Self::InternalId {
+        self.internal_id
     }
 }
-
 
 
 #[derive(Debug, Error)]
-pub enum EnglishWordMeaningResolutionError {
-    #[error("unable to find english word by internal ID: {}", .internal_english_word_id)]
-    EnglishWordNotFound {
-        internal_english_word_id: InternalEnglishWordId,
-    },
-
-    #[error("unable to find category by internal ID: {}", .internal_category_id)]
-    CategoryNotFound {
-        internal_category_id: InternalCategoryId,
-    },
-
-    #[error("failed to resolve category")]
-    CategoryResolutionError {
-        #[from]
-        #[source]
-        error: CategoryResolutionError,
-    },
+#[error("unable to find english word by internal ID: {}", .internal_english_word_id)]
+pub struct EnglishWordNotFound {
+    internal_english_word_id: InternalEnglishWordId,
 }
 
 
-
-impl TryToResolvedModelWithContext for EnglishWordMeaning {
-    type ResolvedModel = ResolvedEnglishWordMeaning;
-    type Context<'ctx> = EnglishWordMeaningResolutionContext<'ctx>;
-    type Error = EnglishWordMeaningResolutionError;
-
-    fn try_to_resolved_model<'ctx>(
-        &'ctx self,
-        context: &'ctx Self::Context<'ctx>,
-    ) -> Result<Self::ResolvedModel, Self::Error> {
-        let Some(english_word) = context.english_word_by_internal_id(&self.word) else {
-            return Err(
-                EnglishWordMeaningResolutionError::EnglishWordNotFound {
-                    internal_english_word_id: self.word,
-                },
-            );
-        };
+#[derive(Debug, Error)]
+#[error("unable to find category by internal ID: {}", .internal_category_id)]
+pub struct CategoryNotFound {
+    internal_category_id: InternalCategoryId,
+}
 
 
+impl EnglishWordMeaning {
+    pub fn word_internal_id(&self) -> InternalEnglishWordId {
+        self.word
+    }
+
+    #[allow(dead_code)]
+    pub fn word<'s>(
+        &self,
+        growing_english_word_set: &'s GrowingKeyedSet<EnglishWord>,
+    ) -> Result<&'s EnglishWord, EnglishWordNotFound> {
+        growing_english_word_set
+            .get(&self.word)
+            .ok_or(EnglishWordNotFound {
+                internal_english_word_id: self.word,
+            })
+    }
+
+    pub fn categories<'s>(
+        &self,
+        growing_categories_set: &'s GrowingKeyedSet<Category>,
+    ) -> Result<Vec<&'s Category>, CategoryNotFound> {
         let mut categories = Vec::with_capacity(self.categories.len());
 
         for internal_category_id in &self.categories {
-            let Some(category) = context.category_by_internal_id(internal_category_id) else {
-                return Err(
-                    EnglishWordMeaningResolutionError::CategoryNotFound {
-                        internal_category_id: internal_category_id.to_owned(),
-                    },
-                );
-            };
+            let category =
+                growing_categories_set
+                    .get(internal_category_id)
+                    .ok_or(CategoryNotFound {
+                        internal_category_id: *internal_category_id,
+                    })?;
 
-            categories.push(
-                category.try_to_resolved_model(&CategoryResolutionContext::new(
-                    &context.categories,
-                ))?,
-            );
+            categories.push(category);
         }
 
-
-        Ok(Self::ResolvedModel {
-            internal_id: self.internal_id,
-            word: english_word.to_owned(),
-            disambiguation: self.disambiguation.clone(),
-            example: self.example.clone(),
-            abbreviation: self.abbreviation.clone(),
-            categories,
-        })
+        Ok(categories)
     }
 }

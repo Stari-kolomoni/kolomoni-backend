@@ -1,5 +1,5 @@
 use super::{InternalEnglishWordId, ToOutputModel};
-use crate::analyzer::{clean_up_str, insert_only_set::InternalId};
+use crate::analyzer::{clean_up_string, insert_only_set::InternalId};
 
 
 pub struct IntermediateEnglishWord {
@@ -12,7 +12,7 @@ impl IntermediateEnglishWord {
     pub fn from_raw_data(raw_lemma: String) -> Self {
         Self {
             internal_id: InternalEnglishWordId::generate(),
-            lemma: clean_up_str(&raw_lemma).to_string(),
+            lemma: clean_up_string(raw_lemma),
         }
     }
 }

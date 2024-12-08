@@ -6,7 +6,7 @@ pub mod api;
 pub mod authentication;
 mod clients;
 pub mod errors;
-pub(crate) mod request;
+pub mod request;
 pub(crate) mod response;
 pub use clients::*;
 mod server;

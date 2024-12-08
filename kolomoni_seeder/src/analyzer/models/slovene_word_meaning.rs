@@ -1,17 +1,16 @@
-use parking_lot::MappedRwLockReadGuard;
 use thiserror::Error;
 
 use super::{
-    category::{Category, CategoryResolutionContext, CategoryResolutionError, ResolvedCategory},
+    category::Category,
     slovene_word::SloveneWord,
     InternalCategoryId,
     InternalSloveneWordId,
     InternalSloveneWordMeaningId,
     TryToOutputModelWithContext,
-    TryToResolvedModelWithContext,
 };
 use crate::analyzer::{
-    clean_up_str,
+    clean_up_optional_string,
+    clean_up_string,
     insert_only_set::{GrowingKeyedSet, InternalId},
 };
 
@@ -19,6 +18,7 @@ use crate::analyzer::{
 pub struct IntermediateSloveneWordMeaning {
     internal_id: InternalSloveneWordMeaningId,
 
+    description: Option<String>,
     disambiguation: Option<String>,
     example: Option<String>,
     abbreviation: Option<String>,
@@ -30,25 +30,28 @@ pub struct IntermediateSloveneWordMeaning {
 impl IntermediateSloveneWordMeaning {
     pub fn from_raw_data(
         raw_referenced_slovene_word_by_lemma: String,
+        raw_description: Option<String>,
         raw_disambiguation: Option<String>,
         raw_example: Option<String>,
         raw_abbreviation: Option<String>,
         raw_referenced_categories_by_english_name: Vec<String>,
     ) -> Self {
         let referenced_slovene_word_by_lemma =
-            clean_up_str(&raw_referenced_slovene_word_by_lemma).to_string();
+            clean_up_string(&raw_referenced_slovene_word_by_lemma).to_string();
 
-        let disambiguation = raw_disambiguation.map(|string| clean_up_str(&string).to_string());
-        let example = raw_example.map(|string| clean_up_str(&string).to_string());
-        let abbreviation = raw_abbreviation.map(|string| clean_up_str(&string).to_string());
+        let description = clean_up_optional_string(raw_description);
+        let disambiguation = clean_up_optional_string(raw_disambiguation);
+        let example = clean_up_optional_string(raw_example);
+        let abbreviation = clean_up_optional_string(raw_abbreviation);
 
         let referenced_categories_by_english_name = raw_referenced_categories_by_english_name
             .into_iter()
-            .map(|string| clean_up_str(&string).to_string())
+            .map(|string| clean_up_string(&string).to_string())
             .collect();
 
         Self {
             internal_id: InternalSloveneWordMeaningId::generate(),
+            description,
             disambiguation,
             example,
             abbreviation,
@@ -68,27 +71,6 @@ impl InternalId for IntermediateSloveneWordMeaning {
 
 
 
-#[derive(Debug, Clone)]
-pub struct SloveneWordMeaning {
-    internal_id: InternalSloveneWordMeaningId,
-
-    pub word: InternalSloveneWordId,
-
-    pub disambiguation: Option<String>,
-    pub example: Option<String>,
-    pub abbreviation: Option<String>,
-
-    pub categories: Vec<InternalCategoryId>,
-}
-
-impl InternalId for SloveneWordMeaning {
-    type InternalId = InternalSloveneWordMeaningId;
-
-    fn internal_id(&self) -> Self::InternalId {
-        self.internal_id
-    }
-}
-
 
 pub struct IntermediateSloveneWordMeaningResolutionContext<'c> {
     slovene_words: &'c GrowingKeyedSet<SloveneWord>,
@@ -106,44 +88,31 @@ impl<'c> IntermediateSloveneWordMeaningResolutionContext<'c> {
         }
     }
 
-    fn slovene_word_by_lemma(
-        &self,
-        english_word_lemma: &str,
-    ) -> Option<MappedRwLockReadGuard<'_, SloveneWord>> {
+    fn slovene_word_by_lemma(&self, english_word_lemma: &str) -> Option<&SloveneWord> {
         let mut target_slovene_word_internal_id = None;
 
-        for english_word in self.slovene_words.read_inner().values() {
+        for english_word in self.slovene_words.values() {
             if english_word.lemma == english_word_lemma {
                 target_slovene_word_internal_id = Some(english_word.internal_id());
                 break;
             }
         }
 
-        let Some(target_slovene_word_internal_id) = target_slovene_word_internal_id else {
-            return None;
-        };
-
-
+        let target_slovene_word_internal_id = target_slovene_word_internal_id?;
         self.slovene_words.get(&target_slovene_word_internal_id)
     }
 
-    fn category_by_english_name(
-        &self,
-        english_category_name: &str,
-    ) -> Option<MappedRwLockReadGuard<'_, Category>> {
+    fn category_by_english_name(&self, english_category_name: &str) -> Option<&Category> {
         let mut target_category_internal_id = None;
 
-        for category in self.categories.read_inner().values() {
+        for category in self.categories.values() {
             if english_category_name == category.english_name {
                 target_category_internal_id = Some(category.internal_id());
                 break;
             }
         }
 
-        let Some(target_category_internal_id) = target_category_internal_id else {
-            return None;
-        };
-
+        let target_category_internal_id = target_category_internal_id?;
         self.categories.get(&target_category_internal_id)
     }
 }
@@ -183,7 +152,7 @@ impl TryToOutputModelWithContext for IntermediateSloveneWordMeaning {
 
         for referenced_category_english_name in &self.referenced_categories_by_english_name {
             let Some(target_category) =
-                context.category_by_english_name(&referenced_category_english_name)
+                context.category_by_english_name(referenced_category_english_name)
             else {
                 return Err(
                     IntermediateSloveneWordMeaningOutputError::CategoryNotFoundByEnglishName {
@@ -199,6 +168,7 @@ impl TryToOutputModelWithContext for IntermediateSloveneWordMeaning {
         Ok(Self::OutputModel {
             internal_id: self.internal_id,
             word: slovene_word.internal_id(),
+            description: self.description.clone(),
             disambiguation: self.disambiguation.clone(),
             abbreviation: self.abbreviation.clone(),
             example: self.example.clone(),
@@ -211,116 +181,77 @@ impl TryToOutputModelWithContext for IntermediateSloveneWordMeaning {
 
 
 #[derive(Debug, Clone)]
-pub struct ResolvedSloveneWordMeaning {
+pub struct SloveneWordMeaning {
     internal_id: InternalSloveneWordMeaningId,
 
-    pub word: SloveneWord,
+    word: InternalSloveneWordId,
 
+    pub description: Option<String>,
     pub disambiguation: Option<String>,
+    #[allow(dead_code)]
     pub example: Option<String>,
     pub abbreviation: Option<String>,
 
-    pub categories: Vec<ResolvedCategory>,
+    categories: Vec<InternalCategoryId>,
+}
+
+impl InternalId for SloveneWordMeaning {
+    type InternalId = InternalSloveneWordMeaningId;
+
+    fn internal_id(&self) -> Self::InternalId {
+        self.internal_id
+    }
 }
 
 
-pub struct SloveneWordMeaningResolutionContext<'a> {
-    slovene_words: &'a GrowingKeyedSet<SloveneWord>,
-    categories: &'a GrowingKeyedSet<Category>,
-}
 
-impl<'a> SloveneWordMeaningResolutionContext<'a> {
-    pub fn new(
-        slovene_words: &'a GrowingKeyedSet<SloveneWord>,
-        categories: &'a GrowingKeyedSet<Category>,
-    ) -> Self {
-        Self {
-            slovene_words,
-            categories,
-        }
-    }
-
-    fn slovene_word_by_internal_id(
-        &self,
-        internal_slovene_word_id: &InternalSloveneWordId,
-    ) -> Option<MappedRwLockReadGuard<'a, SloveneWord>> {
-        self.slovene_words.get(internal_slovene_word_id)
-    }
-
-    fn category_by_internal_id(
-        &self,
-        internal_category_id: &InternalCategoryId,
-    ) -> Option<MappedRwLockReadGuard<'a, Category>> {
-        self.categories.get(internal_category_id)
-    }
+#[derive(Debug, Error)]
+#[error("unable to find slovene word by internal ID: {}", .internal_slovene_word_id)]
+pub struct SloveneWordNotFound {
+    internal_slovene_word_id: InternalSloveneWordId,
 }
 
 
 #[derive(Debug, Error)]
-pub enum SloveneWordMeaningResolutionError {
-    #[error("unable to find slovene word by internal ID: {}", .internal_slovene_word_id)]
-    SloveneWordNotFound {
-        internal_slovene_word_id: InternalSloveneWordId,
-    },
-
-    #[error("unable to find category by internal ID: {}", .internal_category_id)]
-    CategoryNotFound {
-        internal_category_id: InternalCategoryId,
-    },
-
-    #[error("failed to resolve category")]
-    CategoryResolutionError {
-        #[from]
-        #[source]
-        error: CategoryResolutionError,
-    },
+#[error("unable to find category by internal ID: {}", .internal_category_id)]
+pub struct CategoryNotFound {
+    internal_category_id: InternalCategoryId,
 }
 
+impl SloveneWordMeaning {
+    pub fn word_internal_id(&self) -> InternalSloveneWordId {
+        self.word
+    }
 
-impl TryToResolvedModelWithContext for SloveneWordMeaning {
-    type ResolvedModel = ResolvedSloveneWordMeaning;
-    type Context<'ctx> = SloveneWordMeaningResolutionContext<'ctx>;
-    type Error = SloveneWordMeaningResolutionError;
+    #[allow(dead_code)]
+    pub fn word<'s>(
+        &self,
+        growing_english_word_set: &'s GrowingKeyedSet<SloveneWord>,
+    ) -> Result<&'s SloveneWord, SloveneWordNotFound> {
+        growing_english_word_set
+            .get(&self.word)
+            .ok_or(SloveneWordNotFound {
+                internal_slovene_word_id: self.word,
+            })
+    }
 
-    fn try_to_resolved_model<'ctx>(
-        &'ctx self,
-        context: &'ctx Self::Context<'ctx>,
-    ) -> Result<Self::ResolvedModel, Self::Error> {
-        let Some(slovene_word) = context.slovene_word_by_internal_id(&self.word) else {
-            return Err(
-                SloveneWordMeaningResolutionError::SloveneWordNotFound {
-                    internal_slovene_word_id: self.word,
-                },
-            );
-        };
-
-
+    pub fn categories<'s>(
+        &self,
+        growing_categories_set: &'s GrowingKeyedSet<Category>,
+    ) -> Result<Vec<&'s Category>, CategoryNotFound> {
         let mut categories = Vec::with_capacity(self.categories.len());
 
         for internal_category_id in &self.categories {
-            let Some(category) = context.category_by_internal_id(internal_category_id) else {
-                return Err(
-                    SloveneWordMeaningResolutionError::CategoryNotFound {
-                        internal_category_id: internal_category_id.to_owned(),
-                    },
-                );
-            };
+            let category =
+                growing_categories_set
+                    .get(internal_category_id)
+                    .ok_or(CategoryNotFound {
+                        internal_category_id: *internal_category_id,
+                    })?;
 
-            categories.push(
-                category.try_to_resolved_model(&CategoryResolutionContext::new(
-                    &context.categories,
-                ))?,
-            );
+            categories.push(category);
         }
 
-
-        Ok(Self::ResolvedModel {
-            internal_id: self.internal_id,
-            word: slovene_word.to_owned(),
-            disambiguation: self.disambiguation.clone(),
-            abbreviation: self.abbreviation.clone(),
-            example: self.example.clone(),
-            categories,
-        })
+        Ok(categories)
     }
 }

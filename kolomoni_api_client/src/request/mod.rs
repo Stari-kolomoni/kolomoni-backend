@@ -8,13 +8,13 @@ use url::Url;
 
 use crate::{server::ApiServer, HttpClient};
 
-pub(crate) mod delete;
-pub(crate) mod get;
-pub(crate) mod patch;
-pub(crate) mod post;
+pub mod delete;
+pub mod get;
+pub mod patch;
+pub mod post;
 
 
-pub(crate) struct RequestBuilder;
+pub struct RequestBuilder;
 
 impl RequestBuilder {
     pub(crate) fn get<'c, HC>(client: &'c HC) -> GetRequestBuilder<'c, HC, false>

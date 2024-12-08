@@ -1,6 +1,7 @@
-use std::{collections::HashMap, hash::Hash, sync::Arc};
-
-use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard};
+use std::{
+    collections::{hash_map, HashMap},
+    hash::Hash,
+};
 
 
 pub trait InternalId {
@@ -16,7 +17,7 @@ pub struct GrowingKeyedSet<V>
 where
     V: InternalId,
 {
-    map: Arc<RwLock<HashMap<V::InternalId, V>>>,
+    map: HashMap<V::InternalId, V>,
 }
 
 impl<V> GrowingKeyedSet<V>
@@ -25,54 +26,41 @@ where
 {
     pub fn new() -> Self {
         Self {
-            map: Arc::new(RwLock::new(HashMap::new())),
+            map: HashMap::new(),
         }
     }
 
-    pub fn insert(&self, value: V) -> Result<(), V> {
+    pub fn insert(&mut self, value: V) -> Result<(), V> {
         let key = value.internal_id();
 
-
-        {
-            let mut write_locked_map = self.map.write();
-            if write_locked_map.contains_key(&key) {
-                return Err(value);
-            }
-
-            write_locked_map.insert(key.clone(), value);
+        if self.map.contains_key(&key) {
+            return Err(value);
         }
+
+        self.map.insert(key.clone(), value);
 
         Ok(())
     }
 
-    pub fn insert_or_replace(&self, value: V) {
+    #[allow(dead_code)]
+    pub fn insert_or_replace(&mut self, value: V) {
         let key = value.internal_id();
 
-        {
-            let mut write_locked_map = self.map.write();
-            write_locked_map.insert(key.clone(), value);
-        }
+        self.map.insert(key.clone(), value);
     }
 
-    pub fn get(&self, key: &V::InternalId) -> Option<MappedRwLockReadGuard<'_, V>> {
-        let read_locked_map = self.map.read();
-
-        let mapped_value_access = RwLockReadGuard::try_map(read_locked_map, |map| map.get(key));
-
-        match mapped_value_access {
-            Ok(inner_value_ref) => Some(inner_value_ref),
-            Err(_) => None,
-        }
+    pub fn get(&self, key: &V::InternalId) -> Option<&V> {
+        self.map.get(key)
     }
 
-    pub fn read_inner(&self) -> RwLockReadGuard<'_, HashMap<V::InternalId, V>> {
-        self.map.read()
+    pub fn values(&self) -> hash_map::Values<'_, V::InternalId, V> {
+        self.map.values()
     }
 }
 
 impl<V> Clone for GrowingKeyedSet<V>
 where
-    V: InternalId,
+    V: InternalId + Clone,
 {
     fn clone(&self) -> Self {
         Self {

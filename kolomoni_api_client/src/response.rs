@@ -2,6 +2,7 @@ use kolomoni_core::api_models::{
     CategoryErrorReason,
     ErrorReason,
     ResponseWithErrorReason,
+    TranslationsErrorReason,
     WordErrorReason,
 };
 use reqwest::StatusCode;
@@ -96,6 +97,20 @@ impl ServerResponse {
         };
 
         Ok(word_error_reason)
+    }
+
+    pub(crate) async fn translations_error_reason(self) -> ClientResult<TranslationsErrorReason> {
+        let response_status = self.status();
+        let error_reason = self.error_reason().await?;
+
+        let ErrorReason::Translations(translations_error_reason) = error_reason else {
+            return Err(ClientError::unexpected_error_reason(
+                error_reason,
+                response_status,
+            ));
+        };
+
+        Ok(translations_error_reason)
     }
 }
 

@@ -3,15 +3,15 @@ use models::{
     category::{
         Category,
         IntermediateCategory,
+        IntermediateCategoryOutputContext,
         IntermediateCategoryOutputError,
-        IntermediateCategoryResolutionContext,
     },
     english_word::{EnglishWord, IntermediateEnglishWord},
     english_word_meaning::{
         EnglishWordMeaning,
         IntermediateEnglishWordMeaning,
+        IntermediateEnglishWordMeaningOutputContext,
         IntermediateEnglishWordMeaningOutputError,
-        IntermediateEnglishWordMeaningResolutionContext,
     },
     slovene_word::{IntermediateSloveneWord, SloveneWord},
     slovene_word_meaning::{
@@ -30,7 +30,6 @@ use models::{
     ToOutputModel,
     TryToOutputModelWithContext,
 };
-use parking_lot::MappedRwLockReadGuard;
 use thiserror::Error;
 
 use crate::parser::{
@@ -42,7 +41,6 @@ use crate::parser::{
 
 pub(crate) mod insert_only_set;
 pub(crate) mod models;
-pub(crate) mod shared;
 
 
 
@@ -85,10 +83,22 @@ pub enum SeedDatasetError {
 
 
 
-#[inline]
-fn clean_up_str(string: &str) -> &str {
-    string.trim()
+fn clean_up_string<S>(string: S) -> String
+where
+    S: AsRef<str>,
+{
+    string.as_ref().trim().to_string()
 }
+
+fn clean_up_optional_string<S>(optional_string: Option<S>) -> Option<String>
+where
+    S: AsRef<str>,
+{
+    optional_string
+        .map(|string| clean_up_string(string))
+        .filter(|cleaned_string| !cleaned_string.is_empty())
+}
+
 
 
 struct ParsedCategories {
@@ -99,7 +109,7 @@ struct ParsedCategories {
 fn parse_categories(
     categories_iterator: SeedSpreadsheetCategoriesIter,
 ) -> Result<ParsedCategories, SeedDatasetError> {
-    let intermediate_categories = GrowingKeyedSet::new();
+    let mut intermediate_categories = GrowingKeyedSet::new();
 
     for category_row_result in categories_iterator {
         let category_row = category_row_result?;
@@ -112,12 +122,12 @@ fn parse_categories(
     // Do a second pass on the categories to assign them
     // the correct references to parent categories.
     let intermediate_category_context =
-        IntermediateCategoryResolutionContext::new(&intermediate_categories);
+        IntermediateCategoryOutputContext::new(&intermediate_categories);
 
 
-    let final_categories = GrowingKeyedSet::new();
+    let mut final_categories = GrowingKeyedSet::new();
 
-    for intermediate_category in intermediate_categories.read_inner().values() {
+    for intermediate_category in intermediate_categories.values() {
         let final_category = intermediate_category
             .try_to_output_model(&intermediate_category_context)
             .map_err(
@@ -152,13 +162,13 @@ fn parse_words_and_translations(
     parsed_categories: &ParsedCategories,
     translation_row_iterator: SeedSpreadsheetTranslationsIter,
 ) -> Result<ParsedWordsAndTranslations, SeedDatasetError> {
-    let english_words = GrowingKeyedSet::new();
-    let english_word_meanings = GrowingKeyedSet::new();
+    let mut english_words = GrowingKeyedSet::new();
+    let mut english_word_meanings = GrowingKeyedSet::new();
 
-    let slovene_words = GrowingKeyedSet::new();
-    let slovene_word_meanings = GrowingKeyedSet::new();
+    let mut slovene_words = GrowingKeyedSet::new();
+    let mut slovene_word_meanings = GrowingKeyedSet::new();
 
-    let translations = GrowingKeyedSet::new();
+    let mut translations = GrowingKeyedSet::new();
 
 
     for seed_translations_row_result in translation_row_iterator {
@@ -174,6 +184,7 @@ fn parse_words_and_translations(
 
         let intermediate_english_word_meaning = IntermediateEnglishWordMeaning::from_raw_data(
             seed_translation_row.english_lemma.clone(),
+            seed_translation_row.english_meaning_description.clone(),
             seed_translation_row.english_meaning_disamgibuation.clone(),
             seed_translation_row.english_meaning_example.clone(),
             seed_translation_row.english_meaning_abbreviation.clone(),
@@ -181,12 +192,10 @@ fn parse_words_and_translations(
         );
 
         let english_word_meaning = intermediate_english_word_meaning
-            .try_to_output_model(
-                &IntermediateEnglishWordMeaningResolutionContext::new(
-                    &english_words,
-                    &parsed_categories.categories,
-                ),
-            )
+            .try_to_output_model(&IntermediateEnglishWordMeaningOutputContext::new(
+                &english_words,
+                &parsed_categories.categories,
+            ))
             .map_err(
                 |error| SeedDatasetError::IntermediateEnglishWordMeaningOutputError {
                     english_word_lemma: seed_translation_row.english_lemma.clone(),
@@ -208,6 +217,7 @@ fn parse_words_and_translations(
 
         let intermediate_slovene_word_meaning = IntermediateSloveneWordMeaning::from_raw_data(
             seed_translation_row.slovene_lemma.clone(),
+            seed_translation_row.slovene_meaning_description.clone(),
             seed_translation_row.slovene_meaning_disambiguation.clone(),
             seed_translation_row.slovene_meaning_example.clone(),
             seed_translation_row.slovene_meaning_abbreviation.clone(),
@@ -310,47 +320,53 @@ impl SeedDataset {
         &self.translations
     }
 
-    pub fn category_by_internal_id(
-        &self,
-        internal_category_id: &InternalCategoryId,
-    ) -> Option<MappedRwLockReadGuard<'_, Category>> {
+    #[allow(dead_code)]
+    pub fn category_by_internal_id<'a>(
+        &'a self,
+        internal_category_id: &'_ InternalCategoryId,
+    ) -> Option<&'a Category> {
         self.categories.get(internal_category_id)
     }
 
-    pub fn english_word_by_internal_id(
-        &self,
-        internal_english_word_id: &InternalEnglishWordId,
-    ) -> Option<MappedRwLockReadGuard<'_, EnglishWord>> {
+    #[allow(dead_code)]
+    pub fn english_word_by_internal_id<'a>(
+        &'a self,
+        internal_english_word_id: &'_ InternalEnglishWordId,
+    ) -> Option<&'a EnglishWord> {
         self.english_words.get(internal_english_word_id)
     }
 
-    pub fn english_word_meaning_by_internal_id(
-        &self,
-        internal_english_word_meaning_id: &InternalEnglishWordMeaningId,
-    ) -> Option<MappedRwLockReadGuard<'_, EnglishWordMeaning>> {
+    #[allow(dead_code)]
+    pub fn english_word_meaning_by_internal_id<'a>(
+        &'a self,
+        internal_english_word_meaning_id: &'_ InternalEnglishWordMeaningId,
+    ) -> Option<&'a EnglishWordMeaning> {
         self.english_word_meanings
             .get(internal_english_word_meaning_id)
     }
 
-    pub fn slovene_word_by_internal_id(
-        &self,
-        internal_slovene_word_id: &InternalSloveneWordId,
-    ) -> Option<MappedRwLockReadGuard<'_, SloveneWord>> {
+    #[allow(dead_code)]
+    pub fn slovene_word_by_internal_id<'a>(
+        &'a self,
+        internal_slovene_word_id: &'_ InternalSloveneWordId,
+    ) -> Option<&'a SloveneWord> {
         self.slovene_words.get(internal_slovene_word_id)
     }
 
-    pub fn slovene_word_meaning_by_internal_id(
-        &self,
-        internal_slovene_word_meaning_id: &InternalSloveneWordMeaningId,
-    ) -> Option<MappedRwLockReadGuard<'_, SloveneWordMeaning>> {
+    #[allow(dead_code)]
+    pub fn slovene_word_meaning_by_internal_id<'a>(
+        &'a self,
+        internal_slovene_word_meaning_id: &'_ InternalSloveneWordMeaningId,
+    ) -> Option<&'a SloveneWordMeaning> {
         self.slovene_word_meanings
             .get(internal_slovene_word_meaning_id)
     }
 
-    pub fn translation_by_internal_id(
-        &self,
-        internal_translation_id: &InternalTranslationId,
-    ) -> Option<MappedRwLockReadGuard<'_, Translation>> {
+    #[allow(dead_code)]
+    pub fn translation_by_internal_id<'a>(
+        &'a self,
+        internal_translation_id: &'_ InternalTranslationId,
+    ) -> Option<&'a Translation> {
         self.translations.get(internal_translation_id)
     }
 }

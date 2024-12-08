@@ -26,21 +26,6 @@ pub trait TryToOutputModelWithContext {
 
 
 
-pub trait TryToResolvedModelWithContext {
-    type Context<'ctx>
-    where
-        Self: 'ctx;
-    type ResolvedModel;
-    type Error;
-
-    fn try_to_resolved_model<'ctx>(
-        &'ctx self,
-        context: &'ctx Self::Context<'ctx>,
-    ) -> Result<Self::ResolvedModel, Self::Error>;
-}
-
-
-
 macro_rules! create_internal_id_type {
     ($struct_name:ident) => {
         #[doc = "`kolomoni_seeder`-internal ID new-type. "]
@@ -53,11 +38,13 @@ macro_rules! create_internal_id_type {
 
         impl $struct_name {
             #[inline]
+            #[allow(dead_code)]
             pub(crate) fn new(id: u64) -> Self {
                 Self { id }
             }
 
             #[inline]
+            #[allow(dead_code)]
             pub fn generate() -> Self {
                 Self {
                     id: fastrand::u64(..),
@@ -65,6 +52,7 @@ macro_rules! create_internal_id_type {
             }
 
             #[inline]
+            #[allow(dead_code)]
             pub(crate) fn into_inner(self) -> u64 {
                 self.id
             }

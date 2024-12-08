@@ -9,6 +9,7 @@ use crate::{
             categories::{DictionaryCategoriesApi, DictionaryCategoriesAuthenticatedApi},
             english::{EnglishDictionaryApi, EnglishDictionaryAuthenticatedApi},
             slovene::{SloveneDictionaryApi, SloveneDictionaryAuthenticatedApi},
+            translation::TranslationsAuthenticatedApi,
         },
         health::{HealthApi, HealthAuthenticatedApi},
     },
@@ -190,6 +191,10 @@ impl AuthenticatedClient {
 
     pub fn slovene_dictionary(&self) -> SloveneDictionaryAuthenticatedApi<'_> {
         SloveneDictionaryAuthenticatedApi::new(self)
+    }
+
+    pub fn translations(&self) -> TranslationsAuthenticatedApi<'_> {
+        TranslationsAuthenticatedApi::new(self)
     }
 }
 
