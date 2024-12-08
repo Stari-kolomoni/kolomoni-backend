@@ -56,7 +56,7 @@ declare_openapi_error_reason_response!(
 /// This endpoint requires authentication and the `word.translation:create` permission.
 #[utoipa::path(
     post,
-    path = "/dictionary/translation",
+    path = "/dictionary/translations",
     tag = "dictionary:translation",
     request_body(
         content = TranslationCreationRequest
@@ -196,7 +196,7 @@ declare_openapi_error_reason_response!(
 /// This endpoint requires authentication and the `word.translation:delete` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/translation",
+    path = "/dictionary/translations",
     tag = "dictionary:translation",
     params(
         TranslationDeletionRequest
@@ -333,7 +333,7 @@ pub async fn delete_translation(
 
 #[rustfmt::skip]
 pub fn translations_router() -> Scope {
-    web::scope("/translation")
+    web::scope("/translations")
         .service(create_translation)
         .service(delete_translation)
 }
