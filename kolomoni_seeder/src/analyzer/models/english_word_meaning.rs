@@ -25,7 +25,7 @@ pub struct IntermediateEnglishWordMeaning {
     abbreviation: Option<String>,
 
     referenced_english_word_by_lemma: String,
-    referenced_categories_by_english_name: Vec<String>,
+    referenced_categories_by_slovene_name: Vec<String>,
 }
 
 impl IntermediateEnglishWordMeaning {
@@ -35,7 +35,7 @@ impl IntermediateEnglishWordMeaning {
         raw_disambiguation: Option<String>,
         raw_example: Option<String>,
         raw_abbreviation: Option<String>,
-        raw_referenced_categories_by_english_name: Vec<String>,
+        raw_referenced_categories_by_slovene_name: Vec<String>,
     ) -> Self {
         let referenced_english_word_by_lemma = clean_up_string(raw_referenced_english_word_by_lemma);
 
@@ -44,7 +44,7 @@ impl IntermediateEnglishWordMeaning {
         let example = clean_up_optional_string(raw_example);
         let abbreviation = clean_up_optional_string(raw_abbreviation);
 
-        let referenced_categories_by_english_name = raw_referenced_categories_by_english_name
+        let referenced_categories_by_slovene_name = raw_referenced_categories_by_slovene_name
             .into_iter()
             .map(clean_up_string)
             .collect();
@@ -56,7 +56,7 @@ impl IntermediateEnglishWordMeaning {
             example,
             abbreviation,
             referenced_english_word_by_lemma,
-            referenced_categories_by_english_name,
+            referenced_categories_by_slovene_name,
         }
     }
 }
@@ -102,11 +102,11 @@ impl<'c> IntermediateEnglishWordMeaningOutputContext<'c> {
         self.english_words.get(&target_english_word_internal_id)
     }
 
-    fn category_by_english_name(&self, english_category_name: &str) -> Option<&Category> {
+    fn category_by_slovene_name(&self, slovene_category_name: &str) -> Option<&Category> {
         let mut target_category_internal_id = None;
 
         for category in self.categories.values() {
-            if english_category_name == category.english_name {
+            if slovene_category_name == category.slovene_name {
                 target_category_internal_id = Some(category.internal_id());
                 break;
             }
@@ -123,8 +123,8 @@ pub enum IntermediateEnglishWordMeaningOutputError {
     #[error("no such english word with lemma: \"{}\"", .english_word_lemma)]
     EnglishWordNotFoundByLemma { english_word_lemma: String },
 
-    #[error("no such category with english name: \"{}\"", .category_english_name)]
-    CategoryNotFoundByEnglishName { category_english_name: String },
+    #[error("no such category with slovene name: \"{}\"", .category_slovene_name)]
+    CategoryNotFoundBySloveneName { category_slovene_name: String },
 }
 
 
@@ -148,15 +148,15 @@ impl TryToOutputModelWithContext for IntermediateEnglishWordMeaning {
         };
 
 
-        let mut categories = Vec::with_capacity(self.referenced_categories_by_english_name.len());
+        let mut categories = Vec::with_capacity(self.referenced_categories_by_slovene_name.len());
 
-        for referenced_category_english_name in &self.referenced_categories_by_english_name {
+        for referenced_category_slovene_name in &self.referenced_categories_by_slovene_name {
             let Some(target_category) =
-                context.category_by_english_name(referenced_category_english_name)
+                context.category_by_slovene_name(referenced_category_slovene_name)
             else {
                 return Err(
-                    IntermediateEnglishWordMeaningOutputError::CategoryNotFoundByEnglishName {
-                        category_english_name: referenced_category_english_name.to_owned(),
+                    IntermediateEnglishWordMeaningOutputError::CategoryNotFoundBySloveneName {
+                        category_slovene_name: referenced_category_slovene_name.to_owned(),
                     },
                 );
             };

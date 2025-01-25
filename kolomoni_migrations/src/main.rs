@@ -1,6 +1,12 @@
 use clap::Parser;
 use cli::{CliArgs, CliCommand};
-use commands::{down::cli_down, generate::cli_generate, initialize::cli_initialize, up::cli_up};
+use commands::{
+    down::cli_down,
+    generate::cli_generate,
+    initialize::cli_initialize,
+    status::cli_status,
+    up::cli_up,
+};
 use miette::{Context, IntoDiagnostic, Result};
 
 mod cli;
@@ -21,6 +27,7 @@ pub fn main() -> Result<()> {
         CliCommand::Generate(generate_command_args) => cli_generate(generate_command_args),
         CliCommand::Up(up_command_args) => cli_up(up_command_args),
         CliCommand::Down(down_command_args) => cli_down(down_command_args),
+        CliCommand::Status(status_command_args) => cli_status(status_command_args),
     }
 }
 

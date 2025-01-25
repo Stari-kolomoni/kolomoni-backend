@@ -156,6 +156,7 @@ pub async fn create_translation(
     .await?;
 
 
+    transaction.commit().await?;
 
     /* TODO pending cache layer rewrite
     // Signals to the search engine that both words have been updated.
@@ -309,6 +310,7 @@ pub async fn delete_translation(
         english_word_meaning_id, slovene_word_meaning_id
     );
 
+    transaction.commit().await?;
 
 
     /* TODO pending cache layer rewrite

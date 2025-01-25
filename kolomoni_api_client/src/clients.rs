@@ -1,17 +1,26 @@
-use std::rc::Rc;
+use std::{borrow::Cow, future::Future, sync::Arc};
 
-use reqwest::Body;
+use reqwest::{header::HeaderMap, Body};
 use url::Url;
 
 use crate::{
     api::{
+        auth::AuthenticationApi,
         dictionary::{
-            categories::{DictionaryCategoriesApi, DictionaryCategoriesAuthenticatedApi},
-            english::{EnglishDictionaryApi, EnglishDictionaryAuthenticatedApi},
-            slovene::{SloveneDictionaryApi, SloveneDictionaryAuthenticatedApi},
+            categories::{
+                DictionaryCategoriesAuthenticatedApi,
+                DictionaryCategoriesUnauthenticatedApi,
+            },
+            english::{EnglishDictionaryAuthenticatedApi, EnglishDictionaryUnauthenticatedApi},
+            slovene::{SloveneDictionaryAuthenticatedApi, SloveneDictionaryUnauthenticatedApi},
             translation::TranslationsAuthenticatedApi,
         },
-        health::{HealthApi, HealthAuthenticatedApi},
+        health::{HealthAuthenticatedApi, HealthUnauthenticatedApi, SharedHealthEndpoints},
+        users::{
+            current::CurrentUserApi,
+            AuthenticatedSpecificUserApi,
+            SpecificUserUnauthenticatedApi,
+        },
     },
     authentication::AccessToken,
     errors::{ClientError, ClientInitializationError, ClientResult},
@@ -19,41 +28,124 @@ use crate::{
     ApiServer,
 };
 
-pub(crate) trait HttpClient {
+
+pub trait ApiClient {
     fn server(&self) -> &ApiServer;
 
-    async fn get(&self, url: Url) -> ClientResult<ServerResponse>;
+    fn get(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+    ) -> impl Future<Output = ClientResult<ServerResponse>> + Send;
 
-    async fn post<B>(&self, url: Url, json_body: Option<B>) -> ClientResult<ServerResponse>
+    fn post<B>(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+        json_body: Option<B>,
+    ) -> impl Future<Output = ClientResult<ServerResponse>> + Send
     where
-        B: Into<Body>;
+        B: Into<Body> + Send;
 
-    async fn patch<B>(&self, url: Url, json_body: Option<B>) -> ClientResult<ServerResponse>
+    fn patch<B>(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+        json_body: Option<B>,
+    ) -> impl Future<Output = ClientResult<ServerResponse>> + Send
     where
-        B: Into<Body>;
+        B: Into<Body> + Send;
 
-    async fn delete(&self, url: Url) -> ClientResult<ServerResponse>;
+    fn delete<B>(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+        json_body: Option<B>,
+    ) -> impl Future<Output = ClientResult<ServerResponse>> + Send
+    where
+        B: Into<Body> + Send;
+}
+
+
+pub trait UnauthenticatedApiClient: ApiClient {}
+
+pub trait AuthenticatedApiClient: ApiClient {}
+
+
+pub trait SharedApiClientEndpointGroups {
+    type AuthenticationApi<'c>
+    where
+        Self: 'c;
+
+    type UserApi<'c>
+    where
+        Self: 'c;
+
+    type HealthApi<'c>: SharedHealthEndpoints
+    where
+        Self: 'c;
+
+    type CategoriesApi<'c>
+    where
+        Self: 'c;
+
+    type EnglishDictionaryApi<'c>
+    where
+        Self: 'c;
+
+    type SloveneDictionaryApi<'c>
+    where
+        Self: 'c;
+
+    fn authentication(&self) -> Self::AuthenticationApi<'_>;
+
+    fn users(&self) -> Self::UserApi<'_>;
+
+    fn health(&self) -> Self::HealthApi<'_>;
+
+    fn categories(&self) -> Self::CategoriesApi<'_>;
+
+    fn english_dictionary(&self) -> Self::EnglishDictionaryApi<'_>;
+
+    fn slovene_dictionary(&self) -> Self::SloveneDictionaryApi<'_>;
 }
 
 
 
-fn build_client_user_agent() -> String {
-    format!(
-        "kolomoni_api_client / v{}",
-        env!("CARGO_PKG_VERSION")
-    )
+
+const DEFAULT_CLIENT_USER_AGENT: &str = concat!(
+    "kolomoni_api_client / v{}",
+    env!("CARGO_PKG_VERSION")
+);
+
+
+pub struct ClientOptions {
+    pub user_agent: Cow<'static, str>,
 }
 
-pub struct Client {
-    server: Rc<ApiServer>,
+
+pub struct UnauthenticatedClient {
+    server: Arc<ApiServer>,
     http_client: reqwest::Client,
 }
 
-impl Client {
-    pub fn new(server: &Rc<ApiServer>) -> Result<Self, ClientInitializationError> {
+impl UnauthenticatedClient {
+    pub fn new(server: &Arc<ApiServer>) -> Result<Self, ClientInitializationError> {
+        Self::new_with_options(
+            server,
+            ClientOptions {
+                user_agent: Cow::Borrowed(DEFAULT_CLIENT_USER_AGENT),
+            },
+        )
+    }
+
+    pub fn new_with_options(
+        server: &Arc<ApiServer>,
+        options: ClientOptions,
+    ) -> Result<Self, ClientInitializationError> {
         let http_client_partial = reqwest::Client::builder()
             .zstd(true)
-            .user_agent(build_client_user_agent());
+            .user_agent(options.user_agent.as_ref());
 
         let http_client_partial = match server.is_https() {
             true => http_client_partial.https_only(true),
@@ -70,7 +162,7 @@ impl Client {
         })
     }
 
-    pub fn with_authentication(&self, authentication: &Rc<AccessToken>) -> AuthenticatedClient {
+    pub fn with_authentication(&self, authentication: &Arc<AccessToken>) -> AuthenticatedClient {
         AuthenticatedClient::new(
             self.server.clone(),
             authentication.clone(),
@@ -79,41 +171,68 @@ impl Client {
     }
 }
 
-impl Client {
-    pub fn health(&self) -> HealthApi<'_> {
-        HealthApi::new(self)
+impl SharedApiClientEndpointGroups for UnauthenticatedClient {
+    type AuthenticationApi<'c> = AuthenticationApi<'c, Self>;
+    type UserApi<'c> = SpecificUserUnauthenticatedApi<'c, Self>;
+    type HealthApi<'c> = HealthUnauthenticatedApi<'c, Self>;
+    type CategoriesApi<'c> = DictionaryCategoriesUnauthenticatedApi<'c, Self>;
+    type EnglishDictionaryApi<'c> = EnglishDictionaryUnauthenticatedApi<'c, Self>;
+    type SloveneDictionaryApi<'c> = SloveneDictionaryUnauthenticatedApi<'c, Self>;
+
+    #[inline]
+    fn authentication(&self) -> Self::AuthenticationApi<'_> {
+        AuthenticationApi::new(self)
     }
 
-    pub fn categories(&self) -> DictionaryCategoriesApi<'_> {
-        DictionaryCategoriesApi::new(self)
+    #[inline]
+    fn users(&self) -> Self::UserApi<'_> {
+        SpecificUserUnauthenticatedApi::new(self)
     }
 
-    pub fn english_dictionary(&self) -> EnglishDictionaryApi<'_> {
-        EnglishDictionaryApi::new(self)
+    #[inline]
+    fn health(&self) -> HealthUnauthenticatedApi<'_, Self> {
+        HealthUnauthenticatedApi::new(self)
     }
 
-    pub fn slovene_dictionary(&self) -> SloveneDictionaryApi<'_> {
-        SloveneDictionaryApi::new(self)
+    #[inline]
+    fn categories(&self) -> DictionaryCategoriesUnauthenticatedApi<'_, Self> {
+        DictionaryCategoriesUnauthenticatedApi::new(self)
+    }
+
+    #[inline]
+    fn english_dictionary(&self) -> EnglishDictionaryUnauthenticatedApi<'_, Self> {
+        EnglishDictionaryUnauthenticatedApi::new(self)
+    }
+
+    #[inline]
+    fn slovene_dictionary(&self) -> SloveneDictionaryUnauthenticatedApi<'_, Self> {
+        SloveneDictionaryUnauthenticatedApi::new(self)
     }
 }
 
-impl HttpClient for Client {
+impl ApiClient for UnauthenticatedClient {
     fn server(&self) -> &ApiServer {
         &self.server
     }
 
-    async fn get(&self, url: Url) -> ClientResult<ServerResponse> {
+    async fn get(&self, url: Url, additional_headers: HeaderMap) -> ClientResult<ServerResponse> {
         self.http_client
             .get(url)
+            .headers(additional_headers)
             .send()
             .await
             .map(ServerResponse::from_reqwest_response)
             .map_err(|error| ClientError::RequestExecutionError { error })
     }
 
-    async fn post<B>(&self, url: Url, json_body: Option<B>) -> ClientResult<ServerResponse>
+    async fn post<B>(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+        json_body: Option<B>,
+    ) -> ClientResult<ServerResponse>
     where
-        B: Into<Body>,
+        B: Into<Body> + Send,
     {
         let mut request_builder = self.http_client.post(url);
 
@@ -122,15 +241,21 @@ impl HttpClient for Client {
         }
 
         request_builder
+            .headers(additional_headers)
             .send()
             .await
             .map(ServerResponse::from_reqwest_response)
             .map_err(|error| ClientError::RequestExecutionError { error })
     }
 
-    async fn patch<B>(&self, url: Url, json_body: Option<B>) -> ClientResult<ServerResponse>
+    async fn patch<B>(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+        json_body: Option<B>,
+    ) -> ClientResult<ServerResponse>
     where
-        B: Into<Body>,
+        B: Into<Body> + Send,
     {
         let mut request_builder = self.http_client.patch(url);
 
@@ -139,15 +264,30 @@ impl HttpClient for Client {
         }
 
         request_builder
+            .headers(additional_headers)
             .send()
             .await
             .map(ServerResponse::from_reqwest_response)
             .map_err(|error| ClientError::RequestExecutionError { error })
     }
 
-    async fn delete(&self, url: Url) -> ClientResult<ServerResponse> {
-        self.http_client
-            .delete(url)
+    async fn delete<B>(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+        json_body: Option<B>,
+    ) -> ClientResult<ServerResponse>
+    where
+        B: Into<Body> + Send,
+    {
+        let mut request_builder = self.http_client.delete(url);
+
+        if let Some(json_body) = json_body {
+            request_builder = request_builder.body(json_body);
+        }
+
+        request_builder
+            .headers(additional_headers)
             .send()
             .await
             .map(ServerResponse::from_reqwest_response)
@@ -155,17 +295,21 @@ impl HttpClient for Client {
     }
 }
 
+impl UnauthenticatedApiClient for UnauthenticatedClient {}
+
+
+
 
 pub struct AuthenticatedClient {
-    server: Rc<ApiServer>,
-    authentication: Rc<AccessToken>,
+    server: Arc<ApiServer>,
+    authentication: Arc<AccessToken>,
     http_client: reqwest::Client,
 }
 
 impl AuthenticatedClient {
     pub(crate) fn new(
-        server: Rc<ApiServer>,
-        authentication: Rc<AccessToken>,
+        server: Arc<ApiServer>,
+        authentication: Arc<AccessToken>,
         http_client: reqwest::Client,
     ) -> Self {
         Self {
@@ -176,90 +320,143 @@ impl AuthenticatedClient {
     }
 }
 
-impl AuthenticatedClient {
-    pub fn health(&self) -> HealthAuthenticatedApi<'_> {
+impl SharedApiClientEndpointGroups for AuthenticatedClient {
+    type AuthenticationApi<'c> = AuthenticationApi<'c, Self>;
+    type UserApi<'c> = AuthenticatedSpecificUserApi<'c, Self>;
+    type HealthApi<'c> = HealthAuthenticatedApi<'c, Self>;
+    type CategoriesApi<'c> = DictionaryCategoriesAuthenticatedApi<'c, Self>;
+    type EnglishDictionaryApi<'c> = EnglishDictionaryAuthenticatedApi<'c, Self>;
+    type SloveneDictionaryApi<'c> = SloveneDictionaryAuthenticatedApi<'c, Self>;
+
+    #[inline]
+    fn authentication(&self) -> Self::AuthenticationApi<'_> {
+        AuthenticationApi::new(self)
+    }
+
+    #[inline]
+    fn users(&self) -> Self::UserApi<'_> {
+        AuthenticatedSpecificUserApi::new(self)
+    }
+
+    #[inline]
+    fn health(&self) -> HealthAuthenticatedApi<'_, Self> {
         HealthAuthenticatedApi::new(self)
     }
 
-    pub fn categories(&self) -> DictionaryCategoriesAuthenticatedApi<'_> {
+    #[inline]
+    fn categories(&self) -> DictionaryCategoriesAuthenticatedApi<'_, Self> {
         DictionaryCategoriesAuthenticatedApi::new(self)
     }
 
-    pub fn english_dictionary(&self) -> EnglishDictionaryAuthenticatedApi<'_> {
+    #[inline]
+    fn english_dictionary(&self) -> EnglishDictionaryAuthenticatedApi<'_, Self> {
         EnglishDictionaryAuthenticatedApi::new(self)
     }
 
-    pub fn slovene_dictionary(&self) -> SloveneDictionaryAuthenticatedApi<'_> {
+    #[inline]
+    fn slovene_dictionary(&self) -> SloveneDictionaryAuthenticatedApi<'_, Self> {
         SloveneDictionaryAuthenticatedApi::new(self)
-    }
-
-    pub fn translations(&self) -> TranslationsAuthenticatedApi<'_> {
-        TranslationsAuthenticatedApi::new(self)
     }
 }
 
-impl HttpClient for AuthenticatedClient {
+impl AuthenticatedClient {
+    pub fn translations(&self) -> TranslationsAuthenticatedApi<'_, Self> {
+        TranslationsAuthenticatedApi::new(self)
+    }
+
+    pub fn current_user(&self) -> CurrentUserApi<'_, Self> {
+        CurrentUserApi::new(self)
+    }
+}
+
+
+impl ApiClient for AuthenticatedClient {
     fn server(&self) -> &ApiServer {
         &self.server
     }
 
-    async fn get(&self, url: Url) -> ClientResult<ServerResponse> {
+    async fn get(&self, url: Url, additional_headers: HeaderMap) -> ClientResult<ServerResponse> {
         self.http_client
             .get(url)
             .bearer_auth(self.authentication.access_token())
+            .headers(additional_headers)
             .send()
             .await
             .map(ServerResponse::from_reqwest_response)
             .map_err(|error| ClientError::RequestExecutionError { error })
     }
 
-    async fn post<B>(&self, url: Url, json_body: Option<B>) -> ClientResult<ServerResponse>
+    async fn post<B>(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+        json_body: Option<B>,
+    ) -> ClientResult<ServerResponse>
     where
-        B: Into<Body>,
+        B: Into<Body> + Send,
     {
-        let mut request_builder = self
-            .http_client
-            .post(url)
-            .bearer_auth(self.authentication.access_token());
+        let mut request_builder = self.http_client.post(url);
 
         if let Some(json_body) = json_body {
             request_builder = request_builder.body(json_body);
         }
 
         request_builder
-            .send()
-            .await
-            .map(ServerResponse::from_reqwest_response)
-            .map_err(|error| ClientError::RequestExecutionError { error })
-    }
-
-    async fn patch<B>(&self, url: Url, json_body: Option<B>) -> ClientResult<ServerResponse>
-    where
-        B: Into<Body>,
-    {
-        let mut request_builder = self
-            .http_client
-            .patch(url)
-            .bearer_auth(self.authentication.access_token());
-
-        if let Some(json_body) = json_body {
-            request_builder = request_builder.body(json_body);
-        }
-
-        request_builder
-            .send()
-            .await
-            .map(ServerResponse::from_reqwest_response)
-            .map_err(|error| ClientError::RequestExecutionError { error })
-    }
-
-    async fn delete(&self, url: Url) -> ClientResult<ServerResponse> {
-        self.http_client
-            .delete(url)
             .bearer_auth(self.authentication.access_token())
+            .headers(additional_headers)
+            .send()
+            .await
+            .map(ServerResponse::from_reqwest_response)
+            .map_err(|error| ClientError::RequestExecutionError { error })
+    }
+
+    async fn patch<B>(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+        json_body: Option<B>,
+    ) -> ClientResult<ServerResponse>
+    where
+        B: Into<Body> + Send,
+    {
+        let mut request_builder = self.http_client.patch(url);
+
+        if let Some(json_body) = json_body {
+            request_builder = request_builder.body(json_body);
+        }
+
+        request_builder
+            .bearer_auth(self.authentication.access_token())
+            .headers(additional_headers)
+            .send()
+            .await
+            .map(ServerResponse::from_reqwest_response)
+            .map_err(|error| ClientError::RequestExecutionError { error })
+    }
+
+    async fn delete<B>(
+        &self,
+        url: Url,
+        additional_headers: HeaderMap,
+        json_body: Option<B>,
+    ) -> ClientResult<ServerResponse>
+    where
+        B: Into<Body> + Send,
+    {
+        let mut request_builder = self.http_client.delete(url);
+
+        if let Some(json_body) = json_body {
+            request_builder = request_builder.body(json_body);
+        }
+
+        request_builder
+            .bearer_auth(self.authentication.access_token())
+            .headers(additional_headers)
             .send()
             .await
             .map(ServerResponse::from_reqwest_response)
             .map_err(|error| ClientError::RequestExecutionError { error })
     }
 }
+
+impl AuthenticatedApiClient for AuthenticatedClient {}

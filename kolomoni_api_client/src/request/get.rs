@@ -1,17 +1,18 @@
 use std::borrow::Borrow;
 
+use reqwest::header::HeaderMap;
 use url::Url;
 
 use super::{build_request_url, build_request_url_with_parameters};
 use crate::{
     errors::{ClientError, ClientResult},
     response::ServerResponse,
-    HttpClient,
+    ApiClient,
 };
 
-pub(crate) struct GetRequestBuilder<'c, HC, const HAS_URL: bool>
+pub struct GetRequestBuilder<'c, HC, const HAS_URL: bool>
 where
-    HC: HttpClient,
+    HC: ApiClient,
 {
     client: &'c HC,
     url: Option<Result<Url, url::ParseError>>,
@@ -19,13 +20,13 @@ where
 
 impl<'c, HC, const HAS_URL: bool> GetRequestBuilder<'c, HC, HAS_URL>
 where
-    HC: HttpClient,
+    HC: ApiClient,
 {
     pub(crate) fn new(client: &'c HC) -> GetRequestBuilder<'c, HC, false> {
         GetRequestBuilder { client, url: None }
     }
 
-    pub(crate) fn endpoint_url<U>(self, relative_endpoint_url: U) -> GetRequestBuilder<'c, HC, true>
+    pub fn endpoint_url<U>(self, relative_endpoint_url: U) -> GetRequestBuilder<'c, HC, true>
     where
         U: AsRef<str>,
     {
@@ -38,7 +39,7 @@ where
         }
     }
 
-    pub(crate) fn endpoint_url_with_parameters<U, P, K, V>(
+    pub fn endpoint_url_with_parameters<U, P, K, V>(
         self,
         relative_endpoint_url: U,
         parameters: P,
@@ -63,9 +64,9 @@ where
 
 impl<'c, HC> GetRequestBuilder<'c, HC, true>
 where
-    HC: HttpClient,
+    HC: ApiClient,
 {
-    pub(crate) async fn send(self) -> ClientResult<ServerResponse> {
+    pub async fn send(self) -> ClientResult<ServerResponse> {
         // PANIC SAFETY: `url` field is `Some` when `HasUrl` const generic is `true`.
         let request_url = match self.url.unwrap() {
             Ok(request_url) => request_url,
@@ -76,6 +77,6 @@ where
             }
         };
 
-        self.client.get(request_url).await
+        self.client.get(request_url, HeaderMap::new()).await
     }
 }

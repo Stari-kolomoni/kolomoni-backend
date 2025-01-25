@@ -148,6 +148,10 @@ pub async fn create_category(
         .await
         .map_err(APIError::InternalGenericError)?; */
 
+
+    transaction.commit().await?;
+
+
     EndpointResponseBuilder::ok()
         .with_json_body(CategoryCreationResponse {
             category: newly_created_category.into_api_model(),
@@ -486,6 +490,7 @@ pub async fn update_specific_category(
         .await
         .map_err(APIError::InternalGenericError)?; */
 
+    transaction.commit().await?;
 
     EndpointResponseBuilder::ok()
         .with_json_body(CategoryResponse {
@@ -572,6 +577,7 @@ pub async fn delete_specific_category(
         ));
     }
 
+    transaction.commit().await?;
 
     /* TODO pending rewrite of cache layer
     state

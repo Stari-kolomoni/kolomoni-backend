@@ -1,4 +1,13 @@
-use std::{collections::HashMap, error::Error, fs, future::Future, path::Path, pin::Pin};
+use std::{
+    collections::HashMap,
+    error::Error,
+    fmt::Debug,
+    fs,
+    future::Future,
+    path::Path,
+    pin::Pin,
+    slice,
+};
 
 use sqlx::{postgres::PgConnectOptions, ConnectOptions, PgConnection};
 
@@ -55,7 +64,7 @@ impl SegmentedHashMatch {
 /// Note that while the down (rollback) script of the migration is optional,
 /// if either the local or remote has one, the other one *must* have one
 /// with the matching hash as well, otherwise `false` is returned.
-fn embedded_and_remote_migration_hashes_match(
+fn check_embedded_and_remote_migration_for_hash_integrity(
     embedded_migration: &EmbeddedMigration<'_>,
     remote_migration: &RemoteMigration,
 ) -> SegmentedHashMatch {
@@ -98,27 +107,99 @@ fn embedded_and_remote_migration_hashes_match(
 
 
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MigrationsWithStatusOptions {
-    pub require_up_hashes_match: bool,
-    pub require_down_hashes_match: bool,
+pub struct IntegrityVerdict<'a, 'm> {
+    pub mismatched_up_migration_hashes: Vec<&'a ConsolidatedMigration<'m>>,
+    pub mismatched_down_migration_hashes: Vec<&'a ConsolidatedMigration<'m>>,
 }
 
-impl Default for MigrationsWithStatusOptions {
-    fn default() -> Self {
-        Self {
-            require_up_hashes_match: true,
-            require_down_hashes_match: true,
-        }
+impl<'a, 'm> IntegrityVerdict<'a, 'm> {
+    #[inline]
+    pub fn has_full_integrity(&self) -> bool {
+        self.mismatched_up_migration_hashes.is_empty()
+            && self.mismatched_down_migration_hashes.is_empty()
+    }
+
+    #[inline]
+    pub fn has_up_integrity(&self) -> bool {
+        self.mismatched_up_migration_hashes.is_empty()
+    }
+
+    #[inline]
+    pub fn has_down_integrity(&self) -> bool {
+        self.mismatched_down_migration_hashes.is_empty()
     }
 }
 
-impl MigrationsWithStatusOptions {
-    pub fn strict() -> Self {
-        Self {
-            require_up_hashes_match: true,
-            require_down_hashes_match: true,
+impl<'a, 'm> Debug for IntegrityVerdict<'a, 'm> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let formatted_mismatched_up_identifiers = self
+            .mismatched_up_migration_hashes
+            .iter()
+            .map(|migration| format!("{:?}", migration.identifier()))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let formatted_mismatched_down_identifiers = self
+            .mismatched_down_migration_hashes
+            .iter()
+            .map(|migration| format!("{:?}", migration.identifier()))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+
+        write!(
+            f,
+            "IntegrityVerdict {{\n    \
+                mismatched_up_migration_hashes: [{}],
+                mismatched_down_migration_hashes: [{}],
+            }}",
+            formatted_mismatched_up_identifiers, formatted_mismatched_down_identifiers
+        )
+    }
+}
+
+
+pub struct ConsolidatedMigrationCollection<'m> {
+    migrations: Vec<ConsolidatedMigration<'m>>,
+}
+
+impl<'m> ConsolidatedMigrationCollection<'m> {
+    const fn from_consolidated_migrations(migrations: Vec<ConsolidatedMigration<'m>>) -> Self {
+        Self { migrations }
+    }
+
+    pub fn integrity<'a>(&'a self) -> IntegrityVerdict<'a, 'm> {
+        let mut mismatched_up_migrations = Vec::with_capacity(0);
+        let mut mismatched_down_migrations = Vec::with_capacity(0);
+
+        for migration in self.migrations() {
+            if let MigrationStatus::Applied { integrity, .. } = migration.status() {
+                if !integrity.up_hash_matches {
+                    mismatched_up_migrations.push(migration);
+                }
+
+                if !integrity.down_hash_matches {
+                    mismatched_down_migrations.push(migration);
+                }
+            }
         }
+
+        IntegrityVerdict::<'a, 'm> {
+            mismatched_up_migration_hashes: mismatched_up_migrations,
+            mismatched_down_migration_hashes: mismatched_down_migrations,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.migrations.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn migrations(&self) -> slice::Iter<'_, ConsolidatedMigration<'m>> {
+        self.migrations.iter()
     }
 }
 
@@ -196,33 +277,29 @@ impl MigrationManager {
     }
 
     /// Returns all embedded migrations marked as pending.
-    fn get_consolidated_migrations_marked_as_pending(&self) -> Vec<ConsolidatedMigration<'_>> {
-        self.embedded_migrations
+    fn get_consolidated_migrations_marked_as_pending(&self) -> ConsolidatedMigrationCollection<'_> {
+        let migrations_as_pending = self
+            .embedded_migrations
             .iter()
-            .map(|migration| ConsolidatedMigration {
-                migration,
-                status: MigrationStatus::Pending,
-            })
-            .collect()
+            .map(|migration| ConsolidatedMigration::new(migration, MigrationStatus::Pending))
+            .collect();
+
+        ConsolidatedMigrationCollection::from_consolidated_migrations(migrations_as_pending)
     }
 
+
     /// Unlike [`Self::migrations_with_status`], this method expects a [`PgConnectOptions`] instead of the live connection.
-    /// This is because when a connection cannot be established, or when the migration tracking table is not
-    /// present in the database, the returned migrations will all be marked as pending.
+    ///
+    /// This is because when the migration tracking table is not present in the database,
+    /// the returned migrations will all be marked as pending.
     pub async fn migrations_with_status_with_fallback<'m>(
         &'m self,
-        connection_options: Option<&PgConnectOptions>,
-        options: MigrationsWithStatusOptions,
-    ) -> Result<Vec<ConsolidatedMigration<'m>>, StatusError> {
-        let Some(connection_options) = connection_options else {
-            // When a connection fails, we will return all migrations as pending.
-            return Ok(self.get_consolidated_migrations_marked_as_pending());
-        };
-
-        let Ok(mut connection) = connection_options.connect().await else {
-            // When a connection fails, we will return all migrations as pending.
-            return Ok(self.get_consolidated_migrations_marked_as_pending());
-        };
+        connection_options: &PgConnectOptions,
+    ) -> Result<ConsolidatedMigrationCollection<'m>, StatusError> {
+        let mut connection = connection_options
+            .connect()
+            .await
+            .map_err(|error| StatusError::UnableToConnect { error })?;
 
         if !Self::migration_tracking_table_exists(&mut connection)
             .await
@@ -235,15 +312,13 @@ impl MigrationManager {
         }
 
 
-        self.migrations_with_status(&mut connection, options).await
+        self.migrations_with_status(&mut connection).await
     }
-
 
     pub async fn migrations_with_status<'m>(
         &'m self,
         database_connection: &mut PgConnection,
-        options: MigrationsWithStatusOptions,
-    ) -> Result<Vec<ConsolidatedMigration<'m>>, StatusError> {
+    ) -> Result<ConsolidatedMigrationCollection<'m>, StatusError> {
         let mut embedded_migrations_by_version: HashMap<i64, &EmbeddedMigration<'static>> = self
             .embedded_migrations
             .iter()
@@ -281,40 +356,19 @@ impl MigrationManager {
             }
 
 
-            let hash_match_info = embedded_and_remote_migration_hashes_match(
+            let hash_match_info = check_embedded_and_remote_migration_for_hash_integrity(
                 corresponding_embedded_migration,
                 &remote_migration,
             );
-
-            if (options.require_up_hashes_match && !hash_match_info.up_matches())
-                || (options.require_down_hashes_match && !hash_match_info.down_matches())
-            {
-                return Err(StatusError::HashMismatch {
-                    identifier: remote_migration.identifier.clone(),
-                    remote_up_script_sha256_hash: remote_migration
-                        .up_script
-                        .up_script_sha256_hash
-                        .clone(),
-                    embedded_up_script_sha256_hash: corresponding_embedded_migration
-                        .up
-                        .sha256_hash()
-                        .to_owned(),
-                    remote_down_script_sha256_hash: remote_migration
-                        .down_script
-                        .as_ref()
-                        .map(|down| down.down_script_sha256_hash.clone()),
-                    embedded_down_script_sha256_hash: corresponding_embedded_migration
-                        .down
-                        .as_ref()
-                        .map(|down| down.sha256_hash().to_owned()),
-                });
-            }
-
 
             consolidated_migrations.push(ConsolidatedMigration {
                 migration: corresponding_embedded_migration,
                 status: MigrationStatus::Applied {
                     at: remote_migration.applied_at,
+                    integrity: ConsolidatedMigrationIntegrity {
+                        up_hash_matches: hash_match_info.up_matches(),
+                        down_hash_matches: hash_match_info.down_matches(),
+                    },
                 },
             })
         }
@@ -330,7 +384,29 @@ impl MigrationManager {
 
         consolidated_migrations.sort_unstable_by_key(|migration| migration.identifier().version);
 
-        Ok(consolidated_migrations)
+        Ok(ConsolidatedMigrationCollection::from_consolidated_migrations(consolidated_migrations))
+    }
+}
+
+
+
+// TODO continue from here
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConsolidatedMigrationIntegrity {
+    /// `true` if the hash of the up script of the applied migration
+    /// matches the hash of the embedded migration's up script,
+    /// `false` otherwise.
+    pub up_hash_matches: bool,
+
+    /// `true` if the hash of the rollback script of the applied migration
+    /// matches the hash of the embedded migration's rollback script,
+    /// `false` otherwise.
+    pub down_hash_matches: bool,
+}
+
+impl ConsolidatedMigrationIntegrity {
+    pub fn has_full_integrity(&self) -> bool {
+        self.up_hash_matches && self.down_hash_matches
     }
 }
 
@@ -343,6 +419,16 @@ pub struct ConsolidatedMigration<'c> {
 }
 
 impl<'c> ConsolidatedMigration<'c> {
+    pub const fn new(
+        embedded_migration: &'c EmbeddedMigration<'c>,
+        status: MigrationStatus,
+    ) -> ConsolidatedMigration<'c> {
+        ConsolidatedMigration::<'c> {
+            migration: embedded_migration,
+            status,
+        }
+    }
+
     pub fn identifier(&self) -> &MigrationIdentifier {
         &self.migration.identifier
     }

@@ -69,7 +69,7 @@ impl UserRoleMutation {
             role_hash_set.insert(role);
         }
 
-        Ok(RoleSet::from_role_hash_set(role_hash_set))
+        Ok(RoleSet::from_role_set(role_hash_set))
     }
 
     /// Removes a set of roles from the specified user.
@@ -127,6 +127,6 @@ impl UserRoleMutation {
             role_hash_set.insert(role);
         }
 
-        Ok(RoleSet::from_role_hash_set(role_hash_set))
+        Ok(RoleSet::from_role_set(role_hash_set))
     }
 }

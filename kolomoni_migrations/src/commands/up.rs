@@ -1,10 +1,6 @@
 use std::io::{self, Write};
 
-use kolomoni_migrations_core::{
-    migrations::MigrationsWithStatusOptions,
-    DatabaseConnectionManager,
-    MigrationStatus,
-};
+use kolomoni_migrations_core::{DatabaseConnectionManager, MigrationStatus};
 use miette::{miette, Context, IntoDiagnostic, Result};
 
 use crate::cli::UpCommandArguments;
@@ -40,6 +36,13 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
         .wrap_err("failed to obtain privileged database connection info")?;
 
 
+    let Some(connection_to_load_migrations_with) = privileged_user_db_connection_options
+        .as_ref()
+        .or(normal_user_db_connection_options.as_ref())
+    else {
+        return Err(miette!("Invalid arguments: need at least one of the available database connection options (normal or privileged)."));
+    };
+
     let mut connection_manager = DatabaseConnectionManager::new();
 
 
@@ -57,23 +60,25 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
 
     print!("Loading migrations...");
 
-    let migrations = manager
-        .migrations_with_status_with_fallback(
-            normal_user_db_connection_options.as_ref(),
-            MigrationsWithStatusOptions {
-                require_up_hashes_match: true,
-                require_down_hashes_match: true,
-            },
-        )
+    let migrations_collection = manager
+        .migrations_with_status_with_fallback(connection_to_load_migrations_with)
         .await
         .into_diagnostic()
         .wrap_err("failed to load migrations")?;
 
+    if !migrations_collection.integrity().has_full_integrity() {
+        return Err(miette!(
+            "Integrity failed: {:?}",
+            migrations_collection.integrity()
+        ));
+    }
+
+
     println!(
         "  [Loaded {} migrations ({} already applied)]",
-        migrations.len(),
-        migrations
-            .iter()
+        migrations_collection.len(),
+        migrations_collection
+            .migrations()
             .filter(|migration| matches!(
                 migration.status(),
                 MigrationStatus::Applied { .. }
@@ -82,7 +87,7 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
     );
     println!();
 
-    if migrations.is_empty() {
+    if migrations_collection.is_empty() {
         println!("No migrations to apply: no migrations available.");
 
         return Ok(());
@@ -93,8 +98,8 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
     let version_to_migrate_to = match arguments.migrate_to_version {
         Some(version_to_migrate_to) => {
             // Verify the version exists.
-            let selected_version_exists = migrations
-                .iter()
+            let selected_version_exists = migrations_collection
+                .migrations()
                 .any(|migration| migration.identifier().version == version_to_migrate_to);
 
             if !selected_version_exists {
@@ -110,14 +115,19 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
         }
         None => {
             // PANIC SAFETY: We checked above that `migrations` is not empty.
-            migrations.last().unwrap().identifier().version
+            migrations_collection
+                .migrations()
+                .last()
+                .unwrap()
+                .identifier()
+                .version
         }
     };
 
 
     let mut migrations_to_apply = Vec::new();
 
-    for migration in &migrations {
+    for migration in migrations_collection.migrations() {
         if !matches!(migration.status(), MigrationStatus::Pending) {
             continue;
         }

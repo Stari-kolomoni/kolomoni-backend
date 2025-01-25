@@ -94,7 +94,9 @@ path-slash = "^0.2.1"
 
 parking_lot = "^0.12.3"
 
-fs-more = "^0.7.1"
+fs-more = "^0.8.0"
+
+maplit = "^1.0.2"
 
 futures-core = "^0.3.30"
 futures-util = "^0.3.30"
@@ -112,26 +114,6 @@ features = [
     "chrono",
     "json"
 ]
-
-
-# [workspace.dependencies.sea-orm]
-# version = "0.12.15"
-# default-features = false
-# features = [
-#     "macros",
-#     "with-chrono",
-#     "with-uuid",
-#     "runtime-tokio-rustls",
-#     "sqlx-postgres",
-# ] 
-# 
-# [workspace.dependencies.sea-orm-migration]
-# version = "0.12.15"
-# features = [
-#     "runtime-tokio-rustls",
-#     "sqlx-postgres"
-# ]
-
 
 
 
@@ -175,9 +157,6 @@ utoipa = { workspace = true }
 
 sqlx = { workspace = true }
 
-# sea-orm = { workspace = true }
-# sea-orm-migration = { workspace = true }
-
 dunce = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
@@ -190,9 +169,10 @@ paste = { workspace = true }
 
 
 
-# TODO rename
 [features]
-with_test_facilities = []
+# Enables a special set of endpoints that are used when doing end-to-end tests.
+# THIS MUST NOT BE ENABLED IN PRODUCTION, OTHERWISE THE ENTIRE APP IS INCREDIBLY VULNERABLE.
+e2e-testing = ["kolomoni_core/e2e-testing"]
 
 
 [profile.dev.build-override]

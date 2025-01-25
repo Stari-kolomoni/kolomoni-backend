@@ -50,7 +50,7 @@ use crate::{
 ///   blanket-granted to both unauthenticated and authenticated users.
 #[utoipa::path(
     get,
-    path = "/dictionary/slovene/{slovene_word_id}/meanings",
+    path = "/dictionary/slovene/words/{slovene_word_id}/meanings",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -75,7 +75,7 @@ use crate::{
         openapi::response::InternalServerError,
     )
 )]
-#[get("")]
+#[get("/words/{slovene_word_id}/meanings")]
 pub async fn get_all_slovene_word_meanings(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -145,7 +145,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     post,
-    path = "/dictionary/slovene/{slovene_word_id}/meanings",
+    path = "/dictionary/slovene/words/{slovene_word_id}/meanings",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -174,7 +174,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError,
     )
 )]
-#[post("")]
+#[post("/words/{slovene_word_id}/meanings")]
 pub async fn create_slovene_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -264,7 +264,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     patch,
-    path = "/dictionary/slovene/{slovene_word_id}/meanings/{slovene_word_meaning_id}",
+    path = "/dictionary/slovene/words/{slovene_word_id}/meanings/{slovene_word_meaning_id}",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -303,7 +303,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError,
     )
 )]
-#[patch("/{slovene_word_meaning_id}")]
+#[patch("/words/{slovene_word_id}/meanings/{slovene_word_meaning_id}")]
 pub async fn update_slovene_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -414,7 +414,7 @@ pub async fn update_slovene_word_meaning(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/slovene/{slovene_word_id}/meanings/{slovene_word_meaning_id}",
+    path = "/dictionary/slovene/words/{slovene_word_id}/meanings/{slovene_word_meaning_id}",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -449,7 +449,7 @@ pub async fn update_slovene_word_meaning(
         openapi::response::InternalServerError,
     )
 )]
-#[delete("/{slovene_word_meaning_id}")]
+#[delete("/words/{slovene_word_id}/meanings/{slovene_word_meaning_id}")]
 pub async fn delete_slovene_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -526,7 +526,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     post,
-    path = "/dictionary/slovene/{slovene_word_id}/meanings/{slovene_word_meaning_id}/category/{category_id}",
+    path = "/dictionary/slovene/words/{slovene_word_id}/meanings/{slovene_word_meaning_id}/categories/{category_id}",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -571,7 +571,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError
     )
 )]
-#[post("/{slovene_word_meaning_id}/category/{category_id}")]
+#[post("/words/{slovene_word_id}/meanings/{slovene_word_meaning_id}/categories/{category_id}")]
 pub async fn link_category_to_slovene_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -670,7 +670,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/slovene/{slovene_word_id}/meanings/{slovene_word_meaning_id}/category/{category_id}",
+    path = "/dictionary/slovene/words/{slovene_word_id}/meanings/{slovene_word_meaning_id}/categories/{category_id}",
     tag = "dictionary:slovene:meaning",
     params(
         (
@@ -715,7 +715,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError
     )
 )]
-#[delete("/{slovene_word_meaning_id}/category/{category_id}")]
+#[delete("/words/{slovene_word_id}/meanings/{slovene_word_meaning_id}/categories/{category_id}")]
 pub async fn unlink_category_from_slovene_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -803,8 +803,8 @@ pub async fn unlink_category_from_slovene_word_meaning(
 
 
 
-pub fn slovene_word_meaning_router() -> Scope {
-    web::scope("/{slovene_word_id}/meanings")
+pub fn slovene_word_meaning_router(slovene_dictionary_scope: Scope) -> Scope {
+    slovene_dictionary_scope
         .service(get_all_slovene_word_meanings)
         .service(create_slovene_word_meaning)
         .service(update_slovene_word_meaning)

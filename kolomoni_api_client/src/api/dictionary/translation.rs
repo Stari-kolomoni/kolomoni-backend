@@ -5,16 +5,16 @@ use kolomoni_core::{
 use reqwest::StatusCode;
 use thiserror::Error;
 
+use crate::request::ApiClientRequestBuild;
 use crate::{
     errors::{ClientError, ClientResult},
     macros::{
         handle_error_reasons_or_catch_unexpected_status,
+        handle_uncaught_status_code,
         handle_unexpected_error_reason,
-        handle_unexpected_status_code,
         handlers,
     },
-    request::RequestBuilder,
-    AuthenticatedClient,
+    AuthenticatedApiClient,
 };
 
 
@@ -70,11 +70,15 @@ pub enum TranslationRelationshipDeletionError {
 
 
 
-async fn create_translation_relationship(
-    client: &AuthenticatedClient,
+async fn create_translation_relationship<C>(
+    client: &C,
     translation_relationship_to_create: TranslationRelationshipToCreate,
-) -> ClientResult<(), TranslationRelationshipCreationError> {
-    let response = RequestBuilder::post(client)
+) -> ClientResult<(), TranslationRelationshipCreationError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .post_request_builder()
         .endpoint_url("/dictionary/translations")
         .json(&TranslationCreationRequest {
             english_word_meaning_id: translation_relationship_to_create
@@ -121,16 +125,20 @@ async fn create_translation_relationship(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn delete_translation_relationship(
-    client: &AuthenticatedClient,
+async fn delete_translation_relationship<C>(
+    client: &C,
     translation_relationship_to_delete: TranslationRelationshipToDelete,
-) -> ClientResult<(), TranslationRelationshipDeletionError> {
-    let response = RequestBuilder::delete(client)
+) -> ClientResult<(), TranslationRelationshipDeletionError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .delete_request_builder()
         .endpoint_url_with_parameters(
             "/dictionary/translations",
             [
@@ -180,17 +188,23 @@ async fn delete_translation_relationship(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-pub struct TranslationsAuthenticatedApi<'c> {
-    client: &'c AuthenticatedClient,
+pub struct TranslationsAuthenticatedApi<'c, C>
+where
+    C: AuthenticatedApiClient,
+{
+    client: &'c C,
 }
 
-impl<'c> TranslationsAuthenticatedApi<'c> {
-    pub(crate) const fn new(client: &'c AuthenticatedClient) -> Self {
+impl<'c, C> TranslationsAuthenticatedApi<'c, C>
+where
+    C: AuthenticatedApiClient,
+{
+    pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
 

@@ -12,11 +12,13 @@ use crate::{
 
 
 
+#[derive(Debug)]
 pub enum IntermediateCategoryParentState {
     NoParent,
     ByName { english_name: String },
 }
 
+#[derive(Debug)]
 pub struct IntermediateCategory {
     internal_id: InternalCategoryId,
 
@@ -93,7 +95,7 @@ impl<'a> IntermediateCategoryOutputContext<'a> {
 
 #[derive(Debug, Error)]
 pub enum IntermediateCategoryOutputError {
-    #[error("no such parent category with ID: {}", .missing_parent_category_english_name)]
+    #[error("no such parent category with ID: \"{}\"", .missing_parent_category_english_name)]
     ParentCategoryNotFoundByName {
         missing_parent_category_english_name: String,
     },

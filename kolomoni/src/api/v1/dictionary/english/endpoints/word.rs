@@ -65,7 +65,7 @@ use crate::{
         openapi::response::InternalServerError,
     )
 )]
-#[get("")]
+#[get("/words")]
 pub async fn get_all_english_words(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -148,16 +148,17 @@ declare_openapi_error_reason_response!(
         ("access_token" = [])
     )
 )]
-#[post("")]
+#[post("/words")]
 pub async fn create_english_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
     creation_request: web::Json<EnglishWordCreationRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
+    let mut transaction = database_connection.transaction().begin().await?;
 
     let authenticated_user = require_user_authentication_and_permissions!(
-        &mut database_connection,
+        &mut transaction,
         authentication,
         Permission::WordCreate
     );
@@ -166,11 +167,9 @@ pub async fn create_english_word(
     let creation_request = creation_request.into_inner();
 
 
-    let word_lemma_already_exists = entities::EnglishWordQuery::exists_by_exact_lemma(
-        &mut database_connection,
-        &creation_request.lemma,
-    )
-    .await?;
+    let word_lemma_already_exists =
+        entities::EnglishWordQuery::exists_by_exact_lemma(&mut transaction, &creation_request.lemma)
+            .await?;
 
     if word_lemma_already_exists {
         return EndpointResponseBuilder::conflict()
@@ -180,7 +179,7 @@ pub async fn create_english_word(
 
 
     let newly_created_word = entities::EnglishWordMutation::create(
-        &mut database_connection,
+        &mut transaction,
         NewEnglishWord {
             lemma: creation_request.lemma,
         },
@@ -201,6 +200,8 @@ pub async fn create_english_word(
         .signal_english_word_created_or_updated(newly_created_word.word_id)
         .await
         .map_err(APIError::InternalGenericError)?; */
+
+    transaction.commit().await?;
 
 
     EndpointResponseBuilder::ok()
@@ -253,7 +254,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError,
     )
 )]
-#[get("/{word_uuid}")]
+#[get("/words/{word_uuid}")]
 pub async fn get_english_word_by_id(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -330,7 +331,7 @@ pub async fn get_english_word_by_id(
         openapi::response::InternalServerError,
     )
 )]
-#[get("/by-lemma/{word_lemma}")]
+#[get("/words/by-lemma/{word_lemma}")]
 pub async fn get_english_word_by_lemma(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -416,7 +417,7 @@ pub async fn get_english_word_by_lemma(
         ("access_token" = [])
     )
 )]
-#[patch("/{word_uuid}")]
+#[patch("/words/{word_uuid}")]
 pub async fn update_english_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -546,7 +547,7 @@ pub async fn update_english_word(
         ("access_token" = [])
     )
 )]
-#[delete("/{word_uuid}")]
+#[delete("/words/{word_uuid}")]
 pub async fn delete_english_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -585,6 +586,8 @@ pub async fn delete_english_word(
     }
 
 
+    transaction.commit().await?;
+
     /* TODO needs update when cache layer is rewritten
     // Signals to the the search indexer that the word has been removed.
     state
@@ -601,8 +604,8 @@ pub async fn delete_english_word(
 
 
 #[rustfmt::skip]
-pub fn english_word_router() -> Scope {
-    web::scope("/words")
+pub fn english_word_router(english_dictionary_scope: Scope) -> Scope {
+    english_dictionary_scope
         .service(get_all_english_words)
         .service(create_english_word)
         .service(get_english_word_by_id)

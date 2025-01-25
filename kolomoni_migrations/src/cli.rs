@@ -34,6 +34,9 @@ pub enum CliCommand {
     #[command(name = "generate", about = "Generates a new empty migration.")]
     Generate(GenerateCommandArguments),
 
+    #[command(name = "status", about = "Shows the current migration status.")]
+    Status(StatusCommandArguments),
+
     #[command(
         name = "up",
         about = "Applies pending migrations to upgrade the database to the specified schema version."
@@ -263,6 +266,15 @@ pub struct GenerateCommandArguments {
                 will not be reversible."
     )]
     pub no_rollback: bool,
+}
+
+
+
+#[derive(Args)]
+pub struct StatusCommandArguments {
+    #[command(flatten)]
+    pub database: DatabaseConnectionArgs,
+    // TODO Continue from here (including command implementation).
 }
 
 

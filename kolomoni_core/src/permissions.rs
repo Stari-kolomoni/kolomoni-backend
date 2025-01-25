@@ -246,10 +246,11 @@ impl PermissionSet {
 
     /// Initialize [`PermissionSet`] given a `Vec` of permission names.
     /// Returns `Err` if a permission name doesn't resolve to a [`Permission`].
-    pub fn from_permission_names<P>(
-        permission_names: Vec<P>,
+    pub fn try_from_permission_names<I, P>(
+        permission_names: I,
     ) -> Result<Self, FromPermissionNamesError>
     where
+        I: IntoIterator<Item = P>,
         P: AsRef<str>,
     {
         let permissions = permission_names
@@ -330,7 +331,7 @@ mod test {
 
     #[test]
     fn parses_from_name() {
-        let permissions = PermissionSet::from_permission_names(vec![
+        let permissions = PermissionSet::try_from_permission_names(vec![
             "user.self:read",
             "user.self:write",
             "user.any:read",

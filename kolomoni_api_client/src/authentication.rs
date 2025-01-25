@@ -2,7 +2,7 @@ use kolomoni_core::api_models::{UserLoginRequest, UserLoginResponse};
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::{errors::ClientError, request::RequestBuilder, Client};
+use crate::{errors::ClientError, request::RequestBuilder, UnauthenticatedClient};
 
 
 #[derive(Debug, Error)]
@@ -32,7 +32,7 @@ impl AccessToken {
     }
 
     pub async fn log_in<U, P>(
-        client: &Client,
+        client: &UnauthenticatedClient,
         username: U,
         password: P,
     ) -> Result<Self, AuthenticationError>

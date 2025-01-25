@@ -20,6 +20,7 @@ pub struct SeedTranslationRow {
     pub slovene_meaning_abbreviation: Option<String>,
     pub slovene_meaning_description: Option<String>,
 
+    /// Categories assigned to this translation, by slovene category name.
     pub assigned_categories: Vec<String>,
 }
 
@@ -66,8 +67,12 @@ impl SeedTranslationRow {
 
         let mut assigned_categories = Vec::new();
         for possible_category_column_index in 10usize..=12usize {
-            if let Some(category_name) = csv_record.get(possible_category_column_index) {
-                assigned_categories.push(category_name.to_owned());
+            if let Some(category_slovene_name) = csv_record.get(possible_category_column_index) {
+                let trimmed_category_slovene_name = category_slovene_name.trim();
+
+                if !trimmed_category_slovene_name.is_empty() {
+                    assigned_categories.push(trimmed_category_slovene_name.to_owned());
+                }
             }
         }
 

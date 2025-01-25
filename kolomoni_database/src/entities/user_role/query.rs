@@ -51,7 +51,7 @@ impl UserRoleQuery {
             role_hash_set.insert(role);
         }
 
-        Ok(RoleSet::from_role_hash_set(role_hash_set))
+        Ok(RoleSet::from_role_set(role_hash_set))
     }
 
     pub async fn transitive_permissions_for_user(

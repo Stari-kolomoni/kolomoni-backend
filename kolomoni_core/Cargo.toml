@@ -15,6 +15,9 @@ chrono = { workspace = true }
 argon2 = { workspace = true }
 jsonwebtoken = { workspace = true }
 
+maplit = { workspace = true }
+paste = { workspace = true }
+
 utoipa = { workspace = true }
 
 
@@ -25,3 +28,6 @@ utoipa = { workspace = true }
 # `kolomoni` (the server), for obvious reasons, doesn't need this feature, 
 # but for `kolomoni_api_client` for example does.
 serde_impls_for_client_on_models = []
+
+# Includes API models that are necesarry for end-to-end testing.
+e2e-testing = []

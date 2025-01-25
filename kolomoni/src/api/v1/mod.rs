@@ -8,15 +8,16 @@
 //! For more information, see [`NormalizePath`][actix_web::middleware::NormalizePath]
 //! (in trim mode).
 
+pub mod auth;
 pub mod dictionary;
 pub mod health;
-pub mod login;
 pub mod users;
 
 use actix_web::{web, Scope};
+use auth::auth_router;
 use health::health_router;
 
-use self::{dictionary::dictionary_router, login::login_router, users::users_router};
+use self::{dictionary::dictionary_router, users::users_router};
 
 // TODO refactor the API out of the v1 directory, since we currently have only one version (but keep the HTTP path /v1/ prefix!)
 
@@ -24,8 +25,8 @@ use self::{dictionary::dictionary_router, login::login_router, users::users_rout
 /// Lives under the `/api/v1` path.
 pub fn v1_api_router() -> Scope {
     web::scope("/v1")
+        .service(auth_router())
         .service(health_router())
         .service(users_router())
-        .service(login_router())
         .service(dictionary_router())
 }

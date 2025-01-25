@@ -32,7 +32,7 @@ use crate::{
 
 
 declare_openapi_error_reason_response!(
-    pub struct UserYourAccountNotFound {
+    pub struct CurrentUserAccountNotFound {
         description => "Your user account no longer exists.",
         reason => UsersErrorReason::user_not_found()
     }
@@ -69,7 +69,7 @@ declare_openapi_error_reason_response!(
         ),
         (
             status = 404,
-            response = inline(AsErrorReason<UserYourAccountNotFound>)
+            response = inline(AsErrorReason<CurrentUserAccountNotFound>)
         ),
         openapi::response::Unmodified,
         openapi::response::MissingAuthentication,
@@ -149,7 +149,7 @@ pub async fn get_current_user_info(
         ),
         (
             status = 404,
-            response = inline(AsErrorReason<UserYourAccountNotFound>)
+            response = inline(AsErrorReason<CurrentUserAccountNotFound>)
         ),
         openapi::response::MissingAuthentication,
         openapi::response::MissingPermissions<requires::UserSelfRead, 1>,
@@ -229,7 +229,7 @@ pub async fn get_current_user_roles(
         ),
         (
             status = 404,
-            response = inline(AsErrorReason<UserYourAccountNotFound>)
+            response = inline(AsErrorReason<CurrentUserAccountNotFound>)
         ),
         openapi::response::MissingAuthentication,
         openapi::response::MissingPermissions<requires::UserSelfRead, 1>,
@@ -316,7 +316,7 @@ declare_openapi_error_reason_response!(
         ),
         (
             status = 404,
-            response = inline(AsErrorReason<UserYourAccountNotFound>)
+            response = inline(AsErrorReason<CurrentUserAccountNotFound>)
         ),
         openapi::response::RequiredJsonBodyErrors,
         openapi::response::MissingAuthentication,

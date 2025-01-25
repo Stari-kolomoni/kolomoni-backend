@@ -111,15 +111,13 @@ impl TryIntoStronglyTypedInternalModel
     type Error = Cow<'static, str>;
 
     fn try_into_strongly_typed_internal_model(self) -> Result<Self::InternalModel, Self::Error> {
-        let internal_categories = serde_json::from_value::<Vec<InternalCategoryIdOnlyModel>>(
-            self.categories,
-        )
-        .map_err(|error| {
-            Cow::from(format!(
-                "failed to parse returned JSON as internal ID-only categories model: {}",
-                error
-            ))
-        })?;
+        let internal_categories =
+            serde_json::from_value::<Vec<Uuid>>(self.categories).map_err(|error| {
+                Cow::from(format!(
+                    "failed to parse returned JSON as internal ID-only categories model: {}",
+                    error
+                ))
+            })?;
 
         let internal_translates_into = serde_json::from_value::<
             Vec<InternalTranslatesIntoSloveneWordModel>,
@@ -161,7 +159,7 @@ pub struct InternalEnglishWordMeaningModelWithCategoriesAndTranslations {
 
     pub(crate) last_modified_at: DateTime<Utc>,
 
-    pub(crate) categories: Vec<InternalCategoryIdOnlyModel>,
+    pub(crate) categories: Vec<Uuid>,
 
     pub(crate) translates_into: Vec<InternalTranslatesIntoSloveneWordModel>,
 }
@@ -177,11 +175,7 @@ impl IntoExternalModel for InternalEnglishWordMeaningModelWithCategoriesAndTrans
             description: self.description,
             created_at: self.created_at,
             last_modified_at: self.last_modified_at,
-            categories: self
-                .categories
-                .into_iter()
-                .map(|internal_category| internal_category.into_external_model())
-                .collect(),
+            categories: self.categories.into_iter().map(CategoryId::new).collect(),
             translates_into: self
                 .translates_into
                 .into_iter()
@@ -192,19 +186,6 @@ impl IntoExternalModel for InternalEnglishWordMeaningModelWithCategoriesAndTrans
 }
 
 
-
-#[derive(Deserialize)]
-pub struct InternalCategoryIdOnlyModel {
-    pub(crate) category_id: Uuid,
-}
-
-impl IntoExternalModel for InternalCategoryIdOnlyModel {
-    type ExternalModel = CategoryId;
-
-    fn into_external_model(self) -> Self::ExternalModel {
-        CategoryId::new(self.category_id)
-    }
-}
 
 
 #[derive(Deserialize)]
@@ -221,7 +202,7 @@ pub struct InternalTranslatesIntoSloveneWordModel {
 
     pub(crate) last_modified_at: DateTime<Utc>,
 
-    pub(crate) categories: Vec<InternalCategoryIdOnlyModel>,
+    pub(crate) categories: Vec<Uuid>,
 
     pub(crate) translated_at: DateTime<Utc>,
 
@@ -239,11 +220,7 @@ impl IntoExternalModel for InternalTranslatesIntoSloveneWordModel {
             description: self.description,
             created_at: self.created_at,
             last_modified_at: self.last_modified_at,
-            categories: self
-                .categories
-                .into_iter()
-                .map(|internal_model| CategoryId::new(internal_model.category_id))
-                .collect(),
+            categories: self.categories.into_iter().map(CategoryId::new).collect(),
             translated_at: self.translated_at,
             translated_by: self.translated_by.map(UserId::new),
         }

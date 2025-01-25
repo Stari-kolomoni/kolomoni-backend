@@ -52,6 +52,7 @@ pub struct MissingPermissions;
 impl ErrorResponseHandler for MissingPermissions {
     type Error = ClientError;
 
+    #[inline]
     fn handle_error_reason(
         error_reason: ErrorReason,
         _context: &ErrorReasonHandlerContext,
@@ -72,6 +73,7 @@ pub struct InvalidUuidFormat;
 impl ErrorResponseHandler for InvalidUuidFormat {
     type Error = ClientError;
 
+    #[inline]
     fn handle_error_reason(
         error_reason: ErrorReason,
         context: &ErrorReasonHandlerContext,

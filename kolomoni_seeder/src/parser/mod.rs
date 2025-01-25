@@ -24,7 +24,16 @@ use required_csv_column;
 
 macro_rules! optional_csv_column {
     ($csv_record:expr => $column_index:literal) => {
-        $csv_record.get($column_index)
+        match $csv_record.get($column_index) {
+            Some(value) => {
+                if value.is_empty() {
+                    None
+                } else {
+                    Some(value)
+                }
+            }
+            None => None,
+        }
     };
 }
 
@@ -74,6 +83,7 @@ impl SeedSpreadsheetsParser {
     ) -> Result<Self, SeedSpreadsheetParserError> {
         let translations_csv = csv::ReaderBuilder::new()
             .flexible(true)
+            .has_headers(false)
             .from_path(translations_sheet_csv)
             .map_err(|error| SeedSpreadsheetParserError::UnableToOpen {
                 csv_file_path: translations_sheet_csv.to_path_buf(),
@@ -82,6 +92,7 @@ impl SeedSpreadsheetsParser {
 
         let categories_csv = csv::ReaderBuilder::new()
             .flexible(true)
+            .has_headers(false)
             .from_path(categories_sheet_csv)
             .map_err(|error| SeedSpreadsheetParserError::UnableToOpen {
                 csv_file_path: categories_sheet_csv.to_path_buf(),

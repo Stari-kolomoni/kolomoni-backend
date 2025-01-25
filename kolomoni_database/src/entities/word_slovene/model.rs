@@ -60,6 +60,7 @@ impl IntoExternalModel for InternalSloveneWordModel {
 }
 
 
+#[derive(Debug)]
 pub struct SloveneWordWithMeaningsModel {
     pub word_id: SloveneWordId,
 
@@ -91,15 +92,37 @@ impl TryIntoExternalModel for InternalSloveneWordWithMeaningsModel {
     type Error = Cow<'static, str>;
 
     fn try_into_external_model(self) -> Result<Self::ExternalModel, Self::Error> {
-        let internal_meanings = serde_json::from_value::<
-            Vec<InternalSloveneWordMeaningModelWithCategoriesAndTranslations>,
-        >(self.meanings)
-        .map_err(|error| {
-            Cow::from(format!(
-                "failed to parse returned JSON as internal slovene word meaning: {}",
-                error
-            ))
-        })?;
+        let internal_meanings = {
+            #[cfg(not(debug_assertions))]
+            {
+                serde_json::from_value::<
+                    Vec<InternalSloveneWordMeaningModelWithCategoriesAndTranslations>,
+                >(self.meanings)
+                .map_err(|error| {
+                    Cow::Owned(format!(
+                        "failed to parse returned JSON as internal slovene word meaning: \"{:?}\"",
+                        error
+                    ))
+                })?
+            }
+
+            #[cfg(debug_assertions)]
+            {
+                let pretty_printed_meanings = serde_json::to_string_pretty(&self.meanings).unwrap();
+
+                serde_json::from_str::<
+                    Vec<InternalSloveneWordMeaningModelWithCategoriesAndTranslations>,
+                >(&pretty_printed_meanings)
+                .map_err(|error| {
+                    Cow::Owned(format!(
+                        "failed to parse returned JSON as internal slovene word meaning: \"{:?}\". Source JSON: {} // {:?}",
+                        error,
+                        pretty_printed_meanings,
+                        self.meanings
+                    ))
+                })?
+            }
+        };
 
         let meanings = internal_meanings
             .into_iter()

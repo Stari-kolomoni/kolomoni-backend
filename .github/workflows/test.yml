@@ -65,7 +65,7 @@ jobs:
           mkdir -p logs
           
           echo "Compiling and running server in the background."
-          nohup cargo run --verbose --release --features with_test_facilities \
+          nohup cargo run --verbose --release --features e2e-testing \
             -- --configurationFilePath ./kolomoni_test/assets/configuration.TESTING.toml > logs/server.log 2>&1 &
           SERVER_PID=$!
 

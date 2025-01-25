@@ -17,7 +17,7 @@ use crate::{
 
 
 #[derive(Deserialize, Clone, PartialEq, Eq, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Serialize))]
+#[cfg_attr(feature = "e2e-testing", derive(Serialize))]
 #[schema(
     example = json!({
         "search_query": "hit points"
@@ -30,14 +30,14 @@ pub struct SearchRequest {
 
 
 #[derive(Serialize, Clone, PartialEq, Eq, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
+#[cfg_attr(feature = "e2e-testing", derive(Deserialize))]
 pub struct SearchResults {
     english_results: Vec<EnglishWordWithMeanings>,
     slovene_results: Vec<SloveneWord>,
 }
 
 #[derive(Serialize, Clone, PartialEq, Eq, ToSchema)]
-#[cfg_attr(feature = "with_test_facilities", derive(Deserialize))]
+#[cfg_attr(feature = "e2e-testing", derive(Deserialize))]
 #[schema(
     example = json!({
         "search_results": {

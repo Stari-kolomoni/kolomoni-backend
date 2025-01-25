@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, sync::Arc};
 
 use analyzer::{
     insert_only_set::InternalId,
@@ -25,6 +25,7 @@ use kolomoni_api_client::{
     ApiServerOptions,
     AuthenticatedClient,
     ServerHost,
+    SharedApiClientEndpointGroups,
 };
 use kolomoni_core::ids::{
     CategoryId,
@@ -47,17 +48,17 @@ fn build_api_client(
     server_port: usize,
     access_token: &str,
 ) -> miette::Result<AuthenticatedClient> {
-    let api_server = Rc::new(ApiServer::new(
+    let api_server = Arc::new(ApiServer::new(
         ServerHost::DomainName(format!("{}:{}", server_host_or_ip, server_port)),
         ApiServerOptions { use_https: false },
     ));
 
-    let client = kolomoni_api_client::Client::new(&api_server)
+    let client = kolomoni_api_client::UnauthenticatedClient::new(&api_server)
         .into_diagnostic()
         .wrap_err("failed to initialize API client")?;
 
 
-    let api_authentication = Rc::new(AccessToken::new(access_token.to_owned()));
+    let api_authentication = Arc::new(AccessToken::new(access_token.to_owned()));
 
     Ok(client.with_authentication(&api_authentication))
 }
@@ -84,12 +85,21 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
         .wrap_err("failed to parse spreadsheet")?;
 
 
+    if seed_arguments.dry_run {
+        println!("Dry run complete, exiting.");
+        return Ok(());
+    }
+
 
     // Insert all categories and note down their public UUIDs.
     let mut internal_to_public_category_id: HashMap<InternalCategoryId, CategoryId> = HashMap::new();
 
     let categories_api_client = authenticated_api_client.categories();
 
+    println!(
+        "Inserting {} categories...",
+        parsed_data.categories().values().len()
+    );
     for parsed_category in parsed_data.categories().values() {
         let new_category = categories_api_client
             .create_category(CategoryToCreate {
@@ -105,6 +115,10 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
         internal_to_public_category_id.insert(parsed_category.internal_id(), new_category.id);
     }
 
+    println!(
+        "Updating {} categories' parents...",
+        parsed_data.categories().values().len()
+    );
     for parsed_category in parsed_data.categories().values() {
         let Some(parent_category) = parsed_category
             .parent_category(parsed_data.categories())
@@ -155,6 +169,10 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
 
     let slovene_api_client = authenticated_api_client.slovene_dictionary();
 
+    println!(
+        "Inserting {} slovene words...",
+        parsed_data.slovene_words().values().len()
+    );
     for slovene_word in parsed_data.slovene_words().values() {
         let new_slovene_word = slovene_api_client
             .create_slovene_word(SloveneWordToCreate {
@@ -162,12 +180,21 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
             })
             .await
             .into_diagnostic()
-            .wrap_err("failed to create new slovene word")?;
+            .wrap_err_with(|| {
+                miette!(
+                    "failed to create new slovene word (\"{}\")",
+                    slovene_word.lemma
+                )
+            })?;
 
 
         internal_to_public_slovene_word_id.insert(slovene_word.internal_id(), new_slovene_word.id);
     }
 
+    println!(
+        "Inserting {} slovene word meanings...",
+        parsed_data.slovene_word_meanings().values().len()
+    );
     for slovene_word_meaning in parsed_data.slovene_word_meanings().values() {
         let associated_slovene_word = internal_to_public_slovene_word_id
             .get(&slovene_word_meaning.word_internal_id())
@@ -230,6 +257,10 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
 
     let english_api_client = authenticated_api_client.english_dictionary();
 
+    println!(
+        "Inserting {} english words...",
+        parsed_data.english_words().values().len()
+    );
     for english_word in parsed_data.english_words().values() {
         let new_english_word = english_api_client
             .create_english_word(EnglishWordToCreate {
@@ -243,6 +274,10 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
         internal_to_public_english_word_id.insert(english_word.internal_id(), new_english_word.id);
     }
 
+    println!(
+        "Inserting {} english word meanings...",
+        parsed_data.english_word_meanings().values().len()
+    );
     for english_word_meaning in parsed_data.english_word_meanings().values() {
         let associated_english_word = internal_to_public_english_word_id
             .get(&english_word_meaning.word_internal_id())
@@ -299,6 +334,10 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
 
     let translations_api_client = authenticated_api_client.translations();
 
+    println!(
+        "Inserting {} translation relationships...",
+        parsed_data.translations().values().len()
+    );
     for translation in parsed_data.translations().values() {
         let associated_slovene_word_meaning_id = internal_to_public_slovene_word_meaning_id
             .get(&translation.slovene_word_meaning)

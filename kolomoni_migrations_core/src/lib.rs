@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use context::MigrationContext;
 use errors::{MigrationApplyError, MigrationRollbackError};
 use identifier::MigrationIdentifier;
-use migrations::BoxedMigrationFn;
+use migrations::{BoxedMigrationFn, ConsolidatedMigrationIntegrity};
 use remote::RemoteMigrationType;
 use sha256::Sha256Hash;
 use sqlx::{postgres::PgConnectOptions, ConnectOptions, Connection, Executor, PgConnection};
@@ -29,6 +29,9 @@ pub enum MigrationStatus {
     Applied {
         /// When the migration had been applied.
         at: DateTime<Utc>,
+
+        /// The integrity of the remote migration compared to the embedded migration data.
+        integrity: ConsolidatedMigrationIntegrity,
     },
 }
 

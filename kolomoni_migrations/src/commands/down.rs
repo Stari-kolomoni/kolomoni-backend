@@ -1,10 +1,6 @@
 use std::io::{self, Write};
 
-use kolomoni_migrations_core::{
-    migrations::MigrationsWithStatusOptions,
-    DatabaseConnectionManager,
-    MigrationStatus,
-};
+use kolomoni_migrations_core::{DatabaseConnectionManager, MigrationStatus};
 use miette::{miette, Context, IntoDiagnostic, Result};
 
 use crate::cli::DownCommandArguments;
@@ -37,28 +33,39 @@ async fn cli_down_inner(arguments: DownCommandArguments) -> Result<()> {
         .wrap_err("failed to obtain privileged database connection info")?;
 
 
+    let Some(connection_to_load_migrations_with) = privileged_user_db_connection_options
+        .as_ref()
+        .or(normal_user_db_connection_options.as_ref())
+    else {
+        return Err(miette!("Invalid arguments: need at least one of the available database connection options (normal or privileged)."));
+    };
+
+
     let mut connection_manager = DatabaseConnectionManager::new();
 
 
     print!("Loading migrations...");
 
-    let migrations = manager
-        .migrations_with_status_with_fallback(
-            normal_user_db_connection_options.as_ref(),
-            MigrationsWithStatusOptions {
-                require_up_hashes_match: false,
-                require_down_hashes_match: true,
-            },
-        )
+    let migrations_collection = manager
+        .migrations_with_status_with_fallback(connection_to_load_migrations_with)
         .await
         .into_diagnostic()
         .wrap_err("failed to load migrations")?;
 
+
+    if !migrations_collection.integrity().has_down_integrity() {
+        return Err(miette!(
+            "Integrity failed: {:?}",
+            migrations_collection.integrity()
+        ));
+    }
+
+
     println!(
         "  [Loaded {} migrations ({} already applied)]",
-        migrations.len(),
-        migrations
-            .iter()
+        migrations_collection.len(),
+        migrations_collection
+            .migrations()
             .filter(|migration| matches!(
                 migration.status(),
                 MigrationStatus::Applied { .. }
@@ -67,7 +74,7 @@ async fn cli_down_inner(arguments: DownCommandArguments) -> Result<()> {
     );
     println!();
 
-    if migrations.is_empty() {
+    if migrations_collection.is_empty() {
         println!("No migrations to rollback: no migrations available.");
 
         return Ok(());
@@ -77,8 +84,8 @@ async fn cli_down_inner(arguments: DownCommandArguments) -> Result<()> {
     let version_to_rollback_to = arguments.rollback_to_version;
 
     // Verify the version exists.
-    let selected_version_exists = migrations
-        .iter()
+    let selected_version_exists = migrations_collection
+        .migrations()
         .any(|migration| migration.identifier().version == version_to_rollback_to);
 
     if !selected_version_exists && version_to_rollback_to != 0 {
@@ -93,7 +100,7 @@ async fn cli_down_inner(arguments: DownCommandArguments) -> Result<()> {
 
     let mut migrations_to_rollback = Vec::new();
 
-    for migration in migrations.iter().rev() {
+    for migration in migrations_collection.migrations().rev() {
         if !matches!(
             migration.status(),
             MigrationStatus::Applied { .. }

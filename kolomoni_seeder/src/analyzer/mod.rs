@@ -78,6 +78,9 @@ pub enum SeedDatasetError {
         #[source]
         error: IntermediateSloveneWordMeaningOutputError,
     },
+
+    #[error("word \"{}\" has a duplicate english-slovene word meaning translation", .slovene_word_lemma)]
+    DuplicateTranslationEntries { slovene_word_lemma: String },
 }
 
 
@@ -124,7 +127,6 @@ fn parse_categories(
     let intermediate_category_context =
         IntermediateCategoryOutputContext::new(&intermediate_categories);
 
-
     let mut final_categories = GrowingKeyedSet::new();
 
     for intermediate_category in intermediate_categories.values() {
@@ -158,44 +160,244 @@ struct ParsedWordsAndTranslations {
 }
 
 
+struct DraftWordsAndTranslations<'c> {
+    parsed_categories: &'c ParsedCategories,
+
+    english_words: GrowingKeyedSet<EnglishWord>,
+    english_word_meanings: GrowingKeyedSet<EnglishWordMeaning>,
+
+    slovene_words: GrowingKeyedSet<SloveneWord>,
+    slovene_word_meanings: GrowingKeyedSet<SloveneWordMeaning>,
+
+    translations: GrowingKeyedSet<Translation>,
+}
+
+impl<'c> DraftWordsAndTranslations<'c> {
+    pub fn new(parsed_categories: &'c ParsedCategories) -> Self {
+        Self {
+            parsed_categories,
+            english_words: GrowingKeyedSet::new(),
+            english_word_meanings: GrowingKeyedSet::new(),
+            slovene_words: GrowingKeyedSet::new(),
+            slovene_word_meanings: GrowingKeyedSet::new(),
+            translations: GrowingKeyedSet::new(),
+        }
+    }
+
+    pub fn english_word_by_lemma(&self, english_lemma: &str) -> Option<&EnglishWord> {
+        self.english_words
+            .values()
+            .find(|item| item.lemma == english_lemma)
+    }
+
+    pub fn slovene_word_by_lemma(&self, slovene_lemma: &str) -> Option<&SloveneWord> {
+        self.slovene_words
+            .values()
+            .find(|item| item.lemma == slovene_lemma)
+    }
+
+    pub fn insert_english_word_if_missing(
+        &mut self,
+        english_lemma: String,
+    ) -> InternalEnglishWordId {
+        for value in self.english_words.values() {
+            if value.lemma == english_lemma {
+                return value.internal_id();
+            }
+        }
+
+        let intermediate_english_word = IntermediateEnglishWord::from_raw_data(english_lemma);
+        let english_word = intermediate_english_word.to_output_model();
+
+        let english_word_internal_id = english_word.internal_id();
+        let _ = self.english_words.insert(english_word);
+
+        english_word_internal_id
+    }
+
+    pub fn try_insert_english_word_meaning_if_missing(
+        &mut self,
+        referenced_english_word_by_lemma: String,
+        description: Option<String>,
+        disambiguation: Option<String>,
+        example: Option<String>,
+        abbreviation: Option<String>,
+        referenced_categories_by_slovene_category_name: Vec<String>,
+    ) -> Result<InternalEnglishWordMeaningId, IntermediateEnglishWordMeaningOutputError> {
+        let Some(referenced_english_word) =
+            self.english_word_by_lemma(&referenced_english_word_by_lemma)
+        else {
+            return Err(
+                IntermediateEnglishWordMeaningOutputError::EnglishWordNotFoundByLemma {
+                    english_word_lemma: referenced_english_word_by_lemma,
+                },
+            );
+        };
+
+        for value in self.english_word_meanings.values() {
+            if value.word_internal_id() == referenced_english_word.internal_id()
+                && value.description == description
+                && value.disambiguation == disambiguation
+                && value.example == example
+                && value.abbreviation == abbreviation
+            {
+                return Ok(value.internal_id());
+            }
+        }
+
+
+        let intermediate_english_word_meaning = IntermediateEnglishWordMeaning::from_raw_data(
+            referenced_english_word_by_lemma,
+            description,
+            disambiguation,
+            example,
+            abbreviation,
+            referenced_categories_by_slovene_category_name,
+        );
+
+        let english_word_meaning = intermediate_english_word_meaning.try_to_output_model(
+            &IntermediateEnglishWordMeaningOutputContext::new(
+                &self.english_words,
+                &self.parsed_categories.categories,
+            ),
+        )?;
+
+
+        let english_word_meaning_internal_id = english_word_meaning.internal_id();
+        let _ = self.english_word_meanings.insert(english_word_meaning);
+
+        Ok(english_word_meaning_internal_id)
+    }
+
+    pub fn insert_slovene_word_if_missing(
+        &mut self,
+        slovene_lemma: String,
+    ) -> InternalSloveneWordId {
+        for value in self.slovene_words.values() {
+            if value.lemma == slovene_lemma {
+                return value.internal_id();
+            }
+        }
+
+        let intermediate_slovene_word = IntermediateSloveneWord::from_raw_data(slovene_lemma);
+        let slovene_word = intermediate_slovene_word.to_output_model();
+
+        let slovene_word_internal_id = slovene_word.internal_id();
+        let _ = self.slovene_words.insert(slovene_word);
+
+        slovene_word_internal_id
+    }
+
+    pub fn try_insert_slovene_word_meaning_if_missing(
+        &mut self,
+        referenced_slovene_word_by_lemma: String,
+        description: Option<String>,
+        disambiguation: Option<String>,
+        example: Option<String>,
+        abbreviation: Option<String>,
+        referenced_categories_by_slovene_category_name: Vec<String>,
+    ) -> Result<InternalSloveneWordMeaningId, IntermediateSloveneWordMeaningOutputError> {
+        let Some(referenced_slovene_word) =
+            self.slovene_word_by_lemma(&referenced_slovene_word_by_lemma)
+        else {
+            return Err(
+                IntermediateSloveneWordMeaningOutputError::SloveneWordNotFoundByLemma {
+                    slovene_word_lemma: referenced_slovene_word_by_lemma,
+                },
+            );
+        };
+
+        for value in self.slovene_word_meanings.values() {
+            if value.word_internal_id() == referenced_slovene_word.internal_id()
+                && value.description == description
+                && value.disambiguation == disambiguation
+                && value.example == example
+                && value.abbreviation == abbreviation
+            {
+                return Ok(value.internal_id());
+            }
+        }
+
+
+        let intermediate_slovene_word_meaning = IntermediateSloveneWordMeaning::from_raw_data(
+            referenced_slovene_word_by_lemma,
+            description,
+            disambiguation,
+            example,
+            abbreviation,
+            referenced_categories_by_slovene_category_name,
+        );
+
+        let slovene_word_meaning = intermediate_slovene_word_meaning.try_to_output_model(
+            &IntermediateSloveneWordMeaningResolutionContext::new(
+                &self.slovene_words,
+                &self.parsed_categories.categories,
+            ),
+        )?;
+
+
+        let slovene_word_meaning_internal_id = slovene_word_meaning.internal_id();
+        let _ = self.slovene_word_meanings.insert(slovene_word_meaning);
+
+        Ok(slovene_word_meaning_internal_id)
+    }
+
+    pub fn try_insert_translation(
+        &mut self,
+        english_word_meaning_internal_id: InternalEnglishWordMeaningId,
+        slovene_word_meaning_internal_id: InternalSloveneWordMeaningId,
+    ) -> Result<(), ()> {
+        for translation in self.translations.values() {
+            if translation.english_word_meaning == english_word_meaning_internal_id
+                && translation.slovene_word_meaning == slovene_word_meaning_internal_id
+            {
+                return Err(());
+            }
+        }
+
+        let translation = Translation::new(
+            english_word_meaning_internal_id,
+            slovene_word_meaning_internal_id,
+        );
+
+        let _ = self.translations.insert(translation);
+        Ok(())
+    }
+
+    pub fn into_parsed_words_and_translations(self) -> ParsedWordsAndTranslations {
+        ParsedWordsAndTranslations {
+            english_words: self.english_words,
+            english_word_meanings: self.english_word_meanings,
+            slovene_words: self.slovene_words,
+            slovene_word_meanings: self.slovene_word_meanings,
+            translations: self.translations,
+        }
+    }
+}
+
+
 fn parse_words_and_translations(
     parsed_categories: &ParsedCategories,
     translation_row_iterator: SeedSpreadsheetTranslationsIter,
 ) -> Result<ParsedWordsAndTranslations, SeedDatasetError> {
-    let mut english_words = GrowingKeyedSet::new();
-    let mut english_word_meanings = GrowingKeyedSet::new();
-
-    let mut slovene_words = GrowingKeyedSet::new();
-    let mut slovene_word_meanings = GrowingKeyedSet::new();
-
-    let mut translations = GrowingKeyedSet::new();
+    let mut draft = DraftWordsAndTranslations::new(parsed_categories);
 
 
     for seed_translations_row_result in translation_row_iterator {
         let seed_translation_row = seed_translations_row_result?;
 
         /* English word + english word meaning parsing and resolution */
-        let intermediate_english_word =
-            IntermediateEnglishWord::from_raw_data(seed_translation_row.english_lemma.clone());
-        let english_word = intermediate_english_word.to_output_model();
+        let _ = draft.insert_english_word_if_missing(seed_translation_row.english_lemma.clone());
 
-        let _ = english_words.insert(english_word);
-
-
-        let intermediate_english_word_meaning = IntermediateEnglishWordMeaning::from_raw_data(
-            seed_translation_row.english_lemma.clone(),
-            seed_translation_row.english_meaning_description.clone(),
-            seed_translation_row.english_meaning_disamgibuation.clone(),
-            seed_translation_row.english_meaning_example.clone(),
-            seed_translation_row.english_meaning_abbreviation.clone(),
-            seed_translation_row.assigned_categories.clone(),
-        );
-
-        let english_word_meaning = intermediate_english_word_meaning
-            .try_to_output_model(&IntermediateEnglishWordMeaningOutputContext::new(
-                &english_words,
-                &parsed_categories.categories,
-            ))
+        let english_word_meaning_internal_id = draft
+            .try_insert_english_word_meaning_if_missing(
+                seed_translation_row.english_lemma.clone(),
+                seed_translation_row.english_meaning_description.clone(),
+                seed_translation_row.english_meaning_disamgibuation.clone(),
+                seed_translation_row.english_meaning_example.clone(),
+                seed_translation_row.english_meaning_abbreviation.clone(),
+                seed_translation_row.assigned_categories.clone(),
+            )
             .map_err(
                 |error| SeedDatasetError::IntermediateEnglishWordMeaningOutputError {
                     english_word_lemma: seed_translation_row.english_lemma.clone(),
@@ -203,33 +405,18 @@ fn parse_words_and_translations(
                 },
             )?;
 
-        let english_word_meaning_internal_id = english_word_meaning.internal_id();
-        let _ = english_word_meanings.insert(english_word_meaning);
-
 
         /* Slovene word + slovene word meaning parsing and resolution */
-        let intermediate_slovene_word =
-            IntermediateSloveneWord::from_raw_data(seed_translation_row.slovene_lemma.clone());
-        let slovene_word = intermediate_slovene_word.to_output_model();
+        let _ = draft.insert_slovene_word_if_missing(seed_translation_row.slovene_lemma.clone());
 
-        let _ = slovene_words.insert(slovene_word);
-
-
-        let intermediate_slovene_word_meaning = IntermediateSloveneWordMeaning::from_raw_data(
-            seed_translation_row.slovene_lemma.clone(),
-            seed_translation_row.slovene_meaning_description.clone(),
-            seed_translation_row.slovene_meaning_disambiguation.clone(),
-            seed_translation_row.slovene_meaning_example.clone(),
-            seed_translation_row.slovene_meaning_abbreviation.clone(),
-            seed_translation_row.assigned_categories.clone(),
-        );
-
-        let slovene_word_meaning = intermediate_slovene_word_meaning
-            .try_to_output_model(
-                &IntermediateSloveneWordMeaningResolutionContext::new(
-                    &slovene_words,
-                    &parsed_categories.categories,
-                ),
+        let slovene_word_meaning_internal_id = draft
+            .try_insert_slovene_word_meaning_if_missing(
+                seed_translation_row.slovene_lemma.clone(),
+                seed_translation_row.slovene_meaning_description.clone(),
+                seed_translation_row.slovene_meaning_disambiguation.clone(),
+                seed_translation_row.slovene_meaning_example.clone(),
+                seed_translation_row.slovene_meaning_abbreviation.clone(),
+                seed_translation_row.assigned_categories.clone(),
             )
             .map_err(
                 |error| SeedDatasetError::IntermediateSloveneWordMeaningOutputError {
@@ -238,28 +425,23 @@ fn parse_words_and_translations(
                 },
             )?;
 
-        let slovene_word_meaning_internal_id = slovene_word_meaning.internal_id();
-        let _ = slovene_word_meanings.insert(slovene_word_meaning);
-
 
         /* Translation link parsing */
 
-        let translation = Translation::new(
-            english_word_meaning_internal_id,
-            slovene_word_meaning_internal_id,
-        );
-
-        let _ = translations.insert(translation);
+        draft
+            .try_insert_translation(
+                english_word_meaning_internal_id,
+                slovene_word_meaning_internal_id,
+            )
+            .map_err(
+                |_| SeedDatasetError::DuplicateTranslationEntries {
+                    slovene_word_lemma: seed_translation_row.slovene_lemma.clone(),
+                },
+            )?;
     }
 
 
-    Ok(ParsedWordsAndTranslations {
-        english_words,
-        english_word_meanings,
-        slovene_words,
-        slovene_word_meanings,
-        translations,
-    })
+    Ok(draft.into_parsed_words_and_translations())
 }
 
 

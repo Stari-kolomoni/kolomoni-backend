@@ -127,62 +127,52 @@ impl EnglishWordQuery {
                     we.lemma as \"lemma\", \
                     w.created_at as \"created_at\", \
                     w.last_modified_at as \"last_modified_at\", \
-                    coalesce( \
-                        json_agg(meanings) \
-                            FILTER (WHERE meanings.word_meaning_id IS NOT NULL), \
-                        '[]'::json \
-                    ) as \"meanings!\" \
+                    jsonb_agg_strict(DISTINCT meanings.word_meaning)::jsonb as \"meanings!\" \
                 FROM kolomoni.word_english as we \
                 INNER JOIN kolomoni.word as w \
                     ON we.word_id =  w.id \
-                LEFT JOIN LATERAL ( \
+                INNER JOIN LATERAL ( \
                     SELECT \
-                            wem.word_meaning_id as \"word_meaning_id\", \
-                            wem.disambiguation as \"disambiguation\", \
-                            wem.abbreviation as \"abbreviation\", \
-                            wem.description as \"description\", \
-                            wem.created_at as \"created_at\", \
-                            wem.last_modified_at as \"last_modified_at\", \
-                            coalesce( \
-                                json_agg(categories) \
-                                    FILTER (WHERE categories.category_id IS NOT NULL), \
-                                '[]'::json \
-                            ) as \"categories\", \
-                            coalesce( \
-                                json_agg(translates_into) \
-                                    FILTER (WHERE translates_into.translated_at IS NOT NULL), \
-                                '[]'::json \
-                            ) as \"translates_into\" \
+                            jsonb_build_object( \
+                                'word_meaning_id', wem.word_meaning_id, \
+                                'disambiguation', wem.disambiguation, \
+                                'abbreviation', wem.abbreviation, \
+                                'description', wem.description, \
+                                'created_at', wem.created_at, \
+                                'last_modified_at', wem.last_modified_at, \
+                                'categories', jsonb_agg_strict(DISTINCT categories.category_id), \
+                                'translates_into', jsonb_agg_strict(DISTINCT translates_into.translation) \
+                            )::jsonb as \"word_meaning\" \
                         FROM kolomoni.word_english_meaning as wem \
                         INNER JOIN kolomoni.word_meaning as wm \
                             ON wem.word_meaning_id = wm.id \
-                        LEFT JOIN LATERAL ( \
-                            SELECT wec.category_id as \"category_id\" \
+                        INNER JOIN LATERAL ( \
+                            SELECT \
+                                    wec.category_id as \"category_id\" \
                                 FROM kolomoni.word_meaning_category wec \
                                 WHERE wec.word_meaning_id = wem.word_meaning_id \
                         ) categories ON TRUE \
-                        LEFT JOIN LATERAL ( \
+                        INNER JOIN LATERAL ( \
                             SELECT \
-                                wsm.word_meaning_id as \"word_meaning_id\", \
-                                wsm.description as \"description\", \
-                                wsm.disambiguation as \"disambiguation\", \
-                                wsm.abbreviation as \"abbreviation\", \
-                                wsm.created_at as \"created_at\", \
-                                wsm.last_modified_at as \"last_modified_at\", \
-                                coalesce( \
-                                    json_agg(categories_on_translated) \
-                                        FILTER (WHERE categories_on_translated.category_id IS NOT NULL), \
-                                    '[]'::json \
-                                ) as \"categories\", \
-                                translated_at, \
-                                translated_by \
+                                    jsonb_build_object( \
+                                        'word_meaning_id', wsm.word_meaning_id, \
+                                        'description', wsm.description, \
+                                        'disambiguation', wsm.disambiguation, \
+                                        'abbreviation', wsm.abbreviation, \
+                                        'created_at', wsm.created_at, \
+                                        'last_modified_at', wsm.last_modified_at, \
+                                        'translated_at', wmt.translated_at, \
+                                        'translated_by', wmt.translated_by, \
+                                        'categories', jsonb_agg_strict(DISTINCT categories_on_translated.category_id) \
+                                    )::jsonb as \"translation\" \
                                 FROM kolomoni.word_meaning_translation wmt \
                                 INNER JOIN kolomoni.word_slovene_meaning as wsm \
                                     ON wmt.slovene_word_meaning_id = wsm.word_meaning_id \
-                                LEFT JOIN LATERAL ( \
-                                        SELECT wec_t.category_id as \"category_id\" \
-                                            FROM kolomoni.word_meaning_category wec_t \
-                                            WHERE wec_t.word_meaning_id = wsm.word_meaning_id \
+                                INNER JOIN LATERAL ( \
+                                    SELECT \
+                                            wec_t.category_id as \"category_id\" \
+                                        FROM kolomoni.word_meaning_category wec_t \
+                                        WHERE wec_t.word_meaning_id = wsm.word_meaning_id \
                                     ) categories_on_translated ON TRUE \
                                 WHERE wmt.english_word_meaning_id = wm.id \
                                 GROUP BY \
@@ -252,68 +242,59 @@ impl EnglishWordQuery {
     ) -> QueryResult<Option<super::EnglishWordWithMeaningsModel>> {
         let intermediate_extended_model = sqlx::query_as!(
             super::InternalEnglishWordWithMeaningsModel,
+            // TODO Continue migrating to jsonb + DISTINCT aggregations from here
             "SELECT \
                     we.word_id as \"word_id\", \
                     we.lemma as \"lemma\", \
                     w.created_at as \"created_at\", \
                     w.last_modified_at as \"last_modified_at\", \
-                    coalesce( \
-                        json_agg(meanings) \
-                            FILTER (WHERE meanings.word_meaning_id IS NOT NULL), \
-                        '[]'::json \
-                    ) as \"meanings!\" \
+                    jsonb_agg_strict(DISTINCT meanings.word_meaning)::jsonb as \"meanings!\" \
                 FROM kolomoni.word_english as we \
                 INNER JOIN kolomoni.word as w \
                     ON we.word_id =  w.id \
-                LEFT JOIN LATERAL ( \
+                INNER JOIN LATERAL ( \
                     SELECT \
-                            wem.word_meaning_id as \"word_meaning_id\", \
-                            wem.disambiguation as \"disambiguation\", \
-                            wem.abbreviation as \"abbreviation\", \
-                            wem.description as \"description\", \
-                            wem.created_at as \"created_at\", \
-                            wem.last_modified_at as \"last_modified_at\", \
-                            coalesce( \
-                                json_agg(categories) \
-                                    FILTER (WHERE categories.category_id IS NOT NULL), \
-                                '[]'::json \
-                            ) as \"categories\", \
-                            coalesce( \
-                                json_agg(translates_into) \
-                                    FILTER (WHERE translates_into.translated_at IS NOT NULL), \
-                                '[]'::json \
-                            ) as \"translates_into\" \
+                            jsonb_build_object( \
+                                'word_meaning_id', wem.word_meaning_id, \
+                                'disambiguation', wem.disambiguation, \
+                                'abbreviation', wem.abbreviation, \
+                                'description', wem.description, \
+                                'created_at', wem.created_at, \
+                                'last_modified_at', wem.last_modified_at, \
+                                'categories', jsonb_agg_strict(DISTINCT categories.category_id), \
+                                'translates_into', jsonb_agg_strict(DISTINCT translates_into.translation) \
+                            ) as \"word_meaning\" \
                         FROM kolomoni.word_english_meaning as wem \
                         INNER JOIN kolomoni.word_meaning as wm \
                             ON wem.word_meaning_id = wm.id \
-                        LEFT JOIN LATERAL ( \
-                            SELECT wec.category_id as \"category_id\" \
+                        INNER JOIN LATERAL ( \
+                            SELECT  \
+                                    wec.category_id as \"category_id\" \
                                 FROM kolomoni.word_meaning_category wec \
                                 WHERE wec.word_meaning_id = wem.word_meaning_id \
                         ) categories ON TRUE \
-                        LEFT JOIN LATERAL ( \
+                        INNER JOIN LATERAL ( \
                             SELECT \
-                                wsm.word_meaning_id as \"word_meaning_id\", \
-                                wsm.description as \"description\", \
-                                wsm.disambiguation as \"disambiguation\", \
-                                wsm.abbreviation as \"abbreviation\", \
-                                wsm.created_at as \"created_at\", \
-                                wsm.last_modified_at as \"last_modified_at\", \
-                                coalesce( \
-                                    json_agg(categories_on_translated) \
-                                        FILTER (WHERE categories_on_translated.category_id IS NOT NULL), \
-                                    '[]'::json \
-                                ) as \"categories\", \
-                                translated_at, \
-                                translated_by \
+                                    jsonb_build_object( \
+                                        'word_meaning_id', wsm.word_meaning_id, \
+                                        'description', wsm.description, \
+                                        'disambiguation', wsm.disambiguation, \
+                                        'abbreviation', wsm.abbreviation, \
+                                        'created_at', wsm.created_at, \
+                                        'last_modified_at', wsm.last_modified_at, \
+                                        'translated_at', wmt.translated_at, \
+                                        'translated_by', wmt.translated_by, \
+                                        'categories', jsonb_agg_strict(DISTINCT categories_on_translated.category_id) \
+                                    ) as \"translation\" \
                                 FROM kolomoni.word_meaning_translation wmt \
                                 INNER JOIN kolomoni.word_slovene_meaning as wsm \
                                     ON wmt.slovene_word_meaning_id = wsm.word_meaning_id \
-                                LEFT JOIN LATERAL ( \
-                                        SELECT wec_t.category_id as \"category_id\" \
-                                            FROM kolomoni.word_meaning_category wec_t \
-                                            WHERE wec_t.word_meaning_id = wsm.word_meaning_id \
-                                    ) categories_on_translated ON TRUE \
+                                INNER JOIN LATERAL ( \
+                                    SELECT \
+                                            wec_t.category_id as \"category_id\" \
+                                        FROM kolomoni.word_meaning_category wec_t \
+                                        WHERE wec_t.word_meaning_id = wsm.word_meaning_id \
+                                ) categories_on_translated ON TRUE \
                                 WHERE wmt.english_word_meaning_id = wm.id \
                                 GROUP BY \
                                     wsm.word_meaning_id, \
@@ -401,60 +382,50 @@ impl EnglishWordQuery {
                         we.lemma as \"lemma\", \
                         w.created_at as \"created_at\", \
                         w.last_modified_at as \"last_modified_at\", \
-                        coalesce( \
-                            json_agg(meanings) \
-                            FILTER (WHERE meanings.word_meaning_id IS NOT NULL), \
-                            '[]'::json \
-                        ) as \"meanings!\" \
+                        jsonb_agg_strict(DISTINCT meanings.word_meaning)::jsonb as \"meanings!\" \
                     FROM kolomoni.word_english as we \
                     INNER JOIN kolomoni.word as w \
                         ON we.word_id =  w.id \
-                    LEFT JOIN LATERAL ( \
+                    INNER JOIN LATERAL ( \
                         SELECT \
-                                wem.word_meaning_id as \"word_meaning_id\", \
-                                wem.disambiguation as \"disambiguation\", \
-                                wem.abbreviation as \"abbreviation\", \
-                                wem.description as \"description\", \
-                                wem.created_at as \"created_at\", \
-                                wem.last_modified_at as \"last_modified_at\", \
-                                coalesce( \
-                                    json_agg(categories) \
-                                        FILTER (WHERE categories.category_id IS NOT NULL), \
-                                    '[]'::json \
-                                ) as \"categories\", \
-                                coalesce( \
-                                    json_agg(translates_into) \
-                                        FILTER (WHERE translates_into.translated_at IS NOT NULL), \
-                                    '[]'::json \
-                                ) as \"translates_into\" \
+                                jsonb_build_object( \
+                                    'word_meaning_id', wem.word_meaning_id, \
+                                    'disambiguation', wem.disambiguation, \
+                                    'abbreviation', wem.abbreviation, \
+                                    'description', wem.description, \
+                                    'created_at', wem.created_at, \
+                                    'last_modified_at', wem.last_modified_at, \
+                                    'categories', jsonb_agg_strict(DISTINCT categories.category_id), \
+                                    'translates_into', jsonb_agg_strict(DISTINCT translates_into.translation) \
+                                ) as \"word_meaning\" \
                             FROM kolomoni.word_english_meaning as wem \
                             INNER JOIN kolomoni.word_meaning as wm \
                                 ON wem.word_meaning_id = wm.id \
-                            LEFT JOIN LATERAL ( \
-                                SELECT wec.category_id as \"category_id\" \
+                            INNER JOIN LATERAL ( \
+                                SELECT  \
+                                        wec.category_id as \"category_id\" \
                                     FROM kolomoni.word_meaning_category wec \
                                     WHERE wec.word_meaning_id = wem.word_meaning_id \
                             ) categories ON TRUE \
-                            LEFT JOIN LATERAL ( \
+                            INNER JOIN LATERAL ( \
                                 SELECT \
-                                    wsm.word_meaning_id as \"word_meaning_id\", \
-                                    wsm.description as \"description\", \
-                                    wsm.disambiguation as \"disambiguation\", \
-                                    wsm.abbreviation as \"abbreviation\", \
-                                    wsm.created_at as \"created_at\", \
-                                    wsm.last_modified_at as \"last_modified_at\", \
-                                    coalesce( \
-                                        json_agg(categories_on_translated) \
-                                            FILTER (WHERE categories_on_translated.category_id IS NOT NULL), \
-                                        '[]'::json \
-                                    ) as \"categories\", \
-                                    translated_at, \
-                                    translated_by \
+                                        jsonb_build_object( \
+                                            'word_meaning_id', wsm.word_meaning_id, \
+                                            'description', wsm.description, \
+                                            'disambiguation', wsm.disambiguation, \
+                                            'abbreviation', wsm.abbreviation, \
+                                            'created_at', wsm.created_at, \
+                                            'last_modified_at', wsm.last_modified_at, \
+                                            'translated_at', wmt.translated_at, \
+                                            'translated_by', wmt.translated_by, \
+                                            'categories', jsonb_agg_strict(DISTINCT categories_on_translated.category_id) \
+                                        ) as \"translation\" \
                                     FROM kolomoni.word_meaning_translation wmt \
                                     INNER JOIN kolomoni.word_slovene_meaning as wsm \
                                         ON wmt.slovene_word_meaning_id = wsm.word_meaning_id \
-                                    LEFT JOIN LATERAL ( \
-                                        SELECT wec_t.category_id as \"category_id\" \
+                                    INNER JOIN LATERAL ( \
+                                        SELECT \
+                                                wec_t.category_id as \"category_id\" \
                                             FROM kolomoni.word_meaning_category wec_t \
                                             WHERE wec_t.word_meaning_id = wsm.word_meaning_id \
                                     ) categories_on_translated ON TRUE \
@@ -497,60 +468,50 @@ impl EnglishWordQuery {
                         we.lemma as \"lemma\", \
                         w.created_at as \"created_at\", \
                         w.last_modified_at as \"last_modified_at\", \
-                        coalesce( \
-                            json_agg(meanings) \
-                            FILTER (WHERE meanings.word_meaning_id IS NOT NULL), \
-                            '[]'::json \
-                        ) as \"meanings!\" \
+                        jsonb_agg_strict(DISTINCT meanings.word_meaning)::jsonb as \"meanings!\" \
                     FROM kolomoni.word_english as we \
                     INNER JOIN kolomoni.word as w \
                         ON we.word_id =  w.id \
-                    LEFT JOIN LATERAL ( \
+                    INNER JOIN LATERAL ( \
                         SELECT \
-                                wem.word_meaning_id as \"word_meaning_id\", \
-                                wem.disambiguation as \"disambiguation\", \
-                                wem.abbreviation as \"abbreviation\", \
-                                wem.description as \"description\", \
-                                wem.created_at as \"created_at\", \
-                                wem.last_modified_at as \"last_modified_at\", \
-                                coalesce( \
-                                    json_agg(categories) \
-                                        FILTER (WHERE categories.category_id IS NOT NULL), \
-                                    '[]'::json \
-                                ) as \"categories\", \
-                                coalesce( \
-                                    json_agg(translates_into) \
-                                        FILTER (WHERE translates_into.translated_at IS NOT NULL), \
-                                    '[]'::json \
-                                ) as \"translates_into\" \
+                                jsonb_build_object( \
+                                    'word_meaning_id', wem.word_meaning_id, \
+                                    'disambiguation', wem.disambiguation, \
+                                    'abbreviation', wem.abbreviation, \
+                                    'description', wem.description, \
+                                    'created_at', wem.created_at, \
+                                    'last_modified_at', wem.last_modified_at, \
+                                    'categories', jsonb_agg_strict(DISTINCT categories.category_id), \
+                                    'translates_into', jsonb_agg_strict(DISTINCT translates_into.translation) \
+                                ) as \"word_meaning\" \
                             FROM kolomoni.word_english_meaning as wem \
                             INNER JOIN kolomoni.word_meaning as wm \
                                 ON wem.word_meaning_id = wm.id \
-                            LEFT JOIN LATERAL ( \
-                                SELECT wec.category_id as \"category_id\" \
+                            INNER JOIN LATERAL ( \
+                                SELECT  \
+                                        wec.category_id as \"category_id\" \
                                     FROM kolomoni.word_meaning_category wec \
                                     WHERE wec.word_meaning_id = wem.word_meaning_id \
                             ) categories ON TRUE \
-                            LEFT JOIN LATERAL ( \
+                            INNER JOIN LATERAL ( \
                                 SELECT \
-                                    wsm.word_meaning_id as \"word_meaning_id\", \
-                                    wsm.description as \"description\", \
-                                    wsm.disambiguation as \"disambiguation\", \
-                                    wsm.abbreviation as \"abbreviation\", \
-                                    wsm.created_at as \"created_at\", \
-                                    wsm.last_modified_at as \"last_modified_at\", \
-                                    coalesce( \
-                                        json_agg(categories_on_translated) \
-                                            FILTER (WHERE categories_on_translated.category_id IS NOT NULL), \
-                                        '[]'::json \
-                                    ) as \"categories\", \
-                                    translated_at, \
-                                    translated_by \
+                                        jsonb_build_object( \
+                                            'word_meaning_id', wsm.word_meaning_id, \
+                                            'description', wsm.description, \
+                                            'disambiguation', wsm.disambiguation, \
+                                            'abbreviation', wsm.abbreviation, \
+                                            'created_at', wsm.created_at, \
+                                            'last_modified_at', wsm.last_modified_at, \
+                                            'translated_at', wmt.translated_at, \
+                                            'translated_by', wmt.translated_by, \
+                                            'categories', jsonb_agg_strict(DISTINCT categories_on_translated.category_id) \
+                                        ) as \"translation\" \
                                     FROM kolomoni.word_meaning_translation wmt \
                                     INNER JOIN kolomoni.word_slovene_meaning as wsm \
                                         ON wmt.slovene_word_meaning_id = wsm.word_meaning_id \
-                                    LEFT JOIN LATERAL ( \
-                                        SELECT wec_t.category_id as \"category_id\" \
+                                    INNER JOIN LATERAL ( \
+                                        SELECT \
+                                                wec_t.category_id as \"category_id\" \
                                             FROM kolomoni.word_meaning_category wec_t \
                                             WHERE wec_t.word_meaning_id = wsm.word_meaning_id \
                                     ) categories_on_translated ON TRUE \

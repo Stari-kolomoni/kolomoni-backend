@@ -59,8 +59,8 @@ pub enum ClientError {
 
     /// Indicates that th
     #[error(
-        "server sent an unexpected and unhandled {} response \
-        (may indicate this client being out of date with the API): {}",
+        "Server sent an unexpected, unhandled, or malformed response (status code: {}). \
+        This may indicate this client being out of date with the API. Additional reason: {}",
         .status_code,
         .reason
     )]

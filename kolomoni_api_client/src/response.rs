@@ -1,8 +1,10 @@
 use kolomoni_core::api_models::{
     CategoryErrorReason,
     ErrorReason,
+    LoginErrorReason,
     ResponseWithErrorReason,
     TranslationsErrorReason,
+    UsersErrorReason,
     WordErrorReason,
 };
 use reqwest::StatusCode;
@@ -47,11 +49,11 @@ impl ServerResponse {
         })
     } */
 
-    pub(crate) fn status(&self) -> StatusCode {
+    pub fn status(&self) -> StatusCode {
         self.http_response.status()
     }
 
-    pub(crate) async fn json<V>(self) -> ClientResult<V>
+    pub async fn json<V>(self) -> ClientResult<V>
     where
         V: DeserializeOwned,
     {
@@ -65,13 +67,27 @@ impl ServerResponse {
             .map_err(|error| ClientError::ResponseJsonBodyError { error })
     }
 
-    pub(crate) async fn error_reason(self) -> ClientResult<ErrorReason> {
+    pub async fn error_reason(self) -> ClientResult<ErrorReason> {
         let response_with_error_reason = self.json::<ResponseWithErrorReason>().await?;
 
         Ok(response_with_error_reason.reason)
     }
 
-    pub(crate) async fn category_error_reason(self) -> ClientResult<CategoryErrorReason> {
+    pub async fn login_error_reason(self) -> ClientResult<LoginErrorReason> {
+        let response_status = self.status();
+        let error_reason = self.error_reason().await?;
+
+        let ErrorReason::Login(login_error_reason) = error_reason else {
+            return Err(ClientError::unexpected_error_reason(
+                error_reason,
+                response_status,
+            ));
+        };
+
+        Ok(login_error_reason)
+    }
+
+    pub async fn category_error_reason(self) -> ClientResult<CategoryErrorReason> {
         let response_status = self.status();
         let error_reason = self.error_reason().await?;
 
@@ -85,7 +101,7 @@ impl ServerResponse {
         Ok(category_error_reason)
     }
 
-    pub(crate) async fn word_error_reason(self) -> ClientResult<WordErrorReason> {
+    pub async fn word_error_reason(self) -> ClientResult<WordErrorReason> {
         let response_status = self.status();
         let error_reason = self.error_reason().await?;
 
@@ -99,7 +115,7 @@ impl ServerResponse {
         Ok(word_error_reason)
     }
 
-    pub(crate) async fn translations_error_reason(self) -> ClientResult<TranslationsErrorReason> {
+    pub async fn translations_error_reason(self) -> ClientResult<TranslationsErrorReason> {
         let response_status = self.status();
         let error_reason = self.error_reason().await?;
 
@@ -111,6 +127,20 @@ impl ServerResponse {
         };
 
         Ok(translations_error_reason)
+    }
+
+    pub async fn users_error_reason(self) -> ClientResult<UsersErrorReason> {
+        let response_status = self.status();
+        let error_reason = self.error_reason().await?;
+
+        let ErrorReason::Users(users_error_reason) = error_reason else {
+            return Err(ClientError::unexpected_error_reason(
+                error_reason,
+                response_status,
+            ));
+        };
+
+        Ok(users_error_reason)
     }
 }
 

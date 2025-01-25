@@ -3,7 +3,7 @@ use std::net::Ipv4Addr;
 use actix_web::{App, HttpServer};
 use kolomoni::api::v1::dictionary;
 use kolomoni::api::v1::health;
-use kolomoni::api::v1::login;
+use kolomoni::api::v1::auth;
 use kolomoni::api::v1::users;
 use kolomoni::logging::initialize_tracing;
 use kolomoni_core::api_models;
@@ -30,9 +30,10 @@ use utoipa_rapidoc::RapiDoc;
         health::ping,
 
 
-        // kolomoni::api::v1::login
-        login::login,
-        login::refresh_login,
+        // kolomoni::api::v1::auth
+        auth::endpoints::login,
+        auth::endpoints::refresh_login,
+        auth::endpoints::register_user,
 
 
         // kolomoni::api::v1::users::all
@@ -43,9 +44,6 @@ use utoipa_rapidoc::RapiDoc;
         users::current::get_current_user_roles,
         users::current::get_current_user_effective_permissions,
         users::current::update_current_user_display_name,
-
-        // kolomoni::api::v1::users::registration
-        users::registration::register_user,
 
         // kolomoni::api::v1::users::specific
         users::specific::get_specific_user_info,

@@ -77,7 +77,7 @@ mod cli;
 mod logging;
 mod state;
 
-#[cfg(feature = "with_test_facilities")]
+#[cfg(feature = "e2e-testing")]
 mod testing;
 
 use crate::api::api_router;
@@ -85,7 +85,6 @@ use crate::api::errors::EndpointError;
 use crate::cli::CLIArgs;
 use crate::logging::initialize_tracing;
 use crate::state::ApplicationStateInner;
-
 
 /*
 #[derive(Debug, Error)]
@@ -139,13 +138,13 @@ pub async fn apply_pending_migrations(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    #[cfg(feature = "with_test_facilities")]
+    #[cfg(feature = "e2e-testing")]
     {
         println!("-------------------------------------");
         println!("THIS IS AN INCREDIBLY IMPORTANT ERROR");
         println!("-------------------------------------");
         println!(
-            "THIS BINARY HAS BEEN COMPILED WITH THE with_test_facilities FEATURE FLAG, \n\
+            "THIS BINARY HAS BEEN COMPILED WITH THE e2e-testing FEATURE FLAG, \n\
             WHICH MEANS IT SHOULD ONLY BE USED FOR TESTING. IF YOU USE THIS IN PRODUCTION, \n\
             ANYONE CAN WIPE YOUR DATABASE REMOTELY. YOU HAVE BEEN WARNED"
         );
@@ -277,7 +276,7 @@ async fn main() -> Result<()> {
             .app_data(state.clone())
             .service(api_router());
 
-        #[cfg(feature = "with_test_facilities")]
+        #[cfg(feature = "e2e-testing")]
         {
             info!("Enabling testing endpoints.");
 
@@ -294,7 +293,7 @@ async fn main() -> Result<()> {
         .wrap_err("Failed to set up actix HTTP server.")?;
 
 
-    #[cfg(feature = "with_test_facilities")]
+    #[cfg(feature = "e2e-testing")]
     {
         // We use this line to check (in the logs) that the server
         // is alive and running. We use println instead of tracing

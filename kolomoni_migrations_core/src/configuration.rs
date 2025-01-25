@@ -18,7 +18,7 @@ fn get_false() -> bool {
 
 
 
-/// An error that can ocurr when loading migration configuration files.
+/// An error that can occur when loading migration configuration files.
 #[derive(Error, Debug)]
 pub enum MigrationConfigurationError {
     #[error(

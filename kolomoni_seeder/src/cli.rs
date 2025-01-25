@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgAction, Args, Parser, Subcommand};
 
 
 #[derive(Debug, Args)]
@@ -37,6 +37,13 @@ pub struct SeedFromSpreadsheetCommandArguments {
         help = "Access token to authenticate with on the Stari Kolomoni server."
     )]
     pub access_token: String,
+
+    #[arg(
+        long = "dry-run",
+        action = ArgAction::SetTrue,
+        help = "Perform a dry run by only parsing the spreadsheets and not submitting them to the sever."
+    )]
+    pub dry_run: bool,
 }
 
 

@@ -6,12 +6,12 @@ pub use endpoints::*;
 mod model_impls;
 
 
-// TODO Word meaning links.
-
-
 #[rustfmt::skip]
+#[allow(clippy::let_and_return)]
 pub fn slovene_dictionary_router() -> Scope {
-    web::scope("/slovene")
-        .service(slovene_word_router())
-        .service(slovene_word_meaning_router())
+    let slovene_dictionary_scope = web::scope("/slovene");
+    let slovene_dictionary_scope = slovene_word_router(slovene_dictionary_scope);
+    let slovene_dictionary_scope = slovene_word_meaning_router(slovene_dictionary_scope);
+
+    slovene_dictionary_scope
 }

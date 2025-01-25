@@ -253,9 +253,6 @@ pub async fn get_specific_user_roles(
         openapi::response::UuidUrlParameterError,
         openapi::response::MissingPermissions<requires::UserAnyRead, 1>,
         openapi::response::InternalServerError,
-    ),
-    security(
-        ("access_token" = [])
     )
 )]
 #[get("/{user_id}/permissions")]
@@ -265,13 +262,20 @@ async fn get_specific_user_effective_permissions(
     path_info: web::Path<(String,)>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
+    let mut transaction = database_connection
+        .transaction()
+        .access_mode_read_only()
+        .begin()
+        .await?;
 
 
-    // To access this endpoint, the user:
-    // - MUST provide an authentication token, and
-    // - MUST have the `user.self:read` permission.
-    require_user_authentication_and_permissions!(
-        &mut database_connection,
+    // Users don't need to authenticate due to a
+    // blanket permission grant for `user.any:read`.
+    // This will also work if we remove the blanket grant
+    // in the future - it will fall back to requiring authentication
+    // AND the `user.any:read` permission.
+    require_permission_with_optional_authentication!(
+        &mut transaction,
         authentication_extractor,
         Permission::UserAnyRead
     );
@@ -282,7 +286,7 @@ async fn get_specific_user_effective_permissions(
 
 
     let requested_user_exists =
-        entities::UserQuery::exists_by_id(&mut database_connection, requested_user_id).await?;
+        entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !requested_user_exists {
         return EndpointResponseBuilder::not_found()
@@ -292,7 +296,7 @@ async fn get_specific_user_effective_permissions(
 
 
     let requested_user_permission_set = entities::UserRoleQuery::transitive_permissions_for_user(
-        &mut database_connection,
+        &mut transaction,
         requested_user_id,
     )
     .await?;
@@ -594,7 +598,7 @@ pub async fn add_roles_to_specific_user(
         let mut roles_to_add_to_user = HashSet::with_capacity(request_data.roles_to_add.len());
 
         for raw_role_name in request_data.roles_to_add {
-            let Some(role) = Role::from_name(&raw_role_name) else {
+            let Some(role) = Role::try_from_name(&raw_role_name) else {
                 return EndpointResponseBuilder::bad_request()
                     .with_error_reason(UsersErrorReason::invalid_role_name(raw_role_name))
                     .build();
@@ -603,7 +607,7 @@ pub async fn add_roles_to_specific_user(
             roles_to_add_to_user.insert(role);
         }
 
-        RoleSet::from_role_hash_set(roles_to_add_to_user)
+        RoleSet::from_role_set(roles_to_add_to_user)
     };
 
 
@@ -770,7 +774,7 @@ pub async fn remove_roles_from_specific_user(
             HashSet::with_capacity(request_data.roles_to_remove.len());
 
         for raw_role_name in request_data.roles_to_remove {
-            let Some(role) = Role::from_name(&raw_role_name) else {
+            let Some(role) = Role::try_from_name(&raw_role_name) else {
                 return EndpointResponseBuilder::bad_request()
                     .with_error_reason(UsersErrorReason::invalid_role_name(raw_role_name))
                     .build();
@@ -779,7 +783,7 @@ pub async fn remove_roles_from_specific_user(
             roles_to_remove_from_user.insert(role);
         }
 
-        RoleSet::from_role_hash_set(roles_to_remove_from_user)
+        RoleSet::from_role_set(roles_to_remove_from_user)
     };
 
 

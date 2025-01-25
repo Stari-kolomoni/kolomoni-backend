@@ -95,6 +95,12 @@ pub enum InitializeMigrationTrackingError {
 
 #[derive(Debug, Error)]
 pub enum StatusError {
+    #[error("unable to connect to the database")]
+    UnableToConnect {
+        #[source]
+        error: sqlx::Error,
+    },
+
     #[error("failed to load migration from database")]
     RemoteMigrationError(
         #[from]
@@ -109,6 +115,7 @@ pub enum StatusError {
     )]
     MigrationDoesNotExistLocally { identifier: MigrationIdentifier },
 
+    #[deprecated(note = "remove this")]
     #[error(
         "embedded and remote migration don't match due to different hashes (version {}): \
         {} vs {} (up), {:?} vs {:?} (down)",

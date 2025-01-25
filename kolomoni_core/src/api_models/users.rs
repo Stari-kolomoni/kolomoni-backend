@@ -30,6 +30,7 @@ pub struct UserLoginRequest {
 
 /// Information with which to refresh a user's login, generating a new access token.
 #[derive(Deserialize, ToSchema)]
+#[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Serialize))]
 #[schema(
     example = json!({
         "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN\
@@ -50,6 +51,10 @@ pub struct UserLoginRefreshRequest {
 
 /// Response on successful login refresh.
 #[derive(Serialize, Debug, ToSchema)]
+#[cfg_attr(
+    feature = "serde_impls_for_client_on_models",
+    derive(serde::Deserialize)
+)]
 #[schema(
     example = json!({
         "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJTdGFyaSBLb2xvbW9uaSIsInN1\

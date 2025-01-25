@@ -20,7 +20,7 @@ pub trait KolomoniUuidNewtype: FromStr {}
 
 macro_rules! create_uuid_newtype {
     ($struct_name:ident) => {
-        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[derive(serde::Serialize, serde::Deserialize)]
         #[derive(utoipa::ToSchema)]
         #[serde(transparent)]
@@ -62,10 +62,18 @@ macro_rules! create_uuid_newtype {
                 uuid::fmt::Simple::from_uuid(self.0).fmt(f)
             }
         }
+
+        impl std::fmt::Debug for $struct_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    concat!(stringify!($struct_name), "<{}>"),
+                    self.0
+                )
+            }
+        }
     };
 }
-
-
 
 create_uuid_newtype!(CategoryId);
 

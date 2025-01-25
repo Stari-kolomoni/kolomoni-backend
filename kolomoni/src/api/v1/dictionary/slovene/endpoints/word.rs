@@ -50,7 +50,7 @@ use crate::{
 /// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
-    path = "/dictionary/slovene",
+    path = "/dictionary/slovene/words",
     tag = "dictionary:slovene",
     params(
         SloveneWordsListRequest
@@ -65,7 +65,7 @@ use crate::{
         openapi::response::InternalServerError,
     )
 )]
-#[get("")]
+#[get("/words")]
 pub async fn get_all_slovene_words(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -80,13 +80,13 @@ pub async fn get_all_slovene_words(
     );
 
 
-
     let word_query_options = SloveneWordsQueryOptions {
         only_words_modified_after: request_query_params.into_inner().last_modified_after,
     };
 
 
     // Load words from the database.
+    // TODO fix: this can return duplicated translates_into for a word's meaning, investigate
     let mut words_with_meanings_stream =
         entities::SloveneWordQuery::get_all_slovene_words_with_meanings(
             &mut database_connection,
@@ -98,9 +98,11 @@ pub async fn get_all_slovene_words(
     let mut slovene_words = Vec::new();
 
     while let Some(word_result) = words_with_meanings_stream.next().await {
+        // DEBUGONLY
+        // println!("Model: {:?}.", word_result);
+
         slovene_words.push(word_result?.into_api_model());
     }
-
 
     EndpointResponseBuilder::ok()
         .with_json_body(SloveneWordsResponse { slovene_words })
@@ -125,7 +127,7 @@ declare_openapi_error_reason_response!(
 /// This endpoint requires authentication and the `word:create` permission.
 #[utoipa::path(
     post,
-    path = "/dictionary/slovene",
+    path = "/dictionary/slovene/words",
     tag = "dictionary:slovene",
     request_body(
         content = SloveneWordCreationRequest
@@ -149,7 +151,7 @@ declare_openapi_error_reason_response!(
         ("access_token" = [])
     )
 )]
-#[post("")]
+#[post("/words")]
 pub async fn create_slovene_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -201,6 +203,7 @@ pub async fn create_slovene_word(
         .await
         .map_err(APIError::InternalGenericError)?; */
 
+    transaction.commit().await?;
 
     EndpointResponseBuilder::ok()
         .with_json_body(SloveneWordCreationResponse {
@@ -229,7 +232,7 @@ declare_openapi_error_reason_response!(
 /// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
-    path = "/dictionary/slovene/{word_uuid}",
+    path = "/dictionary/slovene/words/{word_uuid}",
     tag = "dictionary:slovene",
     params(
         (
@@ -253,7 +256,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError,
     )
 )]
-#[get("/{word_uuid}")]
+#[get("/words/{word_uuid}")]
 pub async fn get_slovene_word_by_id(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -306,7 +309,7 @@ pub async fn get_slovene_word_by_id(
 /// the `word:read` permission to unauthenticated users.
 #[utoipa::path(
     get,
-    path = "/dictionary/slovene/by-lemma/{word_lemma}",
+    path = "/dictionary/slovene/words/by-lemma/{word_lemma}",
     tag = "dictionary:slovene",
     params(
         (
@@ -329,7 +332,7 @@ pub async fn get_slovene_word_by_id(
         openapi::response::InternalServerError,
     )
 )]
-#[get("/by-lemma/{word_lemma}")]
+#[get("/words/by-lemma/{word_lemma}")]
 pub async fn get_slovene_word_by_lemma(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -378,7 +381,7 @@ pub async fn get_slovene_word_by_lemma(
 /// This endpoint requires authentication and the `word:update` permission.
 #[utoipa::path(
     patch,
-    path = "/dictionary/slovene/{word_uuid}",
+    path = "/dictionary/slovene/words/{word_uuid}",
     tag = "dictionary:slovene",
     params(
         (
@@ -410,7 +413,7 @@ pub async fn get_slovene_word_by_lemma(
         ("access_token" = [])
     )
 )]
-#[patch("/{word_uuid}")]
+#[patch("/words/{word_uuid}")]
 pub async fn update_slovene_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -503,7 +506,7 @@ pub async fn update_slovene_word(
 /// This endpoint requires authentication and the `word:delete` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/slovene/{word_uuid}",
+    path = "/dictionary/slovene/words/{word_uuid}",
     tag = "dictionary:slovene",
     params(
         (
@@ -531,7 +534,7 @@ pub async fn update_slovene_word(
         ("access_token" = [])
     )
 )]
-#[delete("/{word_uuid}")]
+#[delete("/words/{word_uuid}")]
 pub async fn delete_slovene_word(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -570,6 +573,7 @@ pub async fn delete_slovene_word(
         ));
     }
 
+    transaction.commit().await?;
 
     /* TODO pending cache layer rewrite
     // Signals to the the search indexer that the word has been removed.
@@ -587,8 +591,8 @@ pub async fn delete_slovene_word(
 
 
 #[rustfmt::skip]
-pub fn slovene_word_router() -> Scope {
-    web::scope("")
+pub fn slovene_word_router(slovene_dictionary_scope: Scope) -> Scope {
+    slovene_dictionary_scope
         .service(get_all_slovene_words)
         .service(create_slovene_word)
         .service(get_slovene_word_by_id)

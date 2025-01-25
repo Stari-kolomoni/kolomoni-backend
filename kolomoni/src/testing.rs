@@ -1,16 +1,20 @@
 //! A test-only API. Included only when
-//! the `with_test_facilities` feature flag is enabled.
+//! the `e2e-testing` feature flag is enabled.
 
 use actix_web::{post, web, HttpResponse, Scope};
 use kolomoni_auth::{Role, RoleSet, DEFAULT_USER_ROLE};
 use kolomoni_configuration::{Configuration, ForMigrationAtApiRuntimeDatabaseConfiguration};
-use kolomoni_core::ids::UserId;
+use kolomoni_core::{
+    api_models::{GiveAdministratorRoleRequest, ResetUserRolesRequest},
+    ids::UserId,
+    roles::{DEFAULT_USER_ROLE, DEFAULT_USER_ROLE_SET},
+};
 use kolomoni_database::entities;
 use kolomoni_migrations::{
     core::{
         errors::{MigrationApplyError, MigrationRollbackError, StatusError},
         identifier::MigrationIdentifier,
-        migrations::MigrationsWithStatusOptions,
+        migrations::{IntegrityVerdict, MigrationsWithStatusOptions},
     },
     migrations,
 };
@@ -21,7 +25,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
-    api::errors::{EndpointError, EndpointResult},
+    api::errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
     obtain_database_connection,
     state::ApplicationState,
 };
@@ -45,6 +49,9 @@ pub enum RollbackAndReapplyError {
         #[source]
         error: sqlx::Error,
     },
+
+    #[error("migration integrity error: {}", .reason)]
+    MigrationIntegrityError { reason: String },
 
     #[error("failed to rollback migration {}", .migration)]
     MigrationRollbackError {
@@ -101,11 +108,16 @@ async fn rollback_and_reapply_non_privileged_migrations(
     info!("Fetching migration status.");
 
     let all_migrations = migrator
-        .migrations_with_status_with_fallback(
-            Some(migrator_user_connection_options),
-            MigrationsWithStatusOptions::strict(),
-        )
+        .migrations_with_status_with_fallback(migrator_user_connection_options)
         .await?;
+
+
+    if !all_migrations.integrity().has_down_integrity() {
+        return Err(RollbackAndReapplyError::MigrationIntegrityError {
+            reason: format!("{:?}", all_migrations.integrity()),
+        });
+    }
+
 
     // Ignores leading privileged migrations.
     let migrations_to_rollback_and_reapply = Vec::from_iter(
@@ -173,7 +185,14 @@ async fn rollback_and_reapply_non_privileged_migrations(
     Ok(())
 }
 
-#[post("/full-reset")]
+
+#[get("/enabled")]
+pub async fn is_testing_enabled() -> EndpointResult {
+    EndpointResponseBuilder::ok().build()
+}
+
+
+#[post("/state/reset")]
 pub async fn reset_server(state: ApplicationState) -> EndpointResult {
     warn!("Resetting database.");
 
@@ -190,15 +209,11 @@ pub async fn reset_server(state: ApplicationState) -> EndpointResult {
 }
 
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
-pub struct GiveFullUserPermissionsRequest {
-    pub user_id: Uuid,
-}
 
-#[post("/give-user-full-permissions")]
-pub async fn give_full_permissions_to_user(
+#[post("/user/give-administrator-role")]
+pub async fn give_administrator_role_to_user(
     state: ApplicationState,
-    request_body: web::Json<GiveFullUserPermissionsRequest>,
+    request_body: web::Json<GiveAdministratorRoleRequest>,
 ) -> EndpointResult {
     let mut database_connection = state.acquire_database_connection().await?;
     let mut transaction = database_connection.transaction().begin().await?;
@@ -207,14 +222,14 @@ pub async fn give_full_permissions_to_user(
 
 
     warn!(
-        "Giving full permissions to user {}.",
+        "Giving administrator permissions to user {}.",
         target_user_id
     );
 
     entities::UserRoleMutation::add_roles_to_user(
         &mut transaction,
         target_user_id,
-        RoleSet::from_roles(&[Role::User, Role::Administrator]),
+        RoleSet::from_roles(&[Role::Administrator]),
     )
     .await?;
 
@@ -227,13 +242,7 @@ pub async fn give_full_permissions_to_user(
 
 
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
-pub struct ResetUserRolesRequest {
-    pub user_id: Uuid,
-}
-
-
-#[post("/reset-user-roles-to-normal")]
+#[post("/user/reset-roles-to-default")]
 pub async fn reset_user_roles_to_starting_user_roles(
     state: ApplicationState,
     request_body: web::Json<ResetUserRolesRequest>,
@@ -253,17 +262,19 @@ pub async fn reset_user_roles_to_starting_user_roles(
         entities::UserRoleQuery::roles_for_user(&mut transaction, target_user_id).await?;
 
 
-    entities::UserRoleMutation::remove_roles_from_user(
+    let remaining_roles = entities::UserRoleMutation::remove_roles_from_user(
         &mut transaction,
         target_user_id,
         current_roles_of_user,
     )
     .await?;
 
+    assert!(remaining_roles.is_empty());
+
     entities::UserRoleMutation::add_roles_to_user(
         &mut transaction,
         target_user_id,
-        RoleSet::from_roles(&[DEFAULT_USER_ROLE]),
+        &*DEFAULT_USER_ROLE_SET,
     )
     .await?;
 
@@ -277,7 +288,8 @@ pub async fn reset_user_roles_to_starting_user_roles(
 #[rustfmt::skip]
 pub fn testing_router() -> Scope {
     web::scope("/testing")
+        .service(is_testing_enabled)
         .service(reset_server)
-        .service(give_full_permissions_to_user)
+        .service(give_administrator_role_to_user)
         .service(reset_user_roles_to_starting_user_roles)
 }

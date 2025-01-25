@@ -1,6 +1,7 @@
-use std::{borrow::Cow, collections::HashSet};
+use std::{borrow::Cow, collections::HashSet, sync::LazyLock};
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::permissions::{Permission, PermissionSet};
 
@@ -46,7 +47,7 @@ impl Role {
 
     /// Attempt to deserialize a [`Role`] from its lower-case name
     /// (e.g. "user").
-    pub fn from_name(name: &str) -> Option<Self> {
+    pub fn try_from_name(name: &str) -> Option<Self> {
         match name {
             "user" => Some(Self::User),
             "administrator" => Some(Self::Administrator),
@@ -98,7 +99,22 @@ impl Role {
 }
 
 /// The default role given to newly-registered users.
+#[deprecated = "use DEFAULT_USER_ROLE_SET instead"]
 pub const DEFAULT_USER_ROLE: Role = Role::User;
+
+pub static DEFAULT_USER_ROLE_SET: LazyLock<RoleSet> = LazyLock::new(|| {
+    RoleSet::from_role_set(maplit::hashset! {
+        Role::User
+    })
+});
+
+
+
+#[derive(Debug, Error)]
+pub enum RoleSetFromNamesError {
+    #[error("the provided role name (\"{}\") is not a valid role", .role_name)]
+    InvalidRole { role_name: String },
+}
 
 
 /// Set of roles, usually associated with some user.
@@ -116,16 +132,38 @@ impl RoleSet {
         }
     }
 
+    /// Initialize a role set from a [`HashSet`] of [`Role`]s.
+    pub const fn from_role_set(roles: HashSet<Role>) -> Self {
+        Self { roles }
+    }
+
+    pub fn try_from_role_names<I, V>(role_names: I) -> Result<Self, RoleSetFromNamesError>
+    where
+        I: IntoIterator<Item = V>,
+        V: AsRef<str>,
+    {
+        let role_names_iterator = role_names.into_iter();
+
+        let mut role_hash_set = HashSet::with_capacity(role_names_iterator.size_hint().0);
+        for item in role_names_iterator {
+            let item_str = item.as_ref();
+
+            let Some(role) = Role::try_from_name(item_str) else {
+                return Err(RoleSetFromNamesError::InvalidRole {
+                    role_name: item_str.to_string(),
+                });
+            };
+
+            role_hash_set.insert(role);
+        }
+
+        Ok(Self::from_role_set(role_hash_set))
+    }
+
     pub fn from_roles(roles: &[Role]) -> Self {
         let roles = roles.iter().copied().collect();
 
-        Self::from_role_hash_set(roles)
-    }
-
-    /// Initialize a role set from a [`HashSet`] of [`Role`]s.
-    #[inline]
-    pub fn from_role_hash_set(role_set: HashSet<Role>) -> Self {
-        Self { roles: role_set }
+        Self::from_role_set(roles)
     }
 
     /// Checks whether the role set contains a specific role.
@@ -166,5 +204,9 @@ impl RoleSet {
             .iter()
             .map(|role| Cow::Borrowed(role.name()))
             .collect()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.roles.is_empty()
     }
 }

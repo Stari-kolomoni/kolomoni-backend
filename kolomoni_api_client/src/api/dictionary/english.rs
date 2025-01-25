@@ -21,18 +21,19 @@ use kolomoni_core::{
 use reqwest::StatusCode;
 use thiserror::Error;
 
+use crate::request::ApiClientRequestBuild;
 use crate::{
     errors::{ClientError, ClientResult},
     macros::{
         handle_error_reasons_or_catch_unexpected_status,
+        handle_uncaught_status_code,
         handle_unexpected_error_reason,
-        handle_unexpected_status_code,
         handlers,
     },
     request::RequestBuilder,
-    AuthenticatedClient,
-    Client,
-    HttpClient,
+    ApiClient,
+    AuthenticatedApiClient,
+    UnauthenticatedApiClient,
 };
 
 
@@ -125,10 +126,10 @@ async fn get_english_words<C>(
     options: EnglishWordFetchingOptions,
 ) -> ClientResult<Vec<EnglishWordWithMeanings>>
 where
-    C: HttpClient,
+    C: ApiClient,
 {
     let request = if let Some(only_last_modified_after) = options.only_words_modified_after {
-        RequestBuilder::get(client).endpoint_url_with_parameters(
+        client.get_request_builder().endpoint_url_with_parameters(
             "/dictionary/english/words",
             [(
                 "last_modified_after",
@@ -136,7 +137,9 @@ where
             )],
         )
     } else {
-        RequestBuilder::get(client).endpoint_url("/dictionary/english")
+        client
+            .get_request_builder()
+            .endpoint_url("/dictionary/english")
     };
 
     let response = request.send().await?;
@@ -150,7 +153,7 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
@@ -160,9 +163,10 @@ async fn get_english_word_by_id<C>(
     english_word_id: EnglishWordId,
 ) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError>
 where
-    C: HttpClient,
+    C: ApiClient,
 {
-    let response = RequestBuilder::get(client)
+    let response = client
+        .get_request_builder()
         .endpoint_url(format!(
             "/dictionary/english/words/{}",
             english_word_id.into_uuid()
@@ -187,7 +191,7 @@ where
     } else if response_status == StatusCode::BAD_REQUEST {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::InvalidUuidFormat]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
@@ -197,9 +201,10 @@ async fn get_english_word_by_lemma<C>(
     english_word_lemma: &str,
 ) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError>
 where
-    C: HttpClient,
+    C: ApiClient,
 {
-    let response = RequestBuilder::get(client)
+    let response = client
+        .get_request_builder()
         .endpoint_url(format!(
             "/dictionary/english/words/by-lemma/{}",
             english_word_lemma
@@ -226,16 +231,20 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn create_english_word(
-    client: &AuthenticatedClient,
+async fn create_english_word<C>(
+    client: &C,
     word_to_create: EnglishWordToCreate,
-) -> ClientResult<EnglishWordWithMeanings, EnglishWordCreationError> {
-    let response = RequestBuilder::post(client)
+) -> ClientResult<EnglishWordWithMeanings, EnglishWordCreationError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .post_request_builder()
         .endpoint_url("/dictionary/english/words")
         .json(&EnglishWordCreationRequest {
             lemma: word_to_create.lemma,
@@ -262,22 +271,26 @@ async fn create_english_word(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn update_english_word(
-    client: &AuthenticatedClient,
+async fn update_english_word<C>(
+    client: &C,
     english_word_id: EnglishWordId,
     fields_to_update: EnglishWordFieldsToUpdate,
-) -> ClientResult<EnglishWordWithMeanings, EnglishWordUpdatingError> {
+) -> ClientResult<EnglishWordWithMeanings, EnglishWordUpdatingError>
+where
+    C: AuthenticatedApiClient,
+{
     if fields_to_update.has_no_fields_to_update() {
         return Err(EnglishWordUpdatingError::NoFieldsToUpdate);
     }
 
 
-    let response = RequestBuilder::patch(client)
+    let response = client
+        .patch_request_builder()
         .endpoint_url(format!(
             "/dictionary/english/words/{}",
             english_word_id
@@ -312,15 +325,20 @@ async fn update_english_word(
             _ => handle_unexpected_error_reason!(word_error_reason, response_status),
         }
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
-async fn delete_english_word(
-    client: &AuthenticatedClient,
+
+async fn delete_english_word<C>(
+    client: &C,
     english_word_id: EnglishWordId,
-) -> ClientResult<(), EnglishWordDeletionError> {
-    let response = RequestBuilder::delete(client)
+) -> ClientResult<(), EnglishWordDeletionError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .delete_request_builder()
         .endpoint_url(format!(
             "/dictionary/english/words/{}",
             english_word_id
@@ -345,7 +363,7 @@ async fn delete_english_word(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
@@ -488,7 +506,7 @@ async fn get_english_word_meanings<C>(
     EnglishWordMeaningsFetchingError,
 >
 where
-    C: HttpClient,
+    C: ApiClient,
 {
     let response = RequestBuilder::get(client)
         .endpoint_url(format!(
@@ -515,17 +533,21 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn create_english_word_meaning(
-    client: &AuthenticatedClient,
+async fn create_english_word_meaning<C>(
+    client: &C,
     english_word_id: EnglishWordId,
     word_meaning_to_create: EnglishWordMeaningToCreate,
-) -> ClientResult<EnglishWordMeaning, EnglishWordMeaningCreationError> {
-    let response = RequestBuilder::post(client)
+) -> ClientResult<EnglishWordMeaning, EnglishWordMeaningCreationError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .post_request_builder()
         .endpoint_url(format!(
             "/dictionary/english/words/{}/meanings",
             english_word_id
@@ -559,23 +581,27 @@ async fn create_english_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn update_english_word_meaning(
-    client: &AuthenticatedClient,
+async fn update_english_word_meaning<C>(
+    client: &C,
     english_word_id: EnglishWordId,
     english_word_meaning_id: EnglishWordMeaningId,
     fields_to_update: EnglishWordMeaningFieldsToUpdate,
-) -> ClientResult<EnglishWordMeaningWithCategoriesAndTranslations, EnglishWordMeaningUpdatingError> {
+) -> ClientResult<EnglishWordMeaningWithCategoriesAndTranslations, EnglishWordMeaningUpdatingError>
+where
+    C: AuthenticatedApiClient,
+{
     if fields_to_update.has_no_fields_to_update() {
         return Err(EnglishWordMeaningUpdatingError::NoFieldsToUpdate);
     }
 
 
-    let response = RequestBuilder::patch(client)
+    let response = client
+        .patch_request_builder()
         .endpoint_url(format!(
             "/dictionary/english/words/{}/meanings/{}",
             english_word_id, english_word_meaning_id
@@ -608,17 +634,21 @@ async fn update_english_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn delete_english_word_meaning(
-    client: &AuthenticatedClient,
+async fn delete_english_word_meaning<C>(
+    client: &C,
     english_word_id: EnglishWordId,
     english_word_meaning_id: EnglishWordMeaningId,
-) -> ClientResult<(), EnglishWordMeaningDeletionError> {
-    let response = RequestBuilder::delete(client)
+) -> ClientResult<(), EnglishWordMeaningDeletionError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .delete_request_builder()
         .endpoint_url(format!(
             "/dictionary/english/words/{}/meanings/{}",
             english_word_id, english_word_meaning_id
@@ -644,20 +674,24 @@ async fn delete_english_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn link_category_to_english_word_meaning(
-    client: &AuthenticatedClient,
+async fn link_category_to_english_word_meaning<C>(
+    client: &C,
     english_word_id: EnglishWordId,
     english_word_meaning_id: EnglishWordMeaningId,
     category_id: CategoryId,
-) -> ClientResult<(), EnglishWordMeaningCategoryLinkingError> {
-    let response = RequestBuilder::post(client)
+) -> ClientResult<(), EnglishWordMeaningCategoryLinkingError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .post_request_builder()
         .endpoint_url(format!(
-            "/dictionary/english/words/{}/meanings/{}/category/{}",
+            "/dictionary/english/words/{}/meanings/{}/categories/{}",
             english_word_id, english_word_meaning_id, category_id
         ))
         .send()
@@ -692,20 +726,24 @@ async fn link_category_to_english_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn unlink_category_from_english_word_meaning(
-    client: &AuthenticatedClient,
+async fn unlink_category_from_english_word_meaning<C>(
+    client: &C,
     english_word_id: EnglishWordId,
     english_word_meaning_id: EnglishWordMeaningId,
     category_id: CategoryId,
-) -> ClientResult<(), EnglishWordMeaningCategoryUnlinkingError> {
-    let response = RequestBuilder::delete(client)
+) -> ClientResult<(), EnglishWordMeaningCategoryUnlinkingError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .delete_request_builder()
         .endpoint_url(format!(
-            "/dictionary/english/words/{}/meanings/{}/category/{}",
+            "/dictionary/english/words/{}/meanings/{}/categories/{}",
             english_word_id, english_word_meaning_id, category_id
         ))
         .send()
@@ -734,18 +772,24 @@ async fn unlink_category_from_english_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
 
-pub struct EnglishDictionaryApi<'c> {
-    client: &'c Client,
+pub struct EnglishDictionaryUnauthenticatedApi<'c, C>
+where
+    C: UnauthenticatedApiClient,
+{
+    client: &'c C,
 }
 
-impl<'c> EnglishDictionaryApi<'c> {
-    pub(crate) const fn new(client: &'c Client) -> Self {
+impl<'c, C> EnglishDictionaryUnauthenticatedApi<'c, C>
+where
+    C: UnauthenticatedApiClient,
+{
+    pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
 
@@ -790,12 +834,18 @@ impl<'c> EnglishDictionaryApi<'c> {
 
 
 
-pub struct EnglishDictionaryAuthenticatedApi<'c> {
-    client: &'c AuthenticatedClient,
+pub struct EnglishDictionaryAuthenticatedApi<'c, C>
+where
+    C: AuthenticatedApiClient,
+{
+    client: &'c C,
 }
 
-impl<'c> EnglishDictionaryAuthenticatedApi<'c> {
-    pub(crate) const fn new(client: &'c AuthenticatedClient) -> Self {
+impl<'c, C> EnglishDictionaryAuthenticatedApi<'c, C>
+where
+    C: AuthenticatedApiClient,
+{
+    pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
 

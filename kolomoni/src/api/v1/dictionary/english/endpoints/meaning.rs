@@ -75,7 +75,7 @@ use crate::{
         openapi::response::InternalServerError,
     )
 )]
-#[get("")]
+#[get("/words/{english_word_id}/meanings")]
 pub async fn get_all_english_word_meanings(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -174,7 +174,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError,
     )
 )]
-#[post("")]
+#[post("/words/{english_word_id}/meanings")]
 pub async fn create_english_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -301,7 +301,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError,
     )
 )]
-#[patch("/{english_word_meaning_id}")]
+#[patch("/words/{english_word_id}/meanings/{english_word_meaning_id}")]
 pub async fn update_english_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -445,7 +445,7 @@ pub async fn update_english_word_meaning(
         openapi::response::InternalServerError,
     )
 )]
-#[delete("/{english_word_meaning_id}")]
+#[delete("/words/{english_word_id}/meanings/{english_word_meaning_id}")]
 pub async fn delete_english_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -531,7 +531,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     post,
-    path = "/dictionary/english/words/{english_word_id}/meanings/{english_word_meaning_id}/category/{category_id}",
+    path = "/dictionary/english/words/{english_word_id}/meanings/{english_word_meaning_id}/categories/{category_id}",
     tag = "dictionary:english:meaning",
     params(
         (
@@ -576,7 +576,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError
     )
 )]
-#[post("/{english_word_meaning_id}/category/{category_id}")]
+#[post("/words/{english_word_id}/meanings/{english_word_meaning_id}/categories/{category_id}")]
 pub async fn link_category_to_english_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -675,7 +675,7 @@ declare_openapi_error_reason_response!(
 /// - The caller must have the `word:update` permission.
 #[utoipa::path(
     delete,
-    path = "/dictionary/english/words/{english_word_id}/meanings/{english_word_meaning_id}/category/{category_id}",
+    path = "/dictionary/english/words/{english_word_id}/meanings/{english_word_meaning_id}/categories/{category_id}",
     tag = "dictionary:english:meaning",
     params(
         (
@@ -720,7 +720,7 @@ declare_openapi_error_reason_response!(
         openapi::response::InternalServerError
     )
 )]
-#[delete("/{english_word_meaning_id}/category/{category_id}")]
+#[delete("/words/{english_word_id}/meanings/{english_word_meaning_id}/categories/{category_id}")]
 pub async fn unlink_category_from_english_word_meaning(
     state: ApplicationState,
     authentication: UserAuthenticationExtractor,
@@ -808,8 +808,8 @@ pub async fn unlink_category_from_english_word_meaning(
 
 
 
-pub fn english_word_meaning_router() -> Scope {
-    web::scope("/words/{english_word_id}/meanings")
+pub fn english_word_meaning_router(english_dictionary_scope: Scope) -> Scope {
+    english_dictionary_scope
         .service(get_all_english_word_meanings)
         .service(create_english_word_meaning)
         .service(update_english_word_meaning)

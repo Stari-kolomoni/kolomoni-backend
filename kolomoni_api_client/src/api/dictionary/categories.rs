@@ -13,19 +13,19 @@ use kolomoni_core::{
 use reqwest::StatusCode;
 use thiserror::Error;
 
+use crate::request::ApiClientRequestBuild;
 use crate::{
     errors::{ClientError, ClientResult},
     macros::{
         handle_error_reasons_or_catch_unexpected_status,
         handle_internal_server_error,
+        handle_uncaught_status_code,
         handle_unexpected_error_reason,
-        handle_unexpected_status_code,
         handlers,
     },
-    request::RequestBuilder,
-    AuthenticatedClient,
-    Client,
-    HttpClient,
+    ApiClient,
+    AuthenticatedApiClient,
+    UnauthenticatedApiClient,
 };
 
 
@@ -126,9 +126,10 @@ pub enum CategoryDeletionError {
 
 async fn get_categories<C>(client: &C) -> ClientResult<Vec<Category>>
 where
-    C: HttpClient,
+    C: ApiClient,
 {
-    let response = RequestBuilder::get(client)
+    let response = client
+        .get_request_builder()
         .endpoint_url("/dictionary/category")
         .send()
         .await?;
@@ -143,7 +144,7 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status)
+        handle_uncaught_status_code!(response_status)
     }
 }
 
@@ -153,9 +154,10 @@ async fn get_category_by_id<C>(
     category_id: CategoryId,
 ) -> ClientResult<Category, CategoryFetchingError>
 where
-    C: HttpClient,
+    C: ApiClient,
 {
-    let response = RequestBuilder::get(client)
+    let response = client
+        .get_request_builder()
         .endpoint_url(format!("/dictionary/category/{}", category_id))
         .send()
         .await?;
@@ -182,16 +184,19 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status)
+        handle_uncaught_status_code!(response_status)
     }
 }
 
 
-async fn update_category(
-    client: &AuthenticatedClient,
+async fn update_category<C>(
+    client: &C,
     category_id: CategoryId,
     category_fields_to_update: CategoryFieldsToUpdate,
-) -> ClientResult<Category, CategoryUpdatingError> {
+) -> ClientResult<Category, CategoryUpdatingError>
+where
+    C: AuthenticatedApiClient,
+{
     if category_fields_to_update.has_no_fields_to_update() {
         return Err(CategoryUpdatingError::NoFieldsToUpdate);
     }
@@ -200,7 +205,8 @@ async fn update_category(
         .new_parent_category_id
         .map(|outer| outer.map(|inner| inner.into_uuid()));
 
-    let response = RequestBuilder::patch(client)
+    let response = client
+        .patch_request_builder()
         .endpoint_url(format!("/dictionary/category/{}", category_id))
         .json(&CategoryUpdateRequest {
             new_parent_category_id,
@@ -241,16 +247,20 @@ async fn update_category(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status)
+        handle_uncaught_status_code!(response_status)
     }
 }
 
 
-async fn create_category(
-    client: &AuthenticatedClient,
+async fn create_category<C>(
+    client: &C,
     category: CategoryToCreate,
-) -> ClientResult<Category, CategoryCreationError> {
-    let response = RequestBuilder::post(client)
+) -> ClientResult<Category, CategoryCreationError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .post_request_builder()
         .endpoint_url("/dictionary/category")
         .json(&CategoryCreationRequest {
             parent_category_id: category.parent_category_id.map(CategoryId::into_uuid),
@@ -282,16 +292,20 @@ async fn create_category(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn delete_category(
-    client: &AuthenticatedClient,
+async fn delete_category<C>(
+    client: &C,
     category_id: CategoryId,
-) -> ClientResult<(), CategoryDeletionError> {
-    let response = RequestBuilder::delete(client)
+) -> ClientResult<(), CategoryDeletionError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .delete_request_builder()
         .endpoint_url(format!(
             "/dictionary/category/{}",
             category_id.into_uuid()
@@ -318,19 +332,25 @@ async fn delete_category(
     } else if response_status == StatusCode::INTERNAL_SERVER_ERROR {
         handle_internal_server_error!();
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
 
-pub struct DictionaryCategoriesApi<'c> {
-    client: &'c Client,
+pub struct DictionaryCategoriesUnauthenticatedApi<'c, C>
+where
+    C: UnauthenticatedApiClient,
+{
+    client: &'c C,
 }
 
 
-impl<'c> DictionaryCategoriesApi<'c> {
-    pub(crate) const fn new(client: &'c Client) -> Self {
+impl<'c, C> DictionaryCategoriesUnauthenticatedApi<'c, C>
+where
+    C: UnauthenticatedApiClient,
+{
+    pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
 
@@ -338,7 +358,7 @@ impl<'c> DictionaryCategoriesApi<'c> {
         get_categories(self.client).await
     }
 
-    pub async fn get_category_by_id<C>(
+    pub async fn get_category_by_id(
         &self,
         category_id: CategoryId,
     ) -> ClientResult<Category, CategoryFetchingError> {
@@ -348,12 +368,18 @@ impl<'c> DictionaryCategoriesApi<'c> {
 
 
 
-pub struct DictionaryCategoriesAuthenticatedApi<'c> {
-    client: &'c AuthenticatedClient,
+pub struct DictionaryCategoriesAuthenticatedApi<'c, C>
+where
+    C: AuthenticatedApiClient,
+{
+    client: &'c C,
 }
 
-impl<'c> DictionaryCategoriesAuthenticatedApi<'c> {
-    pub(crate) const fn new(client: &'c AuthenticatedClient) -> Self {
+impl<'c, C> DictionaryCategoriesAuthenticatedApi<'c, C>
+where
+    C: AuthenticatedApiClient,
+{
+    pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
 
@@ -361,7 +387,7 @@ impl<'c> DictionaryCategoriesAuthenticatedApi<'c> {
         get_categories(self.client).await
     }
 
-    pub async fn get_category_by_id<C>(
+    pub async fn get_category_by_id(
         &self,
         category_id: CategoryId,
     ) -> ClientResult<Category, CategoryFetchingError> {

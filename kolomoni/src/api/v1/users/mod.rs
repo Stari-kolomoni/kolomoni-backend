@@ -10,7 +10,6 @@ use current::{
     update_current_user_display_name,
 };
 pub use endpoints::*;
-use registration::register_user;
 use specific::{
     add_roles_to_specific_user,
     get_specific_user_effective_permissions,
@@ -29,8 +28,6 @@ pub fn users_router() -> Scope {
     web::scope("users")
         // all.rs
         .service(get_all_registered_users)
-        // registration.rs
-        .service(register_user)
         // current.ts
         .service(get_current_user_info)
         .service(get_current_user_roles)

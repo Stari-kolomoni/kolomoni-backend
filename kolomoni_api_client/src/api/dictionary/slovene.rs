@@ -24,15 +24,15 @@ use crate::{
     errors::{ClientError, ClientResult},
     macros::{
         handle_error_reasons_or_catch_unexpected_status,
+        handle_uncaught_status_code,
         handle_unexpected_error_reason,
-        handle_unexpected_status_code,
         handlers,
     },
     request::RequestBuilder,
-    AuthenticatedClient,
-    Client,
-    HttpClient,
+    ApiClient,
+    AuthenticatedApiClient,
 };
+use crate::{request::ApiClientRequestBuild, UnauthenticatedApiClient};
 
 
 
@@ -115,10 +115,11 @@ pub enum SloveneWordDeletionError {
 
 async fn get_slovene_words<C>(client: &C) -> ClientResult<Vec<SloveneWordWithMeanings>>
 where
-    C: HttpClient,
+    C: ApiClient,
 {
-    let response = RequestBuilder::get(client)
-        .endpoint_url("/dictionary/slovene")
+    let response = client
+        .get_request_builder()
+        .endpoint_url("/dictionary/slovene/words")
         .send()
         .await?;
 
@@ -132,7 +133,7 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
@@ -142,10 +143,14 @@ async fn get_slovene_word_by_id<C>(
     slovene_word_id: SloveneWordId,
 ) -> ClientResult<SloveneWordWithMeanings, SloveneWordFetchingError>
 where
-    C: HttpClient,
+    C: ApiClient,
 {
-    let response = RequestBuilder::get(client)
-        .endpoint_url(format!("/dictionary/slovene/{}", slovene_word_id))
+    let response = client
+        .get_request_builder()
+        .endpoint_url(format!(
+            "/dictionary/slovene/words/{}",
+            slovene_word_id
+        ))
         .send()
         .await?;
 
@@ -166,7 +171,7 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
@@ -176,11 +181,12 @@ async fn get_slovene_word_by_lemma<C>(
     slovene_word_lemma: &str,
 ) -> ClientResult<SloveneWordWithMeanings, SloveneWordFetchingError>
 where
-    C: HttpClient,
+    C: ApiClient,
 {
-    let response = RequestBuilder::get(client)
+    let response = client
+        .get_request_builder()
         .endpoint_url(format!(
-            "/dictionary/slovene/by-lemma/{}",
+            "/dictionary/slovene/words/by-lemma/{}",
             slovene_word_lemma
         ))
         .send()
@@ -203,17 +209,21 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn create_slovene_word(
-    client: &AuthenticatedClient,
+async fn create_slovene_word<C>(
+    client: &C,
     word_to_create: SloveneWordToCreate,
-) -> ClientResult<SloveneWordWithMeanings, SloveneWordCreationError> {
-    let response = RequestBuilder::post(client)
-        .endpoint_url("/dictionary/slovene")
+) -> ClientResult<SloveneWordWithMeanings, SloveneWordCreationError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .post_request_builder()
+        .endpoint_url("/dictionary/slovene/words")
         .json(&SloveneWordCreationRequest {
             lemma: word_to_create.lemma,
         })
@@ -239,23 +249,30 @@ async fn create_slovene_word(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn update_slovene_word(
-    client: &AuthenticatedClient,
+async fn update_slovene_word<C>(
+    client: &C,
     slovene_word_id: SloveneWordId,
     fields_to_update: SloveneWordFieldsToUpdate,
-) -> ClientResult<SloveneWordWithMeanings, SloveneWordUpdatingError> {
+) -> ClientResult<SloveneWordWithMeanings, SloveneWordUpdatingError>
+where
+    C: AuthenticatedApiClient,
+{
     if fields_to_update.has_no_fields_to_update() {
         return Err(SloveneWordUpdatingError::NoFieldsToUpdate);
     }
 
 
-    let response = RequestBuilder::patch(client)
-        .endpoint_url(format!("/dictionary/slovene/{}", slovene_word_id))
+    let response = client
+        .patch_request_builder()
+        .endpoint_url(format!(
+            "/dictionary/slovene/words/{}",
+            slovene_word_id
+        ))
         .json(&SloveneWordUpdateRequest {
             lemma: fields_to_update.new_lemma,
         })
@@ -279,16 +296,24 @@ async fn update_slovene_word(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
-async fn delete_slovene_word(
-    client: &AuthenticatedClient,
+
+async fn delete_slovene_word<C>(
+    client: &C,
     slovene_word_id: SloveneWordId,
-) -> ClientResult<(), SloveneWordDeletionError> {
-    let response = RequestBuilder::delete(client)
-        .endpoint_url(format!("/dictionary/slovene/{}", slovene_word_id))
+) -> ClientResult<(), SloveneWordDeletionError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .delete_request_builder()
+        .endpoint_url(format!(
+            "/dictionary/slovene/words/{}",
+            slovene_word_id
+        ))
         .send()
         .await?;
 
@@ -307,7 +332,7 @@ async fn delete_slovene_word(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
@@ -450,11 +475,11 @@ async fn get_slovene_word_meanings<C>(
     SloveneWordMeaningsFetchingError,
 >
 where
-    C: HttpClient,
+    C: ApiClient,
 {
     let response = RequestBuilder::get(client)
         .endpoint_url(format!(
-            "/dictionary/slovene/{}/meanings",
+            "/dictionary/slovene/words/{}/meanings",
             slovene_word_id
         ))
         .send()
@@ -477,19 +502,23 @@ where
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn create_slovene_word_meaning(
-    client: &AuthenticatedClient,
+async fn create_slovene_word_meaning<C>(
+    client: &C,
     slovene_word_id: SloveneWordId,
     word_meaning_to_create: SloveneWordMeaningToCreate,
-) -> ClientResult<SloveneWordMeaning, SloveneWordMeaningCreationError> {
-    let response = RequestBuilder::post(client)
+) -> ClientResult<SloveneWordMeaning, SloveneWordMeaningCreationError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .post_request_builder()
         .endpoint_url(format!(
-            "/dictionary/slovene/{}/meanings",
+            "/dictionary/slovene/words/{}/meanings",
             slovene_word_id
         ))
         .json(&NewSloveneWordMeaningRequest {
@@ -521,25 +550,29 @@ async fn create_slovene_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn update_slovene_word_meaning(
-    client: &AuthenticatedClient,
+async fn update_slovene_word_meaning<C>(
+    client: &C,
     slovene_word_id: SloveneWordId,
     slovene_word_meaning_id: SloveneWordMeaningId,
     fields_to_update: SloveneWordMeaningFieldsToUpdate,
-) -> ClientResult<SloveneWordMeaningWithCategoriesAndTranslations, SloveneWordMeaningUpdatingError> {
+) -> ClientResult<SloveneWordMeaningWithCategoriesAndTranslations, SloveneWordMeaningUpdatingError>
+where
+    C: AuthenticatedApiClient,
+{
     if fields_to_update.has_no_fields_to_update() {
         return Err(SloveneWordMeaningUpdatingError::NoFieldsToUpdate);
     }
 
 
-    let response = RequestBuilder::patch(client)
+    let response = client
+        .patch_request_builder()
         .endpoint_url(format!(
-            "/dictionary/slovene/{}/meanings/{}",
+            "/dictionary/slovene/words/{}/meanings/{}",
             slovene_word_id, slovene_word_meaning_id
         ))
         .json(&SloveneWordMeaningUpdateRequest {
@@ -570,19 +603,23 @@ async fn update_slovene_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn delete_slovene_word_meaning(
-    client: &AuthenticatedClient,
+async fn delete_slovene_word_meaning<C>(
+    client: &C,
     slovene_word_id: SloveneWordId,
     slovene_word_meaning_id: SloveneWordMeaningId,
-) -> ClientResult<(), SloveneWordMeaningDeletionError> {
-    let response = RequestBuilder::delete(client)
+) -> ClientResult<(), SloveneWordMeaningDeletionError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .delete_request_builder()
         .endpoint_url(format!(
-            "/dictionary/slovene/{}/meanings/{}",
+            "/dictionary/slovene/words/{}/meanings/{}",
             slovene_word_id, slovene_word_meaning_id
         ))
         .send()
@@ -606,21 +643,25 @@ async fn delete_slovene_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
 
-async fn link_category_to_slovene_word_meaning(
-    client: &AuthenticatedClient,
+async fn link_category_to_slovene_word_meaning<C>(
+    client: &C,
     slovene_word_id: SloveneWordId,
     slovene_word_meaning_id: SloveneWordMeaningId,
     category_id: CategoryId,
-) -> ClientResult<(), SloveneWordMeaningCategoryLinkingError> {
-    let response = RequestBuilder::post(client)
+) -> ClientResult<(), SloveneWordMeaningCategoryLinkingError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .post_request_builder()
         .endpoint_url(format!(
-            "/dictionary/slovene/words/{}/meanings/{}/category/{}",
+            "/dictionary/slovene/words/{}/meanings/{}/categories/{}",
             slovene_word_id, slovene_word_meaning_id, category_id
         ))
         .send()
@@ -655,20 +696,24 @@ async fn link_category_to_slovene_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
-async fn unlink_category_from_slovene_word_meaning(
-    client: &AuthenticatedClient,
+async fn unlink_category_from_slovene_word_meaning<C>(
+    client: &C,
     slovene_word_id: SloveneWordId,
     slovene_word_meaning_id: SloveneWordMeaningId,
     category_id: CategoryId,
-) -> ClientResult<(), SloveneWordMeaningCategoryUnlinkingError> {
-    let response = RequestBuilder::delete(client)
+) -> ClientResult<(), SloveneWordMeaningCategoryUnlinkingError>
+where
+    C: AuthenticatedApiClient,
+{
+    let response = client
+        .delete_request_builder()
         .endpoint_url(format!(
-            "/dictionary/slovene/words/{}/meanings/{}/category/{}",
+            "/dictionary/slovene/words/{}/meanings/{}/categories/{}",
             slovene_word_id, slovene_word_meaning_id, category_id
         ))
         .send()
@@ -697,19 +742,25 @@ async fn unlink_category_from_slovene_word_meaning(
     } else if response_status == StatusCode::FORBIDDEN {
         handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
     } else {
-        handle_unexpected_status_code!(response_status);
+        handle_uncaught_status_code!(response_status);
     }
 }
 
 
 
 
-pub struct SloveneDictionaryApi<'c> {
-    client: &'c Client,
+pub struct SloveneDictionaryUnauthenticatedApi<'c, C>
+where
+    C: UnauthenticatedApiClient,
+{
+    client: &'c C,
 }
 
-impl<'c> SloveneDictionaryApi<'c> {
-    pub(crate) const fn new(client: &'c Client) -> Self {
+impl<'c, C> SloveneDictionaryUnauthenticatedApi<'c, C>
+where
+    C: UnauthenticatedApiClient,
+{
+    pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
 
@@ -751,12 +802,18 @@ impl<'c> SloveneDictionaryApi<'c> {
 
 
 
-pub struct SloveneDictionaryAuthenticatedApi<'c> {
-    client: &'c AuthenticatedClient,
+pub struct SloveneDictionaryAuthenticatedApi<'c, C>
+where
+    C: AuthenticatedApiClient,
+{
+    client: &'c C,
 }
 
-impl<'c> SloveneDictionaryAuthenticatedApi<'c> {
-    pub(crate) const fn new(client: &'c AuthenticatedClient) -> Self {
+impl<'c, C> SloveneDictionaryAuthenticatedApi<'c, C>
+where
+    C: AuthenticatedApiClient,
+{
+    pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
 

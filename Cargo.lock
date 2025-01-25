@@ -908,9 +908,9 @@ dependencies = [
 
 [[package]]
 name = "fs-more"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f05d4be3f05db4f25c0b9648ae5a235bffbcf5690f891b538cf6c38a99406c8"
+checksum = "bbe0081d1a388d5115ce63bd6663559ae17e0d1d9657461fddf15d8e14e3badd"
 dependencies = [
  "dunce",
  "thiserror",
@@ -1447,6 +1447,7 @@ dependencies = [
  "bytes",
  "chrono",
  "kolomoni_core",
+ "mime",
  "reqwest",
  "serde",
  "serde_json",
@@ -1473,6 +1474,8 @@ dependencies = [
  "argon2",
  "chrono",
  "jsonwebtoken",
+ "maplit",
+ "paste",
  "serde",
  "serde_json",
  "serde_with",
@@ -1589,6 +1592,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "kolomoni_test"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "kolomoni_core",
+ "kolomoni_test_util",
+ "tokio",
+]
+
+[[package]]
+name = "kolomoni_test_util"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-http",
+ "actix-service",
+ "actix-web",
+ "bytes",
+ "http 0.2.12",
+ "kolomoni_api_client",
+ "kolomoni_configuration",
+ "kolomoni_core",
+ "kolomoni_database",
+ "miette",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing-actix-web",
+ "uuid",
+]
+
+[[package]]
 name = "language-tags"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1664,6 +1700,12 @@ name = "log"
 version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
+
+[[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "matchers"
