@@ -21,8 +21,8 @@ members = [
     "kolomoni_openapi",
     "kolomoni_seeder",
     # "kolomoni_search",
-    # "kolomoni_test",
-    # "kolomoni_test_util"
+    "kolomoni_test",
+    "kolomoni_test_util"
 ]
 
 

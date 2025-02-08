@@ -1,10 +1,10 @@
-use http::{Method, StatusCode};
-use kolomoni::api::v1::dictionary::{
-    categories::{CategoryCreationRequest, CategoryCreationResponse},
-    Category,
+use chrono::Utc;
+use kolomoni_api_client::{
+    api::dictionary::categories::CategoryToCreate,
+    AuthenticatedClient,
+    SharedApiClientEndpointGroups,
 };
-
-use crate::TestServer;
+use kolomoni_core::api_models::Category;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SampleCategory {
@@ -34,21 +34,35 @@ impl SampleCategory {
         }
     }
 
-    pub async fn create(&self, server: &TestServer, access_token: &str) -> Category {
-        let creation_response = server
-            .request(Method::POST, "/api/v1/dictionary/category")
-            .with_access_token(access_token)
-            .with_json_body(CategoryCreationRequest {
-                slovene_name: self.slovene_name().to_string(),
-                english_name: self.english_name().to_string(),
+    pub async fn create(&self, client: &AuthenticatedClient) -> Category {
+        let before_category_creation = Utc::now();
+
+        let new_category = client
+            .categories()
+            .create_category(CategoryToCreate {
+                english_category_name: self.english_name().to_owned(),
+                slovene_category_name: self.slovene_name().to_owned(),
+                parent_category_id: None,
             })
-            .send()
-            .await;
+            .await
+            .expect("failed to create new sample category");
 
-        creation_response.assert_status_equals(StatusCode::OK);
+        let after_category_creation = Utc::now();
 
-        creation_response
-            .json_body::<CategoryCreationResponse>()
-            .category
+
+        assert_eq!(new_category.english_name, self.english_name());
+        assert_eq!(new_category.slovene_name, self.slovene_name());
+        assert!(new_category.parent_category_id.is_none());
+
+        assert!(new_category.created_at >= before_category_creation);
+        assert!(new_category.created_at <= after_category_creation);
+
+        assert_eq!(
+            new_category.created_at,
+            new_category.last_modified_at
+        );
+
+
+        new_category
     }
 }

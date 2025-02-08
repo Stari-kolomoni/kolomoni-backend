@@ -7,7 +7,7 @@ pub mod authentication;
 mod clients;
 pub mod errors;
 pub mod request;
-pub(crate) mod response;
+pub mod response;
 pub use clients::*;
 mod server;
 pub use server::*;

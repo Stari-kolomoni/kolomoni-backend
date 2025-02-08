@@ -20,7 +20,7 @@ use kolomoni_api_client::{
         slovene::{SloveneWordMeaningToCreate, SloveneWordToCreate},
         translation::TranslationRelationshipToCreate,
     },
-    authentication::AccessToken,
+    authentication::{ServerAuthentication, ServerTokenSet},
     ApiServer,
     ApiServerOptions,
     AuthenticatedClient,
@@ -58,9 +58,12 @@ fn build_api_client(
         .wrap_err("failed to initialize API client")?;
 
 
-    let api_authentication = Arc::new(AccessToken::new(access_token.to_owned()));
+    let api_authentication = ServerAuthentication::new_from_token_set(ServerTokenSet::new(
+        access_token.to_owned(),
+        "DUMMY".to_owned(),
+    ));
 
-    Ok(client.with_authentication(&api_authentication))
+    Ok(client.with_authentication(api_authentication))
 }
 
 
@@ -217,7 +220,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
 
         internal_to_public_slovene_word_meaning_id.insert(
             slovene_word_meaning.internal_id(),
-            new_slovene_word_meaning.meaning_id,
+            new_slovene_word_meaning.word_meaning_id,
         );
 
 
@@ -236,7 +239,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
             slovene_api_client
                 .link_category_to_slovene_word_meaning(
                     *associated_slovene_word,
-                    new_slovene_word_meaning.meaning_id,
+                    new_slovene_word_meaning.word_meaning_id,
                     *target_category_id,
                 )
                 .await
@@ -301,7 +304,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
 
         internal_to_public_english_word_meaning_id.insert(
             english_word_meaning.internal_id(),
-            new_english_word_meaning.meaning_id,
+            new_english_word_meaning.word_meaning_id,
         );
 
 
@@ -320,7 +323,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
             english_api_client
                 .link_category_to_english_word_meaning(
                     *associated_english_word,
-                    new_english_word_meaning.meaning_id,
+                    new_english_word_meaning.word_meaning_id,
                     *target_category_id,
                 )
                 .await

@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kolomoni_core = { path = "../kolomoni_core", features = ["serde_impls_for_client_on_models"] }
+kolomoni_core = { path = "../kolomoni_core", features = ["serde_impls_for_client_on_models", "e2e-testing"] }
+kolomoni_api_client = { path = "../kolomoni_api_client" }
 kolomoni_database = { path = "../kolomoni_database" }
 kolomoni_configuration = { path = "../kolomoni_configuration" }
 
@@ -15,17 +16,17 @@ actix-http = { workspace = true }
 actix-cors = { workspace = true }
 actix-service = { workspace = true }
 
-http = { workspace = true }
+# http = { workspace = true }
 
 reqwest = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+chrono = { workspace = true }
+# serde = { workspace = true }
+# serde_json = { workspace = true }
 
 tracing-actix-web = { workspace = true }
 
 miette = { workspace = true }
 tokio = { workspace = true }
-# sea-orm = { workspace = true }
 
 bytes = { workspace = true }
 uuid = { workspace = true }

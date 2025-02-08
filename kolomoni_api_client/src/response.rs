@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use kolomoni_core::api_models::{
     CategoryErrorReason,
     ErrorReason,
@@ -7,7 +8,7 @@ use kolomoni_core::api_models::{
     UsersErrorReason,
     WordErrorReason,
 };
-use reqwest::StatusCode;
+use reqwest::{header::HeaderMap, StatusCode};
 use serde::de::DeserializeOwned;
 
 use crate::errors::{ClientError, ClientResult};
@@ -53,15 +54,22 @@ impl ServerResponse {
         self.http_response.status()
     }
 
+    pub fn headers(&self) -> &HeaderMap {
+        self.http_response.headers()
+    }
+
+    pub async fn body(self) -> ClientResult<Bytes> {
+        self.http_response
+            .bytes()
+            .await
+            .map_err(|error| ClientError::RequestExecutionError { error })
+    }
+
     pub async fn json<V>(self) -> ClientResult<V>
     where
         V: DeserializeOwned,
     {
-        let body_data = self
-            .http_response
-            .bytes()
-            .await
-            .map_err(|error| ClientError::RequestExecutionError { error })?;
+        let body_data = self.body().await?;
 
         serde_json::from_slice(&body_data)
             .map_err(|error| ClientError::ResponseJsonBodyError { error })

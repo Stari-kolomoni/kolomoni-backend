@@ -22,7 +22,7 @@ use crate::{
             SpecificUserUnauthenticatedApi,
         },
     },
-    authentication::AccessToken,
+    authentication::ServerAuthentication,
     errors::{ClientError, ClientInitializationError, ClientResult},
     response::ServerResponse,
     ApiServer,
@@ -162,7 +162,7 @@ impl UnauthenticatedClient {
         })
     }
 
-    pub fn with_authentication(&self, authentication: &Arc<AccessToken>) -> AuthenticatedClient {
+    pub fn with_authentication(&self, authentication: ServerAuthentication) -> AuthenticatedClient {
         AuthenticatedClient::new(
             self.server.clone(),
             authentication.clone(),
@@ -302,20 +302,27 @@ impl UnauthenticatedApiClient for UnauthenticatedClient {}
 
 pub struct AuthenticatedClient {
     server: Arc<ApiServer>,
-    authentication: Arc<AccessToken>,
+    authentication: ServerAuthentication,
     http_client: reqwest::Client,
 }
 
 impl AuthenticatedClient {
     pub(crate) fn new(
         server: Arc<ApiServer>,
-        authentication: Arc<AccessToken>,
+        authentication: ServerAuthentication,
         http_client: reqwest::Client,
     ) -> Self {
         Self {
             server,
             authentication,
             http_client,
+        }
+    }
+
+    pub fn without_authentication(&self) -> UnauthenticatedClient {
+        UnauthenticatedClient {
+            server: self.server.clone(),
+            http_client: self.http_client.clone(),
         }
     }
 }

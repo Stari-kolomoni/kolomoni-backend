@@ -1,130 +1,69 @@
-use std::fmt::Debug;
+use kolomoni_api_client::response::ServerResponse;
+use reqwest::{header::HeaderValue, StatusCode};
 
-use actix_http::{
-    header::{HeaderName, HeaderValue},
-    StatusCode,
-};
-use bytes::Bytes;
-use reqwest::{header::HeaderMap, Response};
-use serde::Deserialize;
 
-use crate::TestRequestDebugInfo;
+pub trait AssertableServerResponse {
+    fn assert_status_equals(&self, status_code: StatusCode);
 
-#[derive(Debug)]
-pub struct TestResponse {
-    request_debug_info: TestRequestDebugInfo,
+    fn assert_header_exists(&self, header_name: &str);
 
-    status: StatusCode,
-    headers: HeaderMap,
-    body_bytes: Bytes,
+    fn assert_header_matches(&self, header_name: &str, header_value: HeaderValue);
 }
 
-impl TestResponse {
-    pub(crate) async fn new(request_debug_info: TestRequestDebugInfo, response: Response) -> Self {
-        Self {
-            request_debug_info,
-            status: response.status(),
-            headers: response.headers().to_owned(),
-            body_bytes: response
-                .bytes()
-                .await
-                .expect("failed to extract body from response"),
-        }
-    }
 
-    fn debug_format_for_panic(&self) -> String {
-        format!(
-            "\nContext:\n  request={:?}\n  response={{\n    status={},\n    headers={:?},\n    body={}\n  }}",
-            self.request_debug_info,
-            self.status,
-            self.headers,
-            String::from_utf8_lossy(&self.body_bytes)
-        )
-    }
+fn format_debug_info_for_panic(server_response: &ServerResponse) -> String {
+    let status = server_response.status();
+    let headers = server_response.headers().to_owned();
 
-    pub fn assert_status_equals(&self, status_code: StatusCode) {
+    format!(
+        "Context {{\n  \
+          status={}\n  \
+          headers={:?}\n\
+        }}",
+        status, headers
+    )
+}
+
+
+impl AssertableServerResponse for ServerResponse {
+    fn assert_status_equals(&self, status_code: StatusCode) {
         assert_eq!(
-            self.status,
+            self.status(),
             status_code,
             "{}",
-            self.debug_format_for_panic()
+            format_debug_info_for_panic(self)
         );
     }
 
-    pub fn assert_header_exists<N>(&self, header_name: N)
-    where
-        N: Into<HeaderName>,
-    {
-        let header_name: HeaderName = header_name.into();
+    fn assert_header_exists(&self, header_name: &str) {
+        let has_header = self.headers().contains_key(header_name);
 
-        self.headers.get(&header_name).unwrap_or_else(|| {
-            panic!(
-                "header {} does not exist on response {}",
-                header_name.as_str(),
-                self.debug_format_for_panic()
-            )
-        });
+        assert!(
+            has_header,
+            "Header {} is not present on response.\n{}",
+            header_name,
+            format_debug_info_for_panic(self)
+        );
     }
 
-    pub fn assert_header_matches_value<N, V>(&self, header_name: N, header_value: V)
-    where
-        N: Into<HeaderName>,
-        V: Into<HeaderValue>,
-    {
-        let header_name: HeaderName = header_name.into();
-        let expected_header_value: HeaderValue = header_value.into();
+    fn assert_header_matches(&self, header_name: &str, header_value: HeaderValue) {
+        self.assert_header_exists(header_name);
 
-        let actual_header_value = self.headers.get(&header_name).unwrap_or_else(|| {
-            panic!(
-                "header {} does not exist on response {}",
-                header_name.as_str(),
-                self.debug_format_for_panic()
-            )
-        });
+        let actual_header_value = self
+            .headers()
+            .get(header_name)
+            .expect("expected the header to exist");
 
         assert_eq!(
-            expected_header_value,
+            header_value,
             actual_header_value,
-            "{}",
-            self.debug_format_for_panic()
-        );
-    }
-
-    pub fn assert_has_json_body<'de, D>(&'de self)
-    where
-        D: Deserialize<'de>,
-    {
-        serde_json::from_slice::<D>(&self.body_bytes).unwrap_or_else(|_| {
-            panic!(
-                "failed to deserialize body as JSON {}",
-                self.debug_format_for_panic()
-            )
-        });
-    }
-
-    pub fn json_body<'de, D>(&'de self) -> D
-    where
-        D: Deserialize<'de>,
-    {
-        serde_json::from_slice::<D>(&self.body_bytes).unwrap_or_else(|_| {
-            panic!(
-                "failed to deserialize body as JSON {}",
-                self.debug_format_for_panic()
-            )
-        })
-    }
-
-    pub fn assert_json_body_matches<'de, D>(&'de self, expected_content: D)
-    where
-        D: Deserialize<'de> + PartialEq + Eq + Debug,
-    {
-        let data = self.json_body::<D>();
-
-        assert_eq!(
-            data,
-            expected_content,
-            "{}",
-            self.debug_format_for_panic()
+            "Expected header {} differs from the actual value.\n\
+            Expected: {}. Actual: {}.\n\
+            {}",
+            header_name,
+            header_value.to_str().unwrap_or("[?non-ASCII?]"),
+            actual_header_value.to_str().unwrap_or("[?non-ASCII?]"),
+            format_debug_info_for_panic(self)
         );
     }
 }

@@ -1,8 +1,7 @@
-use http::{Method, StatusCode};
-use kolomoni::api::v1::dictionary::{english_word::{EnglishWordWithMeanings, EnglishWordCreationRequest, EnglishWordCreationResponse}, slovene_word::{SloveneWord, SloveneWordCreationRequest, SloveneWordCreationResponse}, suggestions::TranslationSuggestionRequest, translations::TranslationCreationRequest};
-use uuid::Uuid;
+use chrono::Utc;
+use kolomoni_api_client::{api::dictionary::{english::{EnglishWordMeaningToCreate, EnglishWordToCreate}, slovene::{SloveneWordMeaningToCreate, SloveneWordToCreate}}, AuthenticatedClient, SharedApiClientEndpointGroups};
+use kolomoni_core::api_models::{EnglishWordWithMeanings, SloveneWordWithMeanings};
 
-use crate::TestServer;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SampleEnglishWord {
@@ -21,6 +20,16 @@ impl SampleEnglishWord {
             SampleEnglishWord::Attack => "attack",
             SampleEnglishWord::CriticalHit => "critical hit",
             SampleEnglishWord::HitPoints => "hit points",
+        }
+    }
+
+    pub fn abbreviation(&self) -> Option<&'static str> {
+        match self {
+            SampleEnglishWord::Ability => None,
+            SampleEnglishWord::Charisma => Some("CHA"),
+            SampleEnglishWord::Attack => None,
+            SampleEnglishWord::CriticalHit => Some("crit"),
+            SampleEnglishWord::HitPoints => Some("HP"),
         }
     }
 
@@ -52,30 +61,62 @@ impl SampleEnglishWord {
                 ),
         }
     }
-
+    
     pub async fn create(
         &self,
-        server: &TestServer,
-        access_token: &str,
+        client: &AuthenticatedClient,
     ) -> EnglishWordWithMeanings {
-        let creation_response = server.request(
-            Method::POST,
-            "/api/v1/dictionary/english",
-        )
-            .with_json_body(EnglishWordCreationRequest {
-                lemma: self.lemma().to_string(),
-                disambiguation: self.disambiguation().map(str::to_string),
-                description: self.description().map(str::to_string)
-            })
-            .with_access_token(access_token)
-            .send()
-            .await;
-    
-        creation_response.assert_status_equals(StatusCode::OK);
-    
-        let response_body = creation_response.json_body::<EnglishWordCreationResponse>();
-    
-        response_body.word
+        let before_word_creation = Utc::now();
+
+        let new_word = client.english_dictionary().create_english_word(EnglishWordToCreate {
+            lemma: self.lemma().to_owned()
+        }).await.expect("failed to create sample english word");
+
+        assert_eq!(self.lemma(), new_word.lemma);
+        assert!(new_word.meanings.is_empty());
+        assert!(new_word.created_at >= before_word_creation);
+        assert_eq!(new_word.created_at, new_word.last_modified_at);
+
+
+        let before_word_meaning_creation = Utc::now();
+
+        let new_word_meaning = client.english_dictionary().create_english_word_meaning(
+            new_word.id,
+            EnglishWordMeaningToCreate {
+                abbreviation: self.abbreviation().map(ToOwned::to_owned),
+                disambiguation: self.disambiguation().map(ToOwned::to_owned),
+                description: self.description().map(ToOwned::to_owned)
+            }
+        ).await.expect("failed to create sample english word meaning");
+
+        assert!(new_word_meaning.created_at >= before_word_meaning_creation);
+        assert_eq!(new_word_meaning.created_at, new_word_meaning.last_modified_at);
+        assert_eq!(self.abbreviation(), new_word_meaning.abbreviation.as_deref());
+        assert_eq!(self.disambiguation(), new_word_meaning.disambiguation.as_deref());
+        assert_eq!(self.description(), new_word_meaning.description.as_deref());
+        
+        
+        let new_word_including_meanings = client.english_dictionary().english_word_by_id(
+            new_word.id
+        ).await.expect("failed to re-fetch full sample english word with meanings");
+
+
+        assert!(new_word_including_meanings.meanings.len() == 1);
+
+        let first_meaning = &new_word_including_meanings.meanings[0];
+
+        assert_eq!(first_meaning.word_meaning_id, new_word_meaning.word_meaning_id);
+        assert_eq!(first_meaning.disambiguation, new_word_meaning.disambiguation);
+        assert_eq!(first_meaning.abbreviation, new_word_meaning.abbreviation);
+        assert_eq!(first_meaning.description, new_word_meaning.description);
+        assert_eq!(first_meaning.created_at, new_word_meaning.created_at);
+        assert_eq!(first_meaning.last_modified_at, new_word_meaning.last_modified_at);
+
+        assert!(first_meaning.categories.is_empty());
+        assert!(first_meaning.translations.is_empty());
+
+
+        new_word_including_meanings
     }
 }
 
@@ -103,6 +144,19 @@ impl SampleSloveneWord {
             SampleSloveneWord::UsodniZadetek => "usodni zadetek",
             SampleSloveneWord::ZivljenskaTocka => "življenska točka",
             SampleSloveneWord::Zdravje => "zdravje",
+        }
+    }
+
+    pub fn abbreviation(&self) -> Option<&'static str> {
+        match self {
+            SampleSloveneWord::Sposobnost => None,
+            SampleSloveneWord::Karizma => None,
+            SampleSloveneWord::Napad => None,
+            SampleSloveneWord::Terna => None,
+            SampleSloveneWord::KriticniIzid => None,
+            SampleSloveneWord::UsodniZadetek => None,
+            SampleSloveneWord::ZivljenskaTocka => Some("ZT"),
+            SampleSloveneWord::Zdravje => None,
         }
     }
 
@@ -136,95 +190,60 @@ impl SampleSloveneWord {
 
     pub async fn create(
         &self,
-        server: &TestServer,
-        access_token: &str,
-    ) -> SloveneWord {
-        let creation_response = server.request(
-            Method::POST,
-            "/api/v1/dictionary/slovene",
-        )
-            .with_json_body(SloveneWordCreationRequest {
-                lemma: self.lemma().to_string(),
-                disambiguation: self.disambiguation().map(str::to_string),
-                description: self.description().map(str::to_string)
-            })
-            .with_access_token(access_token)
-            .send()
-            .await;
-    
-        creation_response.assert_status_equals(StatusCode::OK);
-    
-        let response_body = creation_response.json_body::<SloveneWordCreationResponse>();
-    
-        response_body.word
+        client: &AuthenticatedClient,
+    ) -> SloveneWordWithMeanings {
+        let before_word_creation = Utc::now();
+
+        let new_word = client.slovene_dictionary().create_slovene_word(
+            SloveneWordToCreate {
+                lemma: self.lemma().to_owned()
+            }
+        ).await.expect("failed to create sample slovene word");
+
+        assert_eq!(self.lemma(), new_word.lemma);
+        assert!(new_word.meanings.is_empty());
+        assert!(new_word.created_at >= before_word_creation);
+        assert_eq!(new_word.created_at, new_word.last_modified_at);
+
+
+        let before_word_meaning_creation = Utc::now();
+
+        let new_word_meaning = client.slovene_dictionary().create_slovene_word_meaning(
+            new_word.id,
+            SloveneWordMeaningToCreate {
+                abbreviation: self.abbreviation().map(ToOwned::to_owned),
+                description: self.description().map(ToOwned::to_owned),
+                disambiguation: self.disambiguation().map(ToOwned::to_owned)
+            }
+        ).await.expect("failed to create sample slovene word meaning");
+
+        assert!(new_word_meaning.created_at >= before_word_meaning_creation);
+        assert_eq!(new_word_meaning.created_at, new_word_meaning.last_modified_at);
+        assert_eq!(self.abbreviation(), new_word_meaning.abbreviation.as_deref());
+        assert_eq!(self.disambiguation(), new_word_meaning.disambiguation.as_deref());
+        assert_eq!(self.description(), new_word_meaning.description.as_deref());
+
+
+        let new_word_including_meanings = client.slovene_dictionary().slovene_word_by_id(
+            new_word.id
+        ).await.expect("failed to re-fetch full sample slovene word with meanings");
+
+
+        assert!(new_word_including_meanings.meanings.len() == 1);
+
+        let first_meaning = &new_word_including_meanings.meanings[0];
+
+        assert_eq!(first_meaning.word_meaning_id, new_word_meaning.word_meaning_id);
+        assert_eq!(first_meaning.disambiguation, new_word_meaning.disambiguation);
+        assert_eq!(first_meaning.abbreviation, new_word_meaning.abbreviation);
+        assert_eq!(first_meaning.description, new_word_meaning.description);
+        assert_eq!(first_meaning.created_at, new_word_meaning.created_at);
+        assert_eq!(first_meaning.last_modified_at, new_word_meaning.last_modified_at);
+
+        assert!(first_meaning.categories.is_empty());
+        assert!(first_meaning.translations.is_empty());
+
+
+        new_word_including_meanings
     }
 }
-
-
-pub async fn delete_english_word(server: &TestServer, access_token: &str, word_uuid: Uuid) {
-    let deletion_response = server
-        .request(Method::DELETE, 
-            format!("/api/v1/dictionary/english/{}", word_uuid)
-        )
-        .with_access_token(access_token)
-        .send()
-        .await;
-
-    deletion_response.assert_status_equals(StatusCode::OK);
-}
-
-pub async fn delete_slovene_word(server: &TestServer, access_token: &str, word_uuid: Uuid) {
-    let deletion_response = server
-        .request(Method::DELETE, 
-            format!("/api/v1/dictionary/slovene/{}", word_uuid)
-        )
-        .with_access_token(access_token)
-        .send()
-        .await;
-
-    deletion_response.assert_status_equals(StatusCode::OK);
-}
-
-
-pub async fn link_word_as_translation(
-    server: &TestServer,
-    access_token: &str,
-    english_word_id: &str,
-    slovene_word_id: &str,
-) {
-    let translation_response = server.request(
-        Method::POST,
-        "/api/v1/dictionary/translation"
-    )
-        .with_json_body(TranslationCreationRequest {
-            english_word_meaning_id: english_word_id.to_string(),
-            slovene_word_meaning_id: slovene_word_id.to_string(),
-        })
-        .with_access_token(access_token)
-        .send()
-        .await;
-
-    translation_response.assert_status_equals(StatusCode::OK);
-}
-
-pub async fn link_word_as_suggested_translation(
-    server: &TestServer,
-    access_token: &str,
-    english_word_id: &str,
-    slovene_word_id: &str,
-) {
-    let suggestion_response = server.request(
-        Method::POST,
-        "/api/v1/dictionary/suggestion"
-    )
-        .with_json_body(TranslationSuggestionRequest {
-            english_word_id: english_word_id.to_string(),
-            slovene_word_id: slovene_word_id.to_string(),
-        })
-        .with_access_token(access_token)
-        .send()
-        .await;
-
-    suggestion_response.assert_status_equals(StatusCode::OK);
-}
-

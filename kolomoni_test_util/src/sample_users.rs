@@ -1,15 +1,11 @@
-use http::{header, Method, StatusCode};
-use kolomoni::api::v1::{
-    login::{UserLoginRequest, UserLoginResponse},
-    users::{
-        registration::{UserRegistrationRequest, UserRegistrationResponse},
-        UserInfoResponse,
-        UserInformation,
-    },
+use chrono::Utc;
+use kolomoni_api_client::{
+    api::auth::{UserLoginInfo, UserRegistrationInfo},
+    authentication::ServerTokenSet,
+    SharedApiClientEndpointGroups,
+    UnauthenticatedClient,
 };
-
-use crate::TestServer;
-
+use kolomoni_core::api_models::UserInfo;
 
 /// A sample user intended for testing the backend.
 /// Each user has an associated username, display name and password.
@@ -45,61 +41,61 @@ impl SampleUser {
         }
     }
 
-    pub fn into_registration_request_model(self) -> UserRegistrationRequest {
-        UserRegistrationRequest {
-            username: self.username().to_string(),
-            password: self.password().to_string(),
-            display_name: self.display_name().to_string(),
-        }
-    }
-
-    pub fn into_login_request_model(self) -> UserLoginRequest {
-        UserLoginRequest {
-            username: self.username().to_string(),
-            password: self.password().to_string(),
-        }
-    }
-
-    /// Registers the given [`SampleUser`] on the server,
+    /// Registers the given sample user on the server,
     /// returning their fresh user information.
-    pub async fn register(&self, server: &TestServer) -> UserRegistrationResponse {
-        let registration_request_model = self.into_registration_request_model();
+    pub async fn register<S>(&self, client: &UnauthenticatedClient) -> UserInfo {
+        let before_registration = Utc::now();
 
-        let registration_response = server
-            .request(Method::POST, "/api/v1/users")
-            .with_json_body(registration_request_model)
-            .send()
-            .await;
+        let newly_registered_user = client
+            .authentication()
+            .register_user(UserRegistrationInfo {
+                username: self.username().to_owned(),
+                display_name: self.display_name().to_owned(),
+                password: self.password().to_owned(),
+            })
+            .await
+            .expect("failed to create sample user account");
 
-        registration_response.assert_status_equals(StatusCode::OK);
+        let after_registration = Utc::now();
 
-        registration_response.json_body::<UserRegistrationResponse>()
+        assert_eq!(
+            newly_registered_user.user.display_name,
+            self.display_name()
+        );
+        assert_eq!(
+            newly_registered_user.user.username,
+            self.username()
+        );
+
+        assert!(newly_registered_user.user.joined_at >= before_registration);
+        assert!(newly_registered_user.user.joined_at <= after_registration);
+
+        assert_eq!(
+            newly_registered_user.user.joined_at,
+            newly_registered_user.user.last_active_at
+        );
+        assert_eq!(
+            newly_registered_user.user.joined_at,
+            newly_registered_user.user.last_modified_at
+        );
+
+
+        newly_registered_user.user
     }
 
-    /// Returns the access token.
-    pub async fn login(&self, server: &TestServer) -> String {
-        let login_response = server
-            .request(Method::POST, "/api/v1/login")
-            .with_json_body(self.into_login_request_model())
-            .send()
-            .await;
+    /// Logins the user and returns the access and refres token as [`ServerTokenSet`]
+    /// (which can be turned into [`ServerAuthentication`], which can, in turn, be used to upgrade
+    /// an unauthenticated client into an authenticated one).
+    pub async fn login(&self, client: &UnauthenticatedClient) -> ServerTokenSet {
+        let tokens = client
+            .authentication()
+            .login_user(UserLoginInfo {
+                username: self.username().to_owned(),
+                password: self.password().to_owned(),
+            })
+            .await
+            .expect("failed to perform sample user login");
 
-        login_response.assert_status_equals(StatusCode::OK);
-
-        login_response.json_body::<UserLoginResponse>().access_token
+        ServerTokenSet::new(tokens.access_token, tokens.refresh_token)
     }
-}
-
-/// Fetches the user information associated with the `access_token`.
-pub async fn fetch_user_info(server: &TestServer, access_token: &str) -> UserInformation {
-    let user_info_response = server
-        .request(Method::GET, "/api/v1/users/me")
-        .with_access_token(access_token)
-        .send()
-        .await;
-
-    user_info_response.assert_status_equals(StatusCode::OK);
-    user_info_response.assert_header_exists(header::LAST_MODIFIED);
-
-    user_info_response.json_body::<UserInfoResponse>().user
 }
