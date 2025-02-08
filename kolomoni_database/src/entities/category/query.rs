@@ -2,18 +2,19 @@ use futures_core::stream::BoxStream;
 use kolomoni_core::ids::CategoryId;
 use sqlx::PgConnection;
 
-use super::CategoryModel;
-use crate::{IntoExternalModel, QueryError, QueryResult};
+use super::{internal::InternalCategoryModel, CategoryModel};
+use crate::{macros::create_mapped_async_stream, IntoExternalModel, QueryError, QueryResult};
 
-type RawCategoryStream<'c> = BoxStream<'c, Result<super::InternalCategoryModel, sqlx::Error>>;
 
-create_async_stream_wrapper!(
+type RawCategoryStream<'c> = BoxStream<'c, Result<InternalCategoryModel, sqlx::Error>>;
+
+create_mapped_async_stream!(
     pub struct CategoryStream<'c>;
     transforms stream RawCategoryStream<'c> => stream of QueryResult<super::CategoryModel>:
         |value|
             value.map(
                 |some| some
-                    .map(super::InternalCategoryModel::into_external_model)
+                    .map(InternalCategoryModel::into_external_model)
                     .map_err(|error| QueryError::SqlxError { error })
             )
 );
@@ -24,7 +25,7 @@ pub struct CategoryQuery;
 impl CategoryQuery {
     pub async fn get_all_categories(database_connection: &mut PgConnection) -> CategoryStream<'_> {
         let internal_category_stream = sqlx::query_as!(
-            super::InternalCategoryModel,
+            InternalCategoryModel,
             "SELECT \
                     id, parent_category_id, name_sl, name_en, \
                     created_at, last_modified_at \
@@ -40,7 +41,7 @@ impl CategoryQuery {
         category_id: CategoryId,
     ) -> QueryResult<Option<CategoryModel>> {
         let internal_category = sqlx::query_as!(
-            super::InternalCategoryModel,
+            InternalCategoryModel,
             "SELECT \
                     id, parent_category_id, name_sl, name_en, \
                     created_at, last_modified_at \

@@ -2,8 +2,17 @@ use chrono::Utc;
 use kolomoni_core::ids::{SloveneWordId, SloveneWordMeaningId};
 use sqlx::{PgConnection, Postgres, QueryBuilder};
 
-use super::SloveneWordMeaningModel;
-use crate::{entities::InternalSloveneWordMeaningModel, IntoExternalModel, QueryError, QueryResult};
+use super::{internal::InternalSloveneWordMeaningModel, SloveneWordMeaningModel};
+use crate::{
+    entities::{
+        word_meaning::{NewWordMeaning, WordMeaningMutation},
+        word_meaning_slovene::internal_insert_only::InsertOnlyInternalSloveneWordMeaningModel,
+    },
+    IntoExternalModel,
+    QueryError,
+    QueryResult,
+};
+
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct NewSloveneWordMeaning {
@@ -36,7 +45,7 @@ fn build_slovene_word_meaning_update_query(
     values_to_update: SloveneWordMeaningUpdate,
 ) -> QueryBuilder<'static, Postgres> {
     let mut update_query_builder: QueryBuilder<Postgres> =
-        QueryBuilder::new("UPDATE kolomoni.word_slovene_meaning SET ");
+        QueryBuilder::new("UPDATE kolomoni.word_meaning_slovene SET ");
 
     let mut separated_set_expressions = update_query_builder.separated(", ");
 
@@ -69,54 +78,56 @@ fn build_slovene_word_meaning_update_query(
 pub struct SloveneWordMeaningMutation;
 
 impl SloveneWordMeaningMutation {
+    // TODO continue and finish this last module
     pub async fn create(
         database_connection: &mut PgConnection,
         slovene_word_id: SloveneWordId,
         meaning_to_create: NewSloveneWordMeaning,
     ) -> QueryResult<SloveneWordMeaningModel> {
-        let new_meaning_id = SloveneWordMeaningId::generate();
         let new_meaning_created_at = Utc::now();
         let new_meaning_last_modified_at = new_meaning_created_at;
 
 
-        let internal_meaning_query_result = sqlx::query!(
-            "INSERT INTO kolomoni.word_meaning (id, word_id) \
-                VALUES ($1, $2)",
-            new_meaning_id.into_uuid(),
-            slovene_word_id.into_uuid()
+        let new_word_meaning = WordMeaningMutation::create(
+            database_connection,
+            NewWordMeaning {
+                word_id: slovene_word_id.to_word_id(),
+                created_at: new_meaning_created_at,
+                last_modified_at: new_meaning_last_modified_at,
+            },
         )
-        .execute(&mut *database_connection)
         .await?;
 
-        if internal_meaning_query_result.rows_affected() != 1 {
-            return Err(QueryError::database_inconsistency(format!(
-                "inserted word meaning, but got abnormal number of affected rows ({})",
-                internal_meaning_query_result.rows_affected()
-            )));
-        }
 
-
-        let internal_slovene_meaning = sqlx::query_as!(
-            InternalSloveneWordMeaningModel,
-            "INSERT INTO kolomoni.word_slovene_meaning \
-                (word_meaning_id, disambiguation, abbreviation, \
-                description, created_at, last_modified_at) \
-                VALUES ($1, $2, $3, $4, $5, $6) \
+        let new_slovene_word_meaning = sqlx::query_as!(
+            InsertOnlyInternalSloveneWordMeaningModel,
+            "INSERT INTO kolomoni.word_meaning_slovene \
+                    (word_meaning_id, disambiguation, abbreviation, description) \
+                VALUES \
+                    ($1, $2, $3, $4) \
                 RETURNING \
-                    word_meaning_id, disambiguation, abbreviation, \
-                    description, created_at, last_modified_at",
-            new_meaning_id.into_uuid(),
+                    word_meaning_id, disambiguation, abbreviation, description",
+            new_word_meaning.word_id.into_uuid(),
             meaning_to_create.disambiguation,
             meaning_to_create.abbreviation,
             meaning_to_create.description,
-            new_meaning_created_at,
-            new_meaning_last_modified_at
         )
         .fetch_one(database_connection)
         .await?;
 
 
-        Ok(internal_slovene_meaning.into_external_model())
+        let complete_internal_model = InternalSloveneWordMeaningModel {
+            word_id: new_word_meaning.word_id.into_uuid(),
+            word_meaning_id: new_word_meaning.word_meaning_id.into_uuid(),
+            created_at: new_word_meaning.created_at,
+            last_modified_at: new_word_meaning.last_modified_at,
+            disambiguation: new_slovene_word_meaning.disambiguation,
+            abbreviation: new_slovene_word_meaning.abbreviation,
+            description: new_slovene_word_meaning.description,
+        };
+
+
+        Ok(complete_internal_model.into_external_model())
     }
 
     pub async fn update(
@@ -146,7 +157,7 @@ impl SloveneWordMeaningMutation {
         slovene_word_meaning_id: SloveneWordMeaningId,
     ) -> QueryResult<bool> {
         let query_result = sqlx::query!(
-            "DELETE FROM kolomoni.word_slovene_meaning \
+            "DELETE FROM kolomoni.word_meaning_slovene \
                 WHERE word_meaning_id = $1",
             slovene_word_meaning_id.into_uuid()
         )

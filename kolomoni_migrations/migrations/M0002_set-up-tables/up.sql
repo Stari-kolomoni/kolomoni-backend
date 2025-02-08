@@ -269,13 +269,17 @@ CREATE INDEX index__word_english__lemma
 CREATE TABLE kolomoni.word_meaning (
     id uuid NOT NULL,
     word_id uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    last_modified_at timestamp with time zone NOT NULL,
     CONSTRAINT pk__word_meaning
         PRIMARY KEY (id),
     CONSTRAINT fk__word_meaning__word_id__word
         FOREIGN KEY (word_id)
         REFERENCES kolomoni.word (id)
         ON UPDATE CASCADE
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+    CONSTRAINT check__word_meaning__last_modified_at_ge_created_at
+        CHECK (last_modified_at >= created_at)
 );
 
 CREATE INDEX index__word_meaning__id
@@ -320,60 +324,52 @@ CREATE INDEX index__word_meaning_category__category_id
 
 
 ----
--- Create table: word_slovene_meaning
+-- Create table: word_meaning_slovene
 ----
-CREATE TABLE kolomoni.word_slovene_meaning (
+CREATE TABLE kolomoni.word_meaning_slovene (
     word_meaning_id uuid NOT NULL,
     disambiguation text,
     abbreviation text,
     description text,
-    created_at timestamp with time zone NOT NULL,
-    last_modified_at timestamp with time zone NOT NULL,
-    CONSTRAINT pk__word_slovene_meaning
+    CONSTRAINT pk__word_meaning_slovene
         PRIMARY KEY (word_meaning_id),
-    CONSTRAINT fk__word_slovene_meaning__word_meaning_id__word_meaning
+    CONSTRAINT fk__word_meaning_slovene__word_meaning_id__word_meaning
         FOREIGN KEY (word_meaning_id)
         REFERENCES kolomoni.word_meaning (id)
         ON UPDATE CASCADE
         ON DELETE CASCADE,
-    CONSTRAINT check__word_slovene_meaning__last_modified_at_ge_created_at
-        CHECK (last_modified_at >= created_at),
-    CONSTRAINT unique__word_slovene_meaning__no_duplicates
+    CONSTRAINT unique__word_meaning_slovene__no_duplicates
         UNIQUE (disambiguation, abbreviation, description)
 );
 
-CREATE INDEX index__word_slovene_meaning__distinguishing_fields
-    ON kolomoni.word_slovene_meaning (disambiguation, abbreviation, description);
+CREATE INDEX index__word_meaning_slovene__distinguishing_fields
+    ON kolomoni.word_meaning_slovene (disambiguation, abbreviation, description);
 
 
 
 
 ----
--- Create table: word_english_meaning
+-- Create table: word_meaning_english
 ----
-CREATE TABLE kolomoni.word_english_meaning (
+CREATE TABLE kolomoni.word_meaning_english (
     word_meaning_id uuid NOT NULL,
     disambiguation text,
     abbreviation text,
     description text,
-    created_at timestamp with time zone NOT NULL,
-    last_modified_at timestamp with time zone NOT NULL,
-    CONSTRAINT pk__word_english_meaning
+    CONSTRAINT pk__word_meaning_english
         PRIMARY KEY (word_meaning_id),
-    CONSTRAINT fk__word_english_meaning__word_meaning_id__word_meaning
+    CONSTRAINT fk__word_meaning_english__word_meaning_id__word_meaning
         FOREIGN KEY (word_meaning_id)
         REFERENCES kolomoni.word_meaning (id)
         ON UPDATE CASCADE
         ON DELETE CASCADE,
-    CONSTRAINT check__word_english_meaning__last_modified_at_ge_created_at
-        CHECK (last_modified_at >= created_at),
-    CONSTRAINT unique__word_english_meaning__no_duplicates
+    CONSTRAINT unique__word_meaning_english__no_duplicates
         UNIQUE (disambiguation, abbreviation, description)
 );
 
 
-CREATE INDEX index__word_english_meaning__distinguishing_fields
-    ON kolomoni.word_english_meaning (disambiguation, abbreviation, description);
+CREATE INDEX index__word_meaning_english__distinguishing_fields
+    ON kolomoni.word_meaning_english (disambiguation, abbreviation, description);
 
 
 

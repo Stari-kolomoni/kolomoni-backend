@@ -5,7 +5,7 @@ use crate::api::traits::IntoApiModel;
 
 
 
-impl IntoApiModel<UserInfo> for entities::UserModel {
+impl IntoApiModel<UserInfo> for entities::user::UserModel {
     fn into_api_model(self) -> UserInfo {
         UserInfo {
             id: self.id,

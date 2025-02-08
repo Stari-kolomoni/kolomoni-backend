@@ -11,7 +11,8 @@ use kolomoni_core::ids::UserId;
 use kolomoni_core::permissions::{Permission, PermissionSet, BLANKET_PERMISSION_GRANT};
 use kolomoni_core::roles::RoleSet;
 use kolomoni_core::token::{JWTClaims, JWTValidationError};
-use kolomoni_database::{entities, QueryError};
+use kolomoni_database::entities::user_role::UserRoleQuery;
+use kolomoni_database::QueryError;
 use sqlx::PgConnection;
 use thiserror::Error;
 use tracing::{debug, error, info};
@@ -202,11 +203,9 @@ impl AuthenticatedUser {
         &self,
         database_connection: &mut PgConnection,
     ) -> Result<PermissionSet, AuthenticatedUserError> {
-        let effective_permission_set = entities::UserRoleQuery::transitive_permissions_for_user(
-            database_connection,
-            self.token.user_id,
-        )
-        .await?;
+        let effective_permission_set =
+            UserRoleQuery::transitive_permissions_for_user(database_connection, self.token.user_id)
+                .await?;
 
         Ok(effective_permission_set)
     }
@@ -224,7 +223,7 @@ impl AuthenticatedUser {
             return Ok(true);
         }
 
-        let has_permission = entities::UserRoleQuery::user_has_permission_transitively(
+        let has_permission = UserRoleQuery::user_has_permission_transitively(
             database_connection,
             self.token.user_id,
             permission,
@@ -257,11 +256,9 @@ impl AuthenticatedUser {
         }
 
 
-        let transitive_permissions = entities::UserRoleQuery::transitive_permissions_for_user(
-            database_connection,
-            self.token.user_id,
-        )
-        .await?;
+        let transitive_permissions =
+            UserRoleQuery::transitive_permissions_for_user(database_connection, self.token.user_id)
+                .await?;
 
 
         Ok(required_permissions.is_subset_of(&transitive_permissions))
@@ -275,7 +272,7 @@ impl AuthenticatedUser {
         database_connection: &mut PgConnection,
     ) -> Result<RoleSet, AuthenticatedUserError> {
         let user_role_set =
-            entities::UserRoleQuery::roles_for_user(database_connection, self.token.user_id).await?;
+            UserRoleQuery::roles_for_user(database_connection, self.token.user_id).await?;
 
         Ok(user_role_set)
     }

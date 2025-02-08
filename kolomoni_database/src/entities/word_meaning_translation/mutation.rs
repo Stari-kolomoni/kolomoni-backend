@@ -3,7 +3,12 @@ use kolomoni_core::ids::{EnglishWordMeaningId, SloveneWordMeaningId, UserId};
 use sqlx::PgConnection;
 
 use super::WordMeaningTranslationModel;
-use crate::{IntoExternalModel, QueryError, QueryResult};
+use crate::{
+    entities::word_meaning_translation::internal::InternalWordMeaningTranslationModel,
+    IntoExternalModel,
+    QueryError,
+    QueryResult,
+};
 
 pub struct WordMeaningTranslationMutation;
 
@@ -17,11 +22,12 @@ impl WordMeaningTranslationMutation {
         let translated_at = Utc::now();
 
         let newly_created_translation = sqlx::query_as!(
-            super::InternalWordMeaningTranslationModel,
+            InternalWordMeaningTranslationModel,
             "INSERT INTO kolomoni.word_meaning_translation \
-                (slovene_word_meaning_id, english_word_meaning_id, \
-                 translated_at, translated_by) \
-                VALUES ($1, $2, $3, $4) \
+                    (slovene_word_meaning_id, english_word_meaning_id, \
+                    translated_at, translated_by) \
+                VALUES \
+                    ($1, $2, $3, $4) \
                 RETURNING \
                     slovene_word_meaning_id, english_word_meaning_id, \
                     translated_at, translated_by",
@@ -43,7 +49,8 @@ impl WordMeaningTranslationMutation {
     ) -> QueryResult<bool> {
         let query_result = sqlx::query_scalar!(
             "DELETE FROM kolomoni.word_meaning_translation \
-                WHERE slovene_word_meaning_id = $1 \
+                WHERE \
+                    slovene_word_meaning_id = $1 \
                     AND english_word_meaning_id = $2",
             slovene_word_meaning_id.into_uuid(),
             english_word_meaning_id.into_uuid(),

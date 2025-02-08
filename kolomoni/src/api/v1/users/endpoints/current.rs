@@ -8,7 +8,8 @@ use kolomoni_core::api_models::{
     UsersErrorReason,
 };
 use kolomoni_core::permissions::Permission;
-use kolomoni_database::entities;
+use kolomoni_database::entities::user::{UserMutation, UserQuery};
+use kolomoni_database::entities::user_role::UserRoleQuery;
 use tracing::info;
 
 use crate::{
@@ -102,7 +103,7 @@ pub async fn get_current_user_info(
 
     // Load user from database.
     let Some(current_user) =
-        entities::UserQuery::get_user_by_id(&mut database_connection, authenticated_user_id).await?
+        UserQuery::get_user_by_id(&mut database_connection, authenticated_user_id).await?
     else {
         return EndpointResponseBuilder::not_found()
             .with_error_reason(UsersErrorReason::user_not_found())
@@ -180,7 +181,7 @@ pub async fn get_current_user_roles(
 
 
     let user_exists =
-        entities::UserQuery::exists_by_id(&mut database_connection, authenticated_user_id).await?;
+        UserQuery::exists_by_id(&mut database_connection, authenticated_user_id).await?;
 
     if !user_exists {
         return EndpointResponseBuilder::not_found()
@@ -190,8 +191,7 @@ pub async fn get_current_user_roles(
 
 
     let user_roles =
-        entities::UserRoleQuery::roles_for_user(&mut database_connection, authenticated_user_id)
-            .await?;
+        UserRoleQuery::roles_for_user(&mut database_connection, authenticated_user_id).await?;
 
 
     EndpointResponseBuilder::ok()
@@ -257,7 +257,7 @@ async fn get_current_user_effective_permissions(
     require_permission_in_set!(user_permissions, Permission::UserSelfRead);
 
 
-    let user_exists = entities::UserQuery::exists_by_id(
+    let user_exists = UserQuery::exists_by_id(
         &mut database_connection,
         authenticated_user.user_id(),
     )
@@ -352,11 +352,8 @@ async fn update_current_user_display_name(
 
 
     // Ensure the display name is unique.
-    let new_display_name_already_exists = entities::UserQuery::exists_by_display_name(
-        &mut transaction,
-        &request_data.new_display_name,
-    )
-    .await?;
+    let new_display_name_already_exists =
+        UserQuery::exists_by_display_name(&mut transaction, &request_data.new_display_name).await?;
 
     if new_display_name_already_exists {
         return EndpointResponseBuilder::conflict()
@@ -366,7 +363,7 @@ async fn update_current_user_display_name(
 
 
     // Update user in the database.
-    let updated_user = entities::UserMutation::change_display_name_by_user_id(
+    let updated_user = UserMutation::change_display_name_by_user_id(
         &mut transaction,
         authenticated_user_id,
         &request_data.new_display_name,

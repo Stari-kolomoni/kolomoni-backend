@@ -16,7 +16,7 @@ use crate::api::traits::IntoApiModel;
 
 
 impl IntoApiModel<EnglishWordMeaningWithCategoriesAndTranslations>
-    for entities::EnglishWordMeaningModelWithCategoriesAndTranslations
+    for entities::EnglishWordMeaningModelWithDetails
 {
     fn into_api_model(self) -> EnglishWordMeaningWithCategoriesAndTranslations {
         EnglishWordMeaningWithCategoriesAndTranslations {
@@ -28,7 +28,7 @@ impl IntoApiModel<EnglishWordMeaningWithCategoriesAndTranslations>
             created_at: self.created_at,
             last_modified_at: self.last_modified_at,
             translates_into: self
-                .translates_into
+                .translations
                 .into_iter()
                 .map(|internal_model| internal_model.into_api_model())
                 .collect(),
@@ -37,7 +37,9 @@ impl IntoApiModel<EnglishWordMeaningWithCategoriesAndTranslations>
 }
 
 
-impl IntoApiModel<ShallowSloveneWordMeaning> for entities::TranslatesIntoSloveneWordModel {
+impl IntoApiModel<ShallowSloveneWordMeaning>
+    for entities::TranslatedSloveneWordMeaningModelWithDetails
+{
     fn into_api_model(self) -> ShallowSloveneWordMeaning {
         ShallowSloveneWordMeaning {
             meaning_id: self.word_meaning_id,

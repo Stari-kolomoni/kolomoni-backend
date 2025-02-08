@@ -9,7 +9,7 @@ use kolomoni_core::{
     ids::UserId,
     roles::{DEFAULT_USER_ROLE, DEFAULT_USER_ROLE_SET},
 };
-use kolomoni_database::entities;
+use kolomoni_database::{entities, DatabaseConnectionOptions};
 use kolomoni_migrations::{
     core::{
         errors::{MigrationApplyError, MigrationRollbackError, StatusError},
@@ -19,7 +19,6 @@ use kolomoni_migrations::{
     migrations,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgConnectOptions, Acquire, ConnectOptions, PgConnection};
 use thiserror::Error;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -71,34 +70,23 @@ pub enum RollbackAndReapplyError {
 }
 
 
+#[inline]
 fn construct_database_migrator_connection_options(
-    database_configuration: &ForMigrationAtApiRuntimeDatabaseConfiguration,
-) -> PgConnectOptions {
-    let mut connection_options = PgConnectOptions::new_without_pgpass()
-        .application_name(&format!(
-            "stari-kolomoni-backend-test_v{}",
-            env!("CARGO_PKG_VERSION")
-        ))
-        .statement_cache_capacity(
-            database_configuration
-                .statement_cache_capacity
-                .unwrap_or(200),
-        )
-        .host(&database_configuration.host)
-        .port(database_configuration.port)
-        .username(&database_configuration.username)
-        .database(&database_configuration.database_name);
-
-    if let Some(password) = &database_configuration.password {
-        connection_options = connection_options.password(password.as_str());
-    }
-
-    connection_options
+    migration_connection_configuration: &ForMigrationAtApiRuntimeDatabaseConfiguration,
+) -> DatabaseConnectionOptions {
+    DatabaseConnectionOptions::from_parameters(
+        &migration_connection_configuration.host,
+        migration_connection_configuration.port,
+        &migration_connection_configuration.username,
+        migration_connection_configuration.password.as_deref(),
+        &migration_connection_configuration.database_name,
+        migration_connection_configuration.statement_cache_capacity,
+    )
 }
 
 
 async fn rollback_and_reapply_non_privileged_migrations(
-    migrator_user_connection_options: &PgConnectOptions,
+    migrator_user_connection_options: &DatabaseConnectionOptions,
 ) -> Result<(), RollbackAndReapplyError> {
     warn!("Rolling back and reapplying all non-privileged migrations.");
 

@@ -4,7 +4,12 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::UserQueryResult;
-use crate::{IntoExternalModel, IntoInternalModel, QueryResult};
+use crate::{
+    entities::user::internal::InternalUserModel,
+    IntoExternalModel,
+    IntoInternalModel,
+    QueryResult,
+};
 
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -42,7 +47,7 @@ impl UserMutation {
 
 
         let newly_created_user = sqlx::query_as!(
-            super::InternalUserModel,
+            InternalUserModel,
             "INSERT INTO kolomoni.user \
                     (id, username, display_name, hashed_password, \
                     joined_at, last_active_at, last_modified_at) \
@@ -70,7 +75,7 @@ impl UserMutation {
         new_display_name: &str,
     ) -> QueryResult<super::UserModel> {
         let updated_user_model = sqlx::query_as!(
-            super::InternalUserModel,
+            InternalUserModel,
             "UPDATE kolomoni.user \
                 SET \
                     display_name = $1, \

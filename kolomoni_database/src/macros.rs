@@ -1,5 +1,5 @@
-/// Defines a struct whose sole purpose is wrapping an async [`Stream`],
-/// mapping each item using a closure provided by the user.
+/// Defines a struct whose sole purpose is wrapping and transforming an async [`Stream`],
+/// i.e. mapping each item using a closure provided by the user.
 ///
 /// # Example
 /// For example, let's say we have a stream: [`BoxStream`]`<'a, i32>`,
@@ -11,7 +11,7 @@
 /// *This is precisely what this macro aims to simplify.*
 ///
 /// ```rust,no_run
-/// use crate::macros::create_async_stream_wrapper;
+/// use crate::macros::create_mapped_async_stream;
 /// use std::num::TryFromIntError;
 ///
 /// use futures_core::BoxStream;
@@ -19,9 +19,9 @@
 ///
 /// type OriginalStreamType<'c> = BoxStream<'c, i32>;
 ///
-/// create_async_stream_wrapper!(
+/// create_mapped_async_stream!(
 ///     pub struct UnsignedIntStream<'c>;
-///     transforms OriginalStreamType<'c> => Result<u32, TryFromIntError>:
+///     transforms stream OriginalStreamType<'c> => stream of Result<u32, TryFromIntError>:
 ///         |value| u32::try_from(value)
 /// );
 ///
@@ -44,7 +44,7 @@
 ///
 /// [`Stream`]: futures_core::Stream
 /// [`BoxStream`]: futures_core::BoxStream
-macro_rules! create_async_stream_wrapper {
+macro_rules! create_mapped_async_stream {
     (
         $struct_visibility:vis struct $struct_identifier:ident<$struct_lifetime:lifetime>;
         transforms stream $wrapped_type:ty => stream of $resulting_type:ty:
@@ -81,3 +81,5 @@ macro_rules! create_async_stream_wrapper {
         }
     };
 }
+
+pub(crate) use create_mapped_async_stream;

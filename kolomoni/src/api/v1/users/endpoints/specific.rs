@@ -16,7 +16,8 @@ use kolomoni_core::{
     },
     ids::UserId,
 };
-use kolomoni_database::entities;
+use kolomoni_database::entities::user::{UserMutation, UserQuery};
+use kolomoni_database::entities::user_role::{UserRoleMutation, UserRoleQuery};
 use tracing::info;
 
 use crate::{
@@ -118,7 +119,7 @@ async fn get_specific_user_info(
 
 
     let user_info_if_they_exist =
-        entities::UserQuery::get_user_by_id(&mut database_connection, requested_user_id).await?;
+        UserQuery::get_user_by_id(&mut database_connection, requested_user_id).await?;
 
     let Some(user_info) = user_info_if_they_exist else {
         return EndpointResponseBuilder::not_found()
@@ -194,8 +195,7 @@ pub async fn get_specific_user_roles(
     let requested_user_id = parse_uuid::<UserId>(path_info.into_inner().0)?;
 
 
-    let target_user_exists =
-        entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
+    let target_user_exists = UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !target_user_exists {
         return EndpointResponseBuilder::not_found()
@@ -205,7 +205,7 @@ pub async fn get_specific_user_roles(
 
 
     let target_user_role_set =
-        entities::UserRoleQuery::roles_for_user(&mut transaction, requested_user_id).await?;
+        UserRoleQuery::roles_for_user(&mut transaction, requested_user_id).await?;
 
 
     EndpointResponseBuilder::ok()
@@ -285,8 +285,7 @@ async fn get_specific_user_effective_permissions(
     let requested_user_id = parse_uuid::<UserId>(path_info.into_inner().0)?;
 
 
-    let requested_user_exists =
-        entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
+    let requested_user_exists = UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !requested_user_exists {
         return EndpointResponseBuilder::not_found()
@@ -295,11 +294,8 @@ async fn get_specific_user_effective_permissions(
     }
 
 
-    let requested_user_permission_set = entities::UserRoleQuery::transitive_permissions_for_user(
-        &mut transaction,
-        requested_user_id,
-    )
-    .await?;
+    let requested_user_permission_set =
+        UserRoleQuery::transitive_permissions_for_user(&mut transaction, requested_user_id).await?;
 
 
     EndpointResponseBuilder::ok()
@@ -428,8 +424,7 @@ async fn update_specific_user_display_name(
     }
 
 
-    let requested_user_exists =
-        entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
+    let requested_user_exists = UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !requested_user_exists {
         return EndpointResponseBuilder::not_found()
@@ -440,11 +435,8 @@ async fn update_specific_user_display_name(
 
 
     // Modify requested user's display name.
-    let new_display_name_already_exists = entities::UserQuery::exists_by_display_name(
-        &mut transaction,
-        &request_data.new_display_name,
-    )
-    .await?;
+    let new_display_name_already_exists =
+        UserQuery::exists_by_display_name(&mut transaction, &request_data.new_display_name).await?;
 
     if new_display_name_already_exists {
         return EndpointResponseBuilder::conflict()
@@ -454,7 +446,7 @@ async fn update_specific_user_display_name(
 
 
     // Update requested user's display name.
-    let updated_user = entities::UserMutation::change_display_name_by_user_id(
+    let updated_user = UserMutation::change_display_name_by_user_id(
         &mut transaction,
         requested_user_id,
         &request_data.new_display_name,
@@ -626,7 +618,7 @@ pub async fn add_roles_to_specific_user(
 
 
 
-    let user_exists = entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
+    let user_exists = UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !user_exists {
         return EndpointResponseBuilder::not_found()
@@ -635,7 +627,7 @@ pub async fn add_roles_to_specific_user(
     }
 
 
-    let full_updated_user_role_set = entities::UserRoleMutation::add_roles_to_user(
+    let full_updated_user_role_set = UserRoleMutation::add_roles_to_user(
         &mut transaction,
         requested_user_id,
         roles_to_add_to_user.clone(),
@@ -799,7 +791,7 @@ pub async fn remove_roles_from_specific_user(
     }
 
 
-    let user_exists = entities::UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
+    let user_exists = UserQuery::exists_by_id(&mut transaction, requested_user_id).await?;
 
     if !user_exists {
         return EndpointResponseBuilder::not_found()
@@ -808,7 +800,7 @@ pub async fn remove_roles_from_specific_user(
     }
 
 
-    let full_updated_user_role_set = entities::UserRoleMutation::remove_roles_from_user(
+    let full_updated_user_role_set = UserRoleMutation::remove_roles_from_user(
         &mut transaction,
         requested_user_id,
         roles_to_remove_from_user.clone(),

@@ -4,7 +4,15 @@ use kolomoni_core::api_models::{
     SloveneWordMeaningWithCategoriesAndTranslations,
     SloveneWordWithMeanings,
 };
-use kolomoni_database::entities;
+use kolomoni_database::entities::{
+    self,
+    word_meaning_slovene::{
+        EnglishTranslationModel,
+        SloveneWordMeaningModelWithDetails,
+        TranslatesIntoEnglishWordMeaningModel,
+    },
+    word_slovene::SloveneWordWithMeaningsModel,
+};
 
 use crate::api::traits::IntoApiModel;
 
@@ -17,7 +25,7 @@ use crate::api::traits::IntoApiModel;
 
 
 impl IntoApiModel<SloveneWordMeaningWithCategoriesAndTranslations>
-    for entities::SloveneWordMeaningModelWithCategoriesAndTranslations
+    for SloveneWordMeaningModelWithDetails
 {
     fn into_api_model(self) -> SloveneWordMeaningWithCategoriesAndTranslations {
         SloveneWordMeaningWithCategoriesAndTranslations {
@@ -39,7 +47,7 @@ impl IntoApiModel<SloveneWordMeaningWithCategoriesAndTranslations>
 
 
 
-impl IntoApiModel<ShallowEnglishWordMeaning> for entities::TranslatesIntoEnglishWordMeaningModel {
+impl IntoApiModel<ShallowEnglishWordMeaning> for EnglishTranslationModel {
     fn into_api_model(self) -> ShallowEnglishWordMeaning {
         ShallowEnglishWordMeaning {
             meaning_id: self.word_meaning_id,
@@ -55,7 +63,7 @@ impl IntoApiModel<ShallowEnglishWordMeaning> for entities::TranslatesIntoEnglish
 
 
 
-impl IntoApiModel<SloveneWordWithMeanings> for entities::SloveneWordWithMeaningsModel {
+impl IntoApiModel<SloveneWordWithMeanings> for SloveneWordWithMeaningsModel {
     fn into_api_model(self) -> SloveneWordWithMeanings {
         SloveneWordWithMeanings {
             id: self.word_id,

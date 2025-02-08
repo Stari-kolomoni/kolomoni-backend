@@ -2,9 +2,13 @@ use chrono::Utc;
 use kolomoni_core::ids::SloveneWordId;
 use sqlx::PgConnection;
 
-use super::SloveneWordModel;
+use super::{internal::InternalSloveneWordModel, SloveneWordModel};
 use crate::{
-    entities::{InternalSloveneWordReducedModel, InternalWordModel, WordLanguage, WordMutation},
+    entities::{
+        word::{NewWord, WordLanguage, WordMutation},
+        word_slovene::internal_insert_only::InsertOnlyInternalSloveneWordModel,
+    },
+    IntoExternalModel,
     QueryError,
     QueryResult,
 };
@@ -30,42 +34,44 @@ impl SloveneWordMutation {
         database_connection: &mut PgConnection,
         word_to_create: NewSloveneWord,
     ) -> QueryResult<SloveneWordModel> {
-        let new_word_id = SloveneWordId::generate();
-        let new_word_language_code = WordLanguage::Slovene.to_ietf_bcp_47_language_tag();
         let new_word_created_at = Utc::now();
         let new_word_last_modified_at = new_word_created_at;
 
-        let bare_word_model = sqlx::query_as!(
-            InternalWordModel,
-            "INSERT INTO kolomoni.word (id, language_code, created_at, last_modified_at) \
-                VALUES ($1, $2, $3, $4) \
-                RETURNING id, language_code, created_at, last_modified_at",
-            new_word_id.into_uuid(),
-            new_word_language_code,
-            new_word_created_at,
-            new_word_last_modified_at
+
+        let new_word = WordMutation::create(
+            database_connection,
+            NewWord {
+                language: WordLanguage::Slovene,
+                created_at: new_word_created_at,
+                last_modified_at: new_word_last_modified_at,
+            },
         )
-        .fetch_one(&mut *database_connection)
         .await?;
 
         let english_word_model = sqlx::query_as!(
-            InternalSloveneWordReducedModel,
-            "INSERT INTO kolomoni.word_slovene (word_id, lemma) \
-                VALUES ($1, $2) \
-                RETURNING word_id, lemma",
-            new_word_id.into_uuid(),
+            InsertOnlyInternalSloveneWordModel,
+            "INSERT INTO kolomoni.word_slovene \
+                    (word_id, lemma) \
+                VALUES \
+                    ($1, $2) \
+                RETURNING \
+                    word_id, lemma",
+            new_word.id.into_uuid(),
             &word_to_create.lemma,
         )
         .fetch_one(database_connection)
         .await?;
 
 
-        Ok(SloveneWordModel {
-            word_id: SloveneWordId::new(english_word_model.word_id),
+        let complete_internal_model = InternalSloveneWordModel {
+            word_id: new_word.id.into_uuid(),
+            created_at: new_word.created_at,
+            last_modified_at: new_word.last_modified_at,
             lemma: english_word_model.lemma,
-            created_at: bare_word_model.created_at,
-            last_modified_at: bare_word_model.last_modified_at,
-        })
+        };
+
+
+        Ok(complete_internal_model.into_external_model())
     }
 
     pub async fn update(
@@ -104,10 +110,6 @@ impl SloveneWordMutation {
         database_connection: &mut PgConnection,
         slovene_word_id: SloveneWordId,
     ) -> QueryResult<bool> {
-        WordMutation::delete(
-            database_connection,
-            slovene_word_id.into_word_id(),
-        )
-        .await
+        WordMutation::delete(database_connection, slovene_word_id.to_word_id()).await
     }
 }

@@ -12,8 +12,8 @@ use actix_web::{HttpResponse, ResponseError};
 use chrono::{DateTime, Utc};
 use kolomoni_core::api_models::{ErrorReason, InvalidJsonBodyReason, ResponseWithErrorReason};
 use kolomoni_core::token::JWTCreationError;
-use kolomoni_database::entities::UserQueryError;
-use kolomoni_database::QueryError;
+use kolomoni_database::entities::user::UserQueryError;
+use kolomoni_database::{DatabaseConnectionAcquireError, QueryError};
 use serde::Serialize;
 use thiserror::Error;
 use tracing::error;
@@ -149,7 +149,7 @@ impl EndpointError {
     /// how a database state is invalid or inconsistent.
     ///
     /// We tend to use this as sanity checks when performing a sequence
-    /// of operation in e.g. a transaction: we fetch some data, verify that it matches,
+    /// of operations in e.g. a transaction: we fetch some data, verify that it matches,
     /// then e.g. delete the row. If we see that the deletion failed, we would consider
     /// that an invalid database state, because we were in a transaction and the row
     /// previously existed.
@@ -259,12 +259,21 @@ impl ResponseError for EndpointError {
 }
 
 
+impl From<DatabaseConnectionAcquireError> for EndpointError {
+    fn from(value: DatabaseConnectionAcquireError) -> Self {
+        Self::InternalDatabaseError {
+            error: value.into_inner(),
+        }
+    }
+}
+
+
 impl From<QueryError> for EndpointError {
     fn from(value: QueryError) -> Self {
         match value {
             QueryError::SqlxError { error } => Self::InternalDatabaseError { error },
             QueryError::ModelError { reason } => Self::InternalErrorWithReason { reason },
-            QueryError::DatabaseInconsistencyError { problem: reason } => {
+            QueryError::DatabaseInconsistencyError { reason } => {
                 Self::InternalErrorWithReason { reason }
             }
         }

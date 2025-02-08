@@ -5,7 +5,12 @@ use kolomoni_core::{
     api_models::{TranslationCreationRequest, TranslationDeletionRequest},
     ids::{EnglishWordMeaningId, SloveneWordMeaningId},
 };
-use kolomoni_database::entities;
+use kolomoni_database::entities::word_meaning_english::EnglishWordMeaningQuery;
+use kolomoni_database::entities::word_meaning_slovene::SloveneWordMeaningQuery;
+use kolomoni_database::entities::word_meaning_translation::{
+    WordMeaningTranslationMutation,
+    WordMeaningTranslationQuery,
+};
 use tracing::info;
 
 use crate::{
@@ -111,8 +116,7 @@ pub async fn create_translation(
 
 
     let english_word_exists =
-        entities::EnglishWordMeaningQuery::exists_by_id(&mut transaction, english_word_meaning_id)
-            .await?;
+        EnglishWordMeaningQuery::exists_by_id(&mut transaction, english_word_meaning_id).await?;
 
     if !english_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -122,8 +126,7 @@ pub async fn create_translation(
 
 
     let slovene_word_exists =
-        entities::SloveneWordMeaningQuery::exists_by_id(&mut transaction, slovene_word_meaning_id)
-            .await?;
+        SloveneWordMeaningQuery::exists_by_id(&mut transaction, slovene_word_meaning_id).await?;
 
     if !slovene_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -133,7 +136,7 @@ pub async fn create_translation(
 
 
 
-    let translation_already_exists = entities::WordMeaningTranslationQuery::exists(
+    let translation_already_exists = WordMeaningTranslationQuery::exists(
         &mut transaction,
         english_word_meaning_id,
         slovene_word_meaning_id,
@@ -147,7 +150,7 @@ pub async fn create_translation(
     }
 
 
-    let _ = entities::WordMeaningTranslationMutation::create(
+    WordMeaningTranslationMutation::create(
         &mut transaction,
         english_word_meaning_id,
         slovene_word_meaning_id,
@@ -250,8 +253,7 @@ pub async fn delete_translation(
 
 
     let english_word_meaning_exists =
-        entities::EnglishWordMeaningQuery::exists_by_id(&mut transaction, english_word_meaning_id)
-            .await?;
+        EnglishWordMeaningQuery::exists_by_id(&mut transaction, english_word_meaning_id).await?;
 
     if !english_word_meaning_exists {
         // FIXME fix docs, status code changed here
@@ -262,8 +264,7 @@ pub async fn delete_translation(
 
 
     let slovene_word_meaning_exists =
-        entities::SloveneWordMeaningQuery::exists_by_id(&mut transaction, slovene_word_meaning_id)
-            .await?;
+        SloveneWordMeaningQuery::exists_by_id(&mut transaction, slovene_word_meaning_id).await?;
 
     if !slovene_word_meaning_exists {
         // FIXME fix docs, status code changed here
@@ -273,7 +274,7 @@ pub async fn delete_translation(
     }
 
 
-    let translation_relationship_exists = entities::WordMeaningTranslationQuery::exists(
+    let translation_relationship_exists = WordMeaningTranslationQuery::exists(
         &mut transaction,
         english_word_meaning_id,
         slovene_word_meaning_id,
@@ -287,13 +288,12 @@ pub async fn delete_translation(
     }
 
 
-    let deleted_translation_relationship_successfully =
-        entities::WordMeaningTranslationMutation::delete(
-            &mut transaction,
-            english_word_meaning_id,
-            slovene_word_meaning_id,
-        )
-        .await?;
+    let deleted_translation_relationship_successfully = WordMeaningTranslationMutation::delete(
+        &mut transaction,
+        english_word_meaning_id,
+        slovene_word_meaning_id,
+    )
+    .await?;
 
 
     if !deleted_translation_relationship_successfully {

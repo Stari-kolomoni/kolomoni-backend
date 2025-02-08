@@ -5,7 +5,12 @@ use kolomoni_core::ids::CategoryId;
 use sqlx::{PgConnection, Postgres, QueryBuilder};
 
 use super::CategoryModel;
-use crate::{IntoExternalModel, QueryError, QueryResult};
+use crate::{
+    entities::category::internal::InternalCategoryModel,
+    IntoExternalModel,
+    QueryError,
+    QueryResult,
+};
 
 
 
@@ -79,7 +84,7 @@ impl CategoryMutation {
         let new_category_last_modified_at = new_category_created_at;
 
         let newly_created_category = sqlx::query_as!(
-            super::InternalCategoryModel,
+            InternalCategoryModel,
             "INSERT INTO kolomoni.category \
                 (id, parent_category_id, name_sl, name_en, \
                  created_at, last_modified_at) \
@@ -138,7 +143,7 @@ impl CategoryMutation {
 
         if query_result.rows_affected() > 1 {
             return Err(QueryError::DatabaseInconsistencyError {
-                problem: Cow::from(
+                reason: Cow::from(
                     "attempted to delete a category by ID, but more than one row matched",
                 ),
             });

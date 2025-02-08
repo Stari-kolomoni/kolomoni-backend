@@ -1,30 +1,59 @@
-use chrono::{DateTime, Utc};
 use kolomoni_core::ids::UserId;
-use uuid::Uuid;
 
 use crate::{IntoExternalModel, IntoInternalModel};
 
 
+pub(crate) mod internal {
+    use chrono::{DateTime, Utc};
+    use uuid::Uuid;
 
-pub struct UserModel {
-    /// UUIDv7
-    pub id: UserId,
+    pub(crate) struct InternalUserModel {
+        /// UUIDv7
+        pub(crate) id: Uuid,
 
-    pub username: String,
+        pub(crate) username: String,
 
-    pub display_name: String,
+        pub(crate) display_name: String,
 
-    pub hashed_password: String,
+        pub(crate) hashed_password: String,
 
-    pub joined_at: DateTime<Utc>,
+        pub(crate) joined_at: DateTime<Utc>,
 
-    pub last_modified_at: DateTime<Utc>,
+        pub(crate) last_modified_at: DateTime<Utc>,
 
-    pub last_active_at: DateTime<Utc>,
+        pub(crate) last_active_at: DateTime<Utc>,
+    }
 }
 
+
+mod external {
+    use chrono::{DateTime, Utc};
+    use kolomoni_core::ids::UserId;
+
+    pub struct UserModel {
+        /// UUIDv7
+        pub id: UserId,
+
+        pub username: String,
+
+        pub display_name: String,
+
+        pub hashed_password: String,
+
+        pub joined_at: DateTime<Utc>,
+
+        pub last_modified_at: DateTime<Utc>,
+
+        pub last_active_at: DateTime<Utc>,
+    }
+}
+
+pub use external::*;
+
+
+
 impl IntoInternalModel for UserModel {
-    type InternalModel = InternalUserModel;
+    type InternalModel = internal::InternalUserModel;
 
     fn into_internal_model(self) -> Self::InternalModel {
         Self::InternalModel {
@@ -41,24 +70,7 @@ impl IntoInternalModel for UserModel {
 
 
 
-pub struct InternalUserModel {
-    /// UUIDv7
-    pub(crate) id: Uuid,
-
-    pub(crate) username: String,
-
-    pub(crate) display_name: String,
-
-    pub(crate) hashed_password: String,
-
-    pub(crate) joined_at: DateTime<Utc>,
-
-    pub(crate) last_modified_at: DateTime<Utc>,
-
-    pub(crate) last_active_at: DateTime<Utc>,
-}
-
-impl IntoExternalModel for InternalUserModel {
+impl IntoExternalModel for internal::InternalUserModel {
     type ExternalModel = UserModel;
 
     fn into_external_model(self) -> Self::ExternalModel {

@@ -1,11 +1,11 @@
-mod model;
+mod models;
 mod mutation;
 mod query;
 
 use std::borrow::Cow;
 
 use kolomoni_core::password_hasher::ArgonHasherError;
-pub use model::*;
+pub use models::*;
 pub use mutation::*;
 pub use query::*;
 use thiserror::Error;
@@ -42,7 +42,7 @@ impl From<QueryError> for UserQueryError {
         match value {
             QueryError::SqlxError { error } => Self::SqlxError { error },
             QueryError::ModelError { reason } => Self::ModelError { reason },
-            QueryError::DatabaseInconsistencyError { problem: reason } => {
+            QueryError::DatabaseInconsistencyError { reason } => {
                 Self::DatabaseConsistencyError { reason }
             }
         }

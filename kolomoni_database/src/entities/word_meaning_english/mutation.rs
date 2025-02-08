@@ -1,12 +1,13 @@
-use std::borrow::Cow;
-
 use chrono::Utc;
 use kolomoni_core::ids::{EnglishWordId, EnglishWordMeaningId};
 use sqlx::{PgConnection, Postgres, QueryBuilder};
 
+use super::internal::InternalEnglishWordMeaningModel;
 use super::EnglishWordMeaningModel;
+use crate::entities::word_meaning::NewWordMeaning;
+use crate::entities::word_meaning::WordMeaningMutation;
+use crate::entities::word_meaning_english::internal_insert_only::InsertOnlyInternalEnglishWordMeaningModel;
 use crate::{IntoExternalModel, QueryError, QueryResult};
-
 
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -40,7 +41,7 @@ fn build_english_word_meaning_update_query(
     values_to_update: EnglishWordMeaningUpdate,
 ) -> QueryBuilder<'static, Postgres> {
     let mut update_query_builder: QueryBuilder<Postgres> =
-        QueryBuilder::new("UPDATE kolomoni.word_english_meaning SET ");
+        QueryBuilder::new("UPDATE kolomoni.word_meaning_english SET ");
 
     let mut separated_set_expressions = update_query_builder.separated(", ");
 
@@ -77,50 +78,49 @@ impl EnglishWordMeaningMutation {
         english_word_id: EnglishWordId,
         meaning_to_create: NewEnglishWordMeaning,
     ) -> QueryResult<EnglishWordMeaningModel> {
-        let new_meaning_id = EnglishWordMeaningId::generate();
         let new_meaning_created_at = Utc::now();
         let new_meaning_last_modified_at = new_meaning_created_at;
 
 
-        let internal_meaning_query_result = sqlx::query!(
-            "INSERT INTO kolomoni.word_meaning (id, word_id) \
-                VALUES ($1, $2)",
-            new_meaning_id.into_uuid(),
-            english_word_id.into_uuid()
+        let new_word_meaning = WordMeaningMutation::create(
+            database_connection,
+            NewWordMeaning {
+                word_id: english_word_id.to_word_id(),
+                created_at: new_meaning_created_at,
+                last_modified_at: new_meaning_last_modified_at,
+            },
         )
-        .execute(&mut *database_connection)
         .await?;
 
-        if internal_meaning_query_result.rows_affected() != 1 {
-            return Err(QueryError::DatabaseInconsistencyError {
-                problem: Cow::from(format!(
-                    "inserted word meaning, but got abnormal number of affected rows ({})",
-                    internal_meaning_query_result.rows_affected()
-                )),
-            });
-        }
 
-
-        let internal_english_meaning = sqlx::query_as!(
-            super::InternalEnglishWordMeaningModel,
-            "INSERT INTO kolomoni.word_english_meaning \
-                (word_meaning_id, disambiguation, abbreviation, \
-                description, created_at, last_modified_at) \
-                VALUES ($1, $2, $3, $4, $5, $6) \
+        let new_word_meaning_english = sqlx::query_as!(
+            InsertOnlyInternalEnglishWordMeaningModel,
+            "INSERT INTO kolomoni.word_meaning_english \
+                    (word_meaning_id, disambiguation, abbreviation, description) \
+                VALUES \
+                    ($1, $2, $3, $4) \
                 RETURNING \
-                    word_meaning_id, disambiguation, abbreviation, \
-                    description, created_at, last_modified_at",
-            new_meaning_id.into_uuid(),
+                    word_meaning_id, disambiguation, abbreviation, description",
+            new_word_meaning.word_meaning_id.into_uuid(),
             meaning_to_create.disambiguation,
             meaning_to_create.abbreviation,
             meaning_to_create.description,
-            new_meaning_created_at,
-            new_meaning_last_modified_at
         )
         .fetch_one(database_connection)
         .await?;
 
-        Ok(internal_english_meaning.into_external_model())
+
+        let complete_internal_meaning_model = InternalEnglishWordMeaningModel {
+            word_id: new_word_meaning.word_id.into_uuid(),
+            word_meaning_id: new_word_meaning.word_meaning_id.into_uuid(),
+            created_at: new_word_meaning.created_at,
+            last_modified_at: new_word_meaning.last_modified_at,
+            disambiguation: new_word_meaning_english.disambiguation,
+            abbreviation: new_word_meaning_english.abbreviation,
+            description: new_word_meaning_english.description,
+        };
+
+        Ok(complete_internal_meaning_model.into_external_model())
     }
 
     pub async fn update(
@@ -148,8 +148,8 @@ impl EnglishWordMeaningMutation {
         english_word_meaning_id: EnglishWordMeaningId,
     ) -> QueryResult<bool> {
         let query_result = sqlx::query!(
-            "DELETE FROM kolomoni.word_english_meaning \
-                WHERE word_meaning_id = $1",
+            "DELETE FROM kolomoni.word_meaning_english wme \
+                WHERE wme.word_meaning_id = $1",
             english_word_meaning_id.into_uuid()
         )
         .execute(database_connection)
@@ -157,7 +157,7 @@ impl EnglishWordMeaningMutation {
 
         if query_result.rows_affected() > 1 {
             return Err(QueryError::database_inconsistency(format!(
-                "while deleting english word meaning {} more than one row was affected ({})",
+                "while deleting an english word meaning {}, more than one row was affected ({} rows)!",
                 english_word_meaning_id,
                 query_result.rows_affected()
             )));
@@ -192,7 +192,7 @@ mod test {
                 .build()
                 .sql(),
             format!(
-                "UPDATE kolomoni.word_english_meaning SET abbreviation = $1 WHERE word_meaning_id = {}",
+                "UPDATE kolomoni.word_meaning_english SET abbreviation = $1 WHERE word_meaning_id = {}",
                 meaning_id.into_uuid()
             )
         );

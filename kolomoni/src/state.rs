@@ -1,29 +1,25 @@
 //! Application-wide state (shared between endpoint functions).
 
-use std::{
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
-
 use actix_web::web::Data;
-use kolomoni_configuration::{Configuration, ForApiDatabaseConfiguration};
+use kolomoni_configuration::Configuration;
 use kolomoni_core::{
     password_hasher::{ArgonHasher, ArgonHasherError},
     token::JsonWebTokenManager,
 };
-use sqlx::{
-    pool::PoolConnection,
-    postgres::{PgConnectOptions, PgPoolOptions},
-    Acquire,
-    PgConnection,
-    PgPool,
-    Pool,
-    Postgres,
-    Transaction,
+use kolomoni_database::{
+    DatabaseConnection,
+    DatabaseConnectionAcquireError,
+    DatabaseConnectionConnectError,
+    DatabaseConnectionOptions,
+    DatabaseConnectionPool,
+    DatabaseConnectionPoolOptions,
 };
 use thiserror::Error;
 
 
+
+/*
+DEPRECATED remove
 
 pub async fn establish_database_connection_pool(
     database_configuration: &ForApiDatabaseConfiguration,
@@ -56,7 +52,7 @@ pub async fn establish_database_connection_pool(
         .test_before_acquire(true)
         .connect_with(connection_options)
         .await
-}
+} */
 
 
 // TODO needs to be reworked to be more general (a cache layer), then connect search into it, or maybe even setup this whole thing to be decoupled by using db triggers or something
@@ -168,6 +164,21 @@ impl KolomoniSearch {
 } */
 
 
+#[inline]
+pub fn database_connection_options_from_configuration(
+    configuration: &Configuration,
+) -> DatabaseConnectionOptions {
+    DatabaseConnectionOptions::from_parameters(
+        &configuration.database.for_api.host,
+        configuration.database.for_api.port,
+        &configuration.database.for_api.username,
+        configuration.database.for_api.password.as_deref(),
+        &configuration.database.for_api.database_name,
+        configuration.database.for_api.statement_cache_capacity,
+    )
+}
+
+
 #[derive(Debug, Error)]
 pub enum ApplicationStateError {
     #[error("failed to initialize password hasher")]
@@ -181,271 +192,9 @@ pub enum ApplicationStateError {
     UnableToConnectToDatabase {
         #[from]
         #[source]
-        error: sqlx::Error,
+        error: DatabaseConnectionConnectError,
     },
 }
-
-
-
-pub struct DatabaseConnection {
-    connection: PoolConnection<Postgres>,
-}
-
-impl DatabaseConnection {
-    async fn acquire_from_pool(postgres_pool: &Pool<Postgres>) -> Result<Self, sqlx::Error> {
-        let connection = postgres_pool.acquire().await?;
-
-        Ok(Self { connection })
-    }
-
-    #[inline]
-    #[allow(dead_code)]
-    pub fn into_inner(self) -> PoolConnection<Postgres> {
-        self.connection
-    }
-
-    #[inline]
-    pub fn transaction(&mut self) -> DatabaseTransactionBuilder<'_> {
-        DatabaseTransactionBuilder::new(&mut self.connection)
-    }
-}
-
-impl AsRef<PgConnection> for DatabaseConnection {
-    fn as_ref(&self) -> &PgConnection {
-        &self.connection
-    }
-}
-
-impl AsMut<PgConnection> for DatabaseConnection {
-    fn as_mut(&mut self) -> &mut PgConnection {
-        &mut self.connection
-    }
-}
-
-impl Deref for DatabaseConnection {
-    type Target = PgConnection;
-
-    fn deref(&self) -> &Self::Target {
-        self.connection.deref()
-    }
-}
-
-impl DerefMut for DatabaseConnection {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.connection.deref_mut()
-    }
-}
-
-
-/// PostgreSQL transaction isolation level,
-/// see <https://www.postgresql.org/docs/current/sql-set-transaction.html>.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TransactionIsolationLevel {
-    ReadCommitted,
-    RepeatableRead,
-    Serializable,
-}
-
-/// PostgreSQL transaction access mode (read/write or read-only),
-/// see <https://www.postgresql.org/docs/current/sql-set-transaction.html>.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TransactionAccessMode {
-    ReadWrite,
-    ReadOnly,
-}
-
-
-pub struct DatabaseTransactionBuilder<'c> {
-    connection: &'c mut PoolConnection<Postgres>,
-    isolation_level: Option<TransactionIsolationLevel>,
-    access_mode: Option<TransactionAccessMode>,
-}
-
-impl<'c> DatabaseTransactionBuilder<'c> {
-    #[inline]
-    fn new(connection: &'c mut PoolConnection<Postgres>) -> Self {
-        Self {
-            connection,
-            isolation_level: None,
-            access_mode: None,
-        }
-    }
-}
-
-impl<'c> DatabaseTransactionBuilder<'c> {
-    #[allow(dead_code)]
-    #[inline]
-    fn isolation_level(self, isolation_level: TransactionIsolationLevel) -> Self {
-        Self {
-            connection: self.connection,
-            access_mode: self.access_mode,
-            isolation_level: Some(isolation_level),
-        }
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn isolation_level_read_committed(self) -> Self {
-        self.isolation_level(TransactionIsolationLevel::ReadCommitted)
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn isolation_level_repeatable_read(self) -> Self {
-        self.isolation_level(TransactionIsolationLevel::RepeatableRead)
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn isolation_level_serializable(self) -> Self {
-        self.isolation_level(TransactionIsolationLevel::Serializable)
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    fn access_mode(self, access_mode: TransactionAccessMode) -> Self {
-        Self {
-            connection: self.connection,
-            isolation_level: self.isolation_level,
-            access_mode: Some(access_mode),
-        }
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn access_mode_read_write(self) -> Self {
-        self.access_mode(TransactionAccessMode::ReadWrite)
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn access_mode_read_only(self) -> Self {
-        self.access_mode(TransactionAccessMode::ReadOnly)
-    }
-
-    pub async fn begin(self) -> Result<DatabaseTransaction<'c>, sqlx::Error> {
-        let mut transaction = self.connection.begin().await?;
-
-        // We need to do this large match to get sqlx's compile-time checks.
-        if self.isolation_level.is_some() || self.access_mode.is_some() {
-            let query = match (self.isolation_level, self.access_mode) {
-                (None, Some(access_mode)) => match access_mode {
-                    TransactionAccessMode::ReadWrite => {
-                        sqlx::query!("SET TRANSACTION READ WRITE")
-                    }
-                    TransactionAccessMode::ReadOnly => {
-                        sqlx::query!("SET TRANSACTION READ ONLY")
-                    }
-                },
-                (Some(isolation_level), None) => match isolation_level {
-                    TransactionIsolationLevel::ReadCommitted => {
-                        sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-                    }
-                    TransactionIsolationLevel::RepeatableRead => {
-                        sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-                    }
-                    TransactionIsolationLevel::Serializable => {
-                        sqlx::query!("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-                    }
-                },
-                (Some(isolation_level), Some(access_mode)) => match access_mode {
-                    TransactionAccessMode::ReadWrite => match isolation_level {
-                        TransactionIsolationLevel::ReadCommitted => {
-                            sqlx::query!(
-                                "SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE"
-                            )
-                        }
-                        TransactionIsolationLevel::RepeatableRead => {
-                            sqlx::query!(
-                                "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ WRITE"
-                            )
-                        }
-                        TransactionIsolationLevel::Serializable => {
-                            sqlx::query!("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ WRITE")
-                        }
-                    },
-                    TransactionAccessMode::ReadOnly => match isolation_level {
-                        TransactionIsolationLevel::ReadCommitted => {
-                            sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY")
-                        }
-                        TransactionIsolationLevel::RepeatableRead => {
-                            sqlx::query!(
-                                "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
-                            )
-                        }
-                        TransactionIsolationLevel::Serializable => {
-                            sqlx::query!("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY")
-                        }
-                    },
-                },
-                (None, None) => unreachable!(
-                    "either isolation_level or access_mode must be Some here due to an earlier if statement"
-                ),
-            };
-
-            query.execute(&mut *transaction).await?;
-        }
-
-
-        Ok(DatabaseTransaction::new(transaction))
-    }
-}
-
-
-
-pub struct DatabaseTransaction<'c> {
-    transaction: Transaction<'c, Postgres>,
-}
-
-impl<'c> DatabaseTransaction<'c> {
-    #[inline]
-    fn new(transaction: Transaction<'c, Postgres>) -> Self {
-        Self { transaction }
-    }
-
-    #[inline]
-    pub async fn commit(self) -> Result<(), sqlx::Error> {
-        self.transaction.commit().await
-    }
-
-    #[inline]
-    pub async fn rollback(self) -> Result<(), sqlx::Error> {
-        self.transaction.rollback().await
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn into_inner(self) -> Transaction<'c, Postgres> {
-        self.transaction
-    }
-}
-
-impl<'c> AsRef<PgConnection> for DatabaseTransaction<'c> {
-    fn as_ref(&self) -> &PgConnection {
-        &self.transaction
-    }
-}
-
-impl<'c> AsMut<PgConnection> for DatabaseTransaction<'c> {
-    fn as_mut(&mut self) -> &mut PgConnection {
-        &mut self.transaction
-    }
-}
-
-impl<'c> Deref for DatabaseTransaction<'c> {
-    type Target = PgConnection;
-
-    fn deref(&self) -> &Self::Target {
-        self.transaction.deref()
-    }
-}
-
-impl<'c> DerefMut for DatabaseTransaction<'c> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.transaction.deref_mut()
-    }
-}
-
 
 
 
@@ -467,7 +216,7 @@ pub struct ApplicationStateInner {
     hasher: ArgonHasher,
 
     /// PostgreSQL database connection pool.
-    database_pool: PgPool,
+    database_pool: DatabaseConnectionPool,
 
     /// Authentication token manager (JSON Web Token).
     jwt_manager: JsonWebTokenManager,
@@ -479,8 +228,16 @@ impl ApplicationStateInner {
     pub async fn new(configuration: Configuration) -> Result<Self, ApplicationStateError> {
         let hasher = ArgonHasher::new(&configuration.secrets.hash_salt)?;
 
-        let database_pool =
-            establish_database_connection_pool(&configuration.database.for_api).await?;
+
+        let database_connection_options =
+            database_connection_options_from_configuration(&configuration);
+
+        let database_pool = DatabaseConnectionPool::connect(
+            database_connection_options,
+            DatabaseConnectionPoolOptions::default(),
+        )
+        .await?;
+
 
         let jwt_manager = JsonWebTokenManager::new(&configuration.json_web_token.secret);
 
@@ -504,8 +261,10 @@ impl ApplicationStateInner {
         })
     }
 
-    pub async fn acquire_database_connection(&self) -> Result<DatabaseConnection, sqlx::Error> {
-        DatabaseConnection::acquire_from_pool(&self.database_pool).await
+    pub async fn acquire_database_connection(
+        &self,
+    ) -> Result<DatabaseConnection, DatabaseConnectionAcquireError> {
+        self.database_pool.acquire_connection().await
     }
 
     #[allow(dead_code)]
@@ -526,7 +285,7 @@ impl ApplicationStateInner {
 /// Central application state, wrapped in an actix [`Data`] wrapper-
 ///
 ///
-/// This enables usage in endpoint functions.///
+/// This enables usage in endpoint functions.
 /// See <https://actix.rs/docs/application#state> for more information.
 ///
 /// # Examples
@@ -538,7 +297,7 @@ impl ApplicationStateInner {
 /// pub async fn some_endpoint(
 ///     state: ApplicationState,
 /// ) -> EndpointResult {
-///     // state.database, state.configuration, ...
+///     // state.acquire_database_connection().await?, state.hasher(), ...
 ///     # todo!();
 /// }
 /// ```

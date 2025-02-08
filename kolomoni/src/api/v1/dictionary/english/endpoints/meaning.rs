@@ -627,8 +627,8 @@ pub async fn link_category_to_english_word_meaning(
     let category_relationship_already_exists =
         entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
-            target_english_word_id.into_word_id(),
-            target_english_word_meaning_id.into_word_meaning_id(),
+            target_english_word_id.to_word_id(),
+            target_english_word_meaning_id.to_word_meaning_id(),
             target_category_id,
         )
         .await?;
@@ -642,7 +642,7 @@ pub async fn link_category_to_english_word_meaning(
 
     entities::WordMeaningCategoryMutation::link_category_with_word_meaning(
         &mut transaction,
-        target_english_word_meaning_id.into_word_meaning_id(),
+        target_english_word_meaning_id.to_word_meaning_id(),
         target_category_id,
     )
     .await?;
@@ -771,8 +771,8 @@ pub async fn unlink_category_from_english_word_meaning(
     let category_relationship_exists =
         entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
-            target_english_word_id.into_word_id(),
-            target_english_word_meaning_id.into_word_meaning_id(),
+            target_english_word_id.to_word_id(),
+            target_english_word_meaning_id.to_word_meaning_id(),
             target_category_id,
         )
         .await?;
@@ -787,7 +787,7 @@ pub async fn unlink_category_from_english_word_meaning(
     let unlinked_successfully =
         entities::WordMeaningCategoryMutation::unlink_category_from_word_meaning(
             &mut transaction,
-            target_english_word_meaning_id.into_word_meaning_id(),
+            target_english_word_meaning_id.to_word_meaning_id(),
             target_category_id,
         )
         .await?;

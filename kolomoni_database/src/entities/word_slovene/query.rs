@@ -3,8 +3,15 @@ use futures_core::stream::BoxStream;
 use kolomoni_core::ids::SloveneWordId;
 use sqlx::PgConnection;
 
-use super::SloveneWordWithMeaningsModel;
-use crate::{IntoExternalModel, QueryError, QueryResult, TryIntoExternalModel};
+use super::{internal::InternalSloveneWordModel, SloveneWordModel, SloveneWordWithMeaningsModel};
+use crate::{
+    entities::word_slovene::internal_weak::WeakInternalSloveneWordWithMeaningsModel,
+    macros::create_mapped_async_stream,
+    IntoExternalModel,
+    QueryError,
+    QueryResult,
+    TryIntoStronglyTypedInternalModel,
+};
 
 
 
@@ -15,38 +22,26 @@ pub struct SloveneWordsQueryOptions {
 }
 
 
-type RawSloveneWordStream<'c> = BoxStream<'c, Result<super::InternalSloveneWordModel, sqlx::Error>>;
-
-create_async_stream_wrapper!(
-    pub struct SloveneWordStream<'c>;
-    transforms stream RawSloveneWordStream<'c> => stream of QueryResult<super::SloveneWordModel>:
-        |value|
-            value.map(
-                |some| some
-                    .map(super::InternalSloveneWordModel::into_external_model)
-                    .map_err(|error| QueryError::SqlxError { error })
-            )
-);
-
-
 
 type RawSloveneWordWithMeaningsStream<'c> =
-    BoxStream<'c, Result<super::InternalSloveneWordWithMeaningsModel, sqlx::Error>>;
+    BoxStream<'c, Result<WeakInternalSloveneWordWithMeaningsModel, sqlx::Error>>;
 
-create_async_stream_wrapper!(
+create_mapped_async_stream!(
     pub struct SloveneWordWithMeaningsStream<'c>;
-    transforms stream RawSloveneWordWithMeaningsStream<'c> => stream of QueryResult<super::SloveneWordWithMeaningsModel>:
+    transforms stream RawSloveneWordWithMeaningsStream<'c> => stream of QueryResult<SloveneWordWithMeaningsModel>:
         |value| {
             let Some(value) = value else {
                 return std::task::Poll::Ready(None);
             };
 
-            let internal_model = value.map_err(|error| QueryError::SqlxError { error })?;
+            let weak_internal_model = value
+                .map_err(|error| QueryError::SqlxError { error })?;
 
-            Some(
-                internal_model.try_into_external_model()
-                    .map_err(|reason| QueryError::ModelError { reason })
-            )
+            let strong_internal_model = weak_internal_model
+                .try_into_strongly_typed_internal_model()
+                .map_err(QueryError::model_error)?;
+
+            Some(Ok(strong_internal_model.into_external_model()))
         }
 );
 
@@ -95,432 +90,94 @@ impl SloveneWordQuery {
     pub async fn get_by_id(
         connection: &mut PgConnection,
         slovene_word_id: SloveneWordId,
-    ) -> QueryResult<Option<super::SloveneWordModel>> {
+    ) -> QueryResult<Option<SloveneWordModel>> {
         let intermediate_extended_model = sqlx::query_as!(
-            super::InternalSloveneWordModel,
-            "SELECT word_id, lemma, created_at, last_modified_at \
-                FROM kolomoni.word_slovene \
-                INNER JOIN kolomoni.word \
-                    ON word.id = word_slovene.word_id \
-                WHERE word_slovene.word_id = $1",
+            InternalSloveneWordModel,
+            "SELECT \
+                    word_id, lemma, created_at, last_modified_at \
+                FROM kolomoni.word_slovene ws \
+                INNER JOIN kolomoni.word w \
+                    ON w.id = ws.word_id \
+                WHERE ws.word_id = $1",
             slovene_word_id.into_uuid()
         )
         .fetch_optional(connection)
         .await?;
 
-        Ok(intermediate_extended_model.map(super::InternalSloveneWordModel::into_external_model))
+        Ok(intermediate_extended_model.map(IntoExternalModel::into_external_model))
     }
 
     pub async fn get_by_id_with_meanings(
         database_connection: &mut PgConnection,
         slovene_word_id: SloveneWordId,
     ) -> QueryResult<Option<SloveneWordWithMeaningsModel>> {
-        let internal_word_with_meanings = sqlx::query_as!(
-            super::InternalSloveneWordWithMeaningsModel,
-            "SELECT \
-                    ws.word_id as \"word_id\", \
-                    ws.lemma as \"lemma\", \
-                    w.created_at as \"created_at\", \
-                    w.last_modified_at as \"last_modified_at\", \
-                    jsonb_agg_strict(DISTINCT meanings.word_meaning)::jsonb as \"meanings!\" \
-                FROM kolomoni.word_slovene as ws \
-                INNER JOIN kolomoni.word as w \
-                    ON ws.word_id =  w.id \
-                INNER JOIN LATERAL ( \
-                    SELECT \
-                            jsonb_build_object( \
-                                'word_meaning_id', wsm.word_meaning_id, \
-                                'description', wsm.description, \
-                                'disambiguation', wsm.disambiguation, \
-                                'abbreviation', wsm.abbreviation, \
-                                'created_at', wsm.created_at, \
-                                'last_modified_at', wsm.last_modified_at, \
-                                'categories', jsonb_agg_strict(DISTINCT categories.category_id), \
-                                'translates_into', jsonb_agg_strict(DISTINCT translates_into.translation) \
-                            )::jsonb as \"word_meaning\" \
-                        FROM kolomoni.word_slovene_meaning as wsm \
-                        INNER JOIN kolomoni.word_meaning as wm \
-                            ON wsm.word_meaning_id = wm.id \
-                        INNER JOIN LATERAL ( \
-                            SELECT \
-                                    wec.category_id as \"category_id\" \
-                                FROM kolomoni.word_meaning_category wec \
-                                WHERE wec.word_meaning_id = wsm.word_meaning_id \
-                        ) categories ON TRUE \
-                        INNER JOIN LATERAL ( \
-                            SELECT \
-                                jsonb_build_object( \
-                                    'word_meaning_id', wem.word_meaning_id, \
-                                    'disambiguation', wem.disambiguation, \
-                                    'abbreviation', wem.abbreviation, \
-                                    'description', wem.description, \
-                                    'created_at', wem.created_at, \
-                                    'last_modified_at', wem.last_modified_at, \
-                                    'translated_at', wmt.translated_at,
-                                    'translated_by', wmt.translated_by,
-                                    'categories', jsonb_agg_strict(DISTINCT categories_on_translated.category_id) \
-                                )::jsonb as \"translation\" \
-                            FROM kolomoni.word_meaning_translation wmt \
-                            INNER JOIN kolomoni.word_english_meaning as wem \
-                                    ON wmt.english_word_meaning_id = wem.word_meaning_id \
-                            INNER JOIN LATERAL ( \
-                                SELECT \
-                                    wec_t.category_id as \"category_id\" \
-                                FROM kolomoni.word_meaning_category wec_t \
-                                WHERE wec_t.word_meaning_id = wem.word_meaning_id \
-                            ) categories_on_translated ON TRUE \
-                            WHERE wmt.slovene_word_meaning_id = wm.id \
-                            GROUP BY \
-                                wem.word_meaning_id, \
-                                wem.description, \
-                                wem.disambiguation, \
-                                wem.abbreviation, \
-                                wem.created_at, \
-                                wem.last_modified_at, \
-                                wmt.translated_at, \
-                                wmt.translated_by \
-                        ) translates_into ON TRUE \
-                        WHERE wm.word_id = ws.word_id \
-                        GROUP BY \
-                            wsm.word_meaning_id, \
-                            wsm.disambiguation, \
-                            wsm.abbreviation, \
-                            wsm.description, \
-                            wsm.created_at, \
-                            wsm.last_modified_at \
-                ) meanings ON TRUE \
-                WHERE ws.word_id = $1 \
-                GROUP BY \
-                    ws.word_id, \
-                    ws.lemma, \
-                    w.created_at, \
-                    w.last_modified_at",
+        let weak_internal_word_with_meanings = sqlx::query_file_as!(
+            WeakInternalSloveneWordWithMeaningsModel,
+            "src/entities/word_slovene/queries/by_id_including_meanings.sql",
             slovene_word_id.into_uuid()
         )
         .fetch_optional(database_connection)
         .await?;
 
-
-        let Some(internal_model) = internal_word_with_meanings else {
+        let Some(weak_internal_word_with_meanings) = weak_internal_word_with_meanings else {
             return Ok(None);
         };
 
 
         Ok(Some(
-            internal_model
-                .try_into_external_model()
-                .map_err(|reason| QueryError::ModelError { reason })?,
+            weak_internal_word_with_meanings
+                .try_into_strongly_typed_internal_model()
+                .map_err(|reason| QueryError::ModelError { reason })?
+                .into_external_model(),
         ))
-    }
-
-    pub async fn get_by_exact_lemma(
-        connection: &mut PgConnection,
-        lemma: &str,
-    ) -> QueryResult<Option<super::SloveneWordModel>> {
-        let intermediate_extended_model = sqlx::query_as!(
-            super::InternalSloveneWordModel,
-            "SELECT word_id, lemma, created_at, last_modified_at \
-                FROM kolomoni.word_slovene \
-                INNER JOIN kolomoni.word \
-                    ON word.id = word_slovene.word_id \
-                WHERE word_slovene.lemma = $1",
-            lemma
-        )
-        .fetch_optional(connection)
-        .await?;
-
-        Ok(intermediate_extended_model.map(super::InternalSloveneWordModel::into_external_model))
     }
 
     pub async fn get_by_exact_lemma_with_meanings(
         database_connection: &mut PgConnection,
         lemma: &str,
     ) -> QueryResult<Option<SloveneWordWithMeaningsModel>> {
-        let internal_word_with_meanings = sqlx::query_as!(
-            super::InternalSloveneWordWithMeaningsModel,
-            "SELECT \
-                    ws.word_id as \"word_id\", \
-                    ws.lemma as \"lemma\", \
-                    w.created_at as \"created_at\", \
-                    w.last_modified_at as \"last_modified_at\", \
-                    jsonb_agg_strict(DISTINCT meanings.word_meaning)::jsonb as \"meanings!\" \
-                FROM kolomoni.word_slovene as ws \
-                INNER JOIN kolomoni.word as w \
-                    ON ws.word_id =  w.id \
-                INNER JOIN LATERAL ( \
-                    SELECT \
-                            jsonb_build_object( \
-                                'word_meaning_id', wsm.word_meaning_id, \
-                                'description', wsm.description, \
-                                'disambiguation', wsm.disambiguation, \
-                                'abbreviation', wsm.abbreviation, \
-                                'created_at', wsm.created_at, \
-                                'last_modified_at', wsm.last_modified_at, \
-                                'categories', jsonb_agg_strict(DISTINCT categories.category_id), \
-                                'translates_into', jsonb_agg_strict(DISTINCT translates_into.translation) \
-                            )::jsonb as \"word_meaning\" \
-                        FROM kolomoni.word_slovene_meaning as wsm \
-                        INNER JOIN kolomoni.word_meaning as wm \
-                            ON wsm.word_meaning_id = wm.id \
-                        INNER JOIN LATERAL ( \
-                            SELECT \
-                                    wec.category_id as \"category_id\" \
-                                FROM kolomoni.word_meaning_category wec \
-                                WHERE wec.word_meaning_id = wsm.word_meaning_id \
-                        ) categories ON TRUE \
-                        INNER JOIN LATERAL ( \
-                            SELECT \
-                                jsonb_build_object( \
-                                    'word_meaning_id', wem.word_meaning_id, \
-                                    'disambiguation', wem.disambiguation, \
-                                    'abbreviation', wem.abbreviation, \
-                                    'description', wem.description, \
-                                    'created_at', wem.created_at, \
-                                    'last_modified_at', wem.last_modified_at, \
-                                    'translated_at', wmt.translated_at,
-                                    'translated_by', wmt.translated_by,
-                                    'categories', jsonb_agg_strict(DISTINCT categories_on_translated.category_id) \
-                                )::jsonb as \"translation\" \
-                            FROM kolomoni.word_meaning_translation wmt \
-                            INNER JOIN kolomoni.word_english_meaning as wem \
-                                    ON wmt.english_word_meaning_id = wem.word_meaning_id \
-                            INNER JOIN LATERAL ( \
-                                SELECT \
-                                    wec_t.category_id as \"category_id\" \
-                                FROM kolomoni.word_meaning_category wec_t \
-                                WHERE wec_t.word_meaning_id = wem.word_meaning_id \
-                            ) categories_on_translated ON TRUE \
-                            WHERE wmt.slovene_word_meaning_id = wm.id \
-                            GROUP BY \
-                                wem.word_meaning_id, \
-                                wem.description, \
-                                wem.disambiguation, \
-                                wem.abbreviation, \
-                                wem.created_at, \
-                                wem.last_modified_at, \
-                                wmt.translated_at, \
-                                wmt.translated_by \
-                        ) translates_into ON TRUE \
-                        WHERE wm.word_id = ws.word_id \
-                        GROUP BY \
-                            wsm.word_meaning_id, \
-                            wsm.disambiguation, \
-                            wsm.abbreviation, \
-                            wsm.description, \
-                            wsm.created_at, \
-                            wsm.last_modified_at \
-                ) meanings ON TRUE \
-                WHERE ws.lemma = $1 \
-                GROUP BY \
-                    ws.word_id, \
-                    ws.lemma, \
-                    w.created_at, \
-                    w.last_modified_at",
+        let weak_internal_word_with_meanings = sqlx::query_file_as!(
+            WeakInternalSloveneWordWithMeaningsModel,
+            "src/entities/word_slovene/queries/by_lemma_including_meanings.sql",
             lemma
         )
         .fetch_optional(database_connection)
         .await?;
 
-
-        let Some(internal_model) = internal_word_with_meanings else {
+        let Some(weak_internal_word_with_meanings) = weak_internal_word_with_meanings else {
             return Ok(None);
         };
 
-
         Ok(Some(
-            internal_model
-                .try_into_external_model()
-                .map_err(|reason| QueryError::ModelError { reason })?,
+            weak_internal_word_with_meanings
+                .try_into_strongly_typed_internal_model()
+                .map_err(|reason| QueryError::ModelError { reason })?
+                .into_external_model(),
         ))
     }
 
-    pub async fn get_all_slovene_words(connection: &mut PgConnection) -> SloveneWordStream<'_> {
-        let intermediate_word_stream = sqlx::query_as!(
-            super::InternalSloveneWordModel,
-            "SELECT word_id, lemma, created_at, last_modified_at \
-                FROM kolomoni.word_slovene \
-                INNER JOIN kolomoni.word \
-                    ON word.id = word_slovene.word_id"
-        )
-        .fetch(connection);
-
-        SloveneWordStream::new(intermediate_word_stream)
-    }
 
     pub async fn get_all_slovene_words_with_meanings(
         database_connection: &mut PgConnection,
         options: SloveneWordsQueryOptions,
     ) -> SloveneWordWithMeaningsStream<'_> {
         if let Some(only_modified_after) = options.only_words_modified_after {
-            let internal_words_with_meanings_stream = sqlx::query_as!(
-                super::InternalSloveneWordWithMeaningsModel,
-                "SELECT \
-                    ws.word_id as \"word_id\", \
-                    ws.lemma as \"lemma\", \
-                    w.created_at as \"created_at\", \
-                    w.last_modified_at as \"last_modified_at\", \
-                    jsonb_agg_strict(DISTINCT meanings.word_meaning)::jsonb as \"meanings!\" \
-                    FROM kolomoni.word_slovene as ws \
-                    INNER JOIN kolomoni.word as w \
-                        ON ws.word_id =  w.id \
-                    INNER JOIN LATERAL ( \
-                        SELECT \
-                                jsonb_build_object( \
-                                    'word_meaning_id', wsm.word_meaning_id, \
-                                    'description', wsm.description, \
-                                    'disambiguation', wsm.disambiguation, \
-                                    'abbreviation', wsm.abbreviation, \
-                                    'created_at', wsm.created_at, \
-                                    'last_modified_at', wsm.last_modified_at, \
-                                    'categories', jsonb_agg_strict(DISTINCT categories.category_id), \
-                                    'translates_into', jsonb_agg_strict(DISTINCT translates_into.translation) \
-                                )::jsonb as \"word_meaning\" \
-                            FROM kolomoni.word_slovene_meaning as wsm \
-                            INNER JOIN kolomoni.word_meaning as wm \
-                                ON wsm.word_meaning_id = wm.id \
-                            INNER JOIN LATERAL ( \
-                                SELECT \
-                                        wec.category_id as \"category_id\" \
-                                    FROM kolomoni.word_meaning_category wec \
-                                    WHERE wec.word_meaning_id = wsm.word_meaning_id \
-                            ) categories ON TRUE \
-                            INNER JOIN LATERAL ( \
-                                SELECT \
-                                    jsonb_build_object( \
-                                        'word_meaning_id', wem.word_meaning_id, \
-                                        'disambiguation', wem.disambiguation, \
-                                        'abbreviation', wem.abbreviation, \
-                                        'description', wem.description, \
-                                        'created_at', wem.created_at, \
-                                        'last_modified_at', wem.last_modified_at, \
-                                        'translated_at', wmt.translated_at,
-                                        'translated_by', wmt.translated_by,
-                                        'categories', jsonb_agg_strict(DISTINCT categories_on_translated.category_id) \
-                                    )::jsonb as \"translation\" \
-                                FROM kolomoni.word_meaning_translation wmt \
-                                INNER JOIN kolomoni.word_english_meaning as wem \
-                                        ON wmt.english_word_meaning_id = wem.word_meaning_id \
-                                INNER JOIN LATERAL ( \
-                                    SELECT \
-                                        wec_t.category_id as \"category_id\" \
-                                    FROM kolomoni.word_meaning_category wec_t \
-                                    WHERE wec_t.word_meaning_id = wem.word_meaning_id \
-                                ) categories_on_translated ON TRUE \
-                                WHERE wmt.slovene_word_meaning_id = wm.id \
-                                GROUP BY \
-                                    wem.word_meaning_id, \
-                                    wem.description, \
-                                    wem.disambiguation, \
-                                    wem.abbreviation, \
-                                    wem.created_at, \
-                                    wem.last_modified_at, \
-                                    wmt.translated_at, \
-                                    wmt.translated_by \
-                            ) translates_into ON TRUE \
-                            WHERE wm.word_id = ws.word_id \
-                            GROUP BY \
-                                wsm.word_meaning_id, \
-                                wsm.disambiguation, \
-                                wsm.abbreviation, \
-                                wsm.description, \
-                                wsm.created_at, \
-                                wsm.last_modified_at \
-                    ) meanings ON TRUE \
-                    WHERE w.last_modified_at >= $1 \
-                    GROUP BY \
-                        ws.word_id, \
-                        ws.lemma, \
-                        w.created_at, \
-                        w.last_modified_at",
+            let weak_filtered_internal_words_with_meanings = sqlx::query_file_as!(
+                WeakInternalSloveneWordWithMeaningsModel,
+                "src/entities/word_slovene/queries/all_including_meanings_with_last_modified_filter.sql",
                 only_modified_after
             )
             .fetch(database_connection);
 
-            SloveneWordWithMeaningsStream::new(internal_words_with_meanings_stream)
+            SloveneWordWithMeaningsStream::new(weak_filtered_internal_words_with_meanings)
         } else {
-            let internal_words_with_meanings_stream = sqlx::query_as!(
-                super::InternalSloveneWordWithMeaningsModel,
-                "SELECT \
-                        ws.word_id as \"word_id\", \
-                        ws.lemma as \"lemma\", \
-                        w.created_at as \"created_at\", \
-                        w.last_modified_at as \"last_modified_at\", \
-                        jsonb_agg_strict(DISTINCT meanings.word_meaning)::jsonb as \"meanings!\" \
-                    FROM kolomoni.word_slovene as ws \
-                    INNER JOIN kolomoni.word as w \
-                        ON ws.word_id =  w.id \
-                    INNER JOIN LATERAL ( \
-                        SELECT \
-                                jsonb_build_object( \
-                                    'word_meaning_id', wsm.word_meaning_id, \
-                                    'description', wsm.description, \
-                                    'disambiguation', wsm.disambiguation, \
-                                    'abbreviation', wsm.abbreviation, \
-                                    'created_at', wsm.created_at, \
-                                    'last_modified_at', wsm.last_modified_at, \
-                                    'categories', jsonb_agg_strict(DISTINCT categories.category_id), \
-                                    'translates_into', jsonb_agg_strict(DISTINCT translates_into.translation) \
-                                )::jsonb as \"word_meaning\" \
-                            FROM kolomoni.word_slovene_meaning as wsm \
-                            INNER JOIN kolomoni.word_meaning as wm \
-                                ON wsm.word_meaning_id = wm.id \
-                            INNER JOIN LATERAL ( \
-                                SELECT \
-                                        wec.category_id as \"category_id\" \
-                                    FROM kolomoni.word_meaning_category wec \
-                                    WHERE wec.word_meaning_id = wsm.word_meaning_id \
-                            ) categories ON TRUE \
-                            INNER JOIN LATERAL ( \
-                                SELECT \
-                                    jsonb_build_object( \
-                                        'word_meaning_id', wem.word_meaning_id, \
-                                        'disambiguation', wem.disambiguation, \
-                                        'abbreviation', wem.abbreviation, \
-                                        'description', wem.description, \
-                                        'created_at', wem.created_at, \
-                                        'last_modified_at', wem.last_modified_at, \
-                                        'translated_at', wmt.translated_at,
-                                        'translated_by', wmt.translated_by,
-                                        'categories', jsonb_agg_strict(DISTINCT categories_on_translated.category_id) \
-                                    )::jsonb as \"translation\" \
-                                FROM kolomoni.word_meaning_translation wmt \
-                                INNER JOIN kolomoni.word_english_meaning as wem \
-                                        ON wmt.english_word_meaning_id = wem.word_meaning_id \
-                                INNER JOIN LATERAL ( \
-                                    SELECT \
-                                        wec_t.category_id as \"category_id\" \
-                                    FROM kolomoni.word_meaning_category wec_t \
-                                    WHERE wec_t.word_meaning_id = wem.word_meaning_id \
-                                ) categories_on_translated ON TRUE \
-                                WHERE wmt.slovene_word_meaning_id = wm.id \
-                                GROUP BY \
-                                    wem.word_meaning_id, \
-                                    wem.description, \
-                                    wem.disambiguation, \
-                                    wem.abbreviation, \
-                                    wem.created_at, \
-                                    wem.last_modified_at, \
-                                    wmt.translated_at, \
-                                    wmt.translated_by \
-                            ) translates_into ON TRUE \
-                            WHERE wm.word_id = ws.word_id \
-                            GROUP BY \
-                                wsm.word_meaning_id, \
-                                wsm.disambiguation, \
-                                wsm.abbreviation, \
-                                wsm.description, \
-                                wsm.created_at, \
-                                wsm.last_modified_at \
-                    ) meanings ON TRUE \
-                    GROUP BY \
-                        ws.word_id, \
-                        ws.lemma, \
-                        w.created_at, \
-                        w.last_modified_at"
+            let weak_internal_words_with_meanings = sqlx::query_file_as!(
+                WeakInternalSloveneWordWithMeaningsModel,
+                "src/entities/word_slovene/queries/all_including_meanings.sql",
             )
             .fetch(database_connection);
 
-            SloveneWordWithMeaningsStream::new(internal_words_with_meanings_stream)
+            SloveneWordWithMeaningsStream::new(weak_internal_words_with_meanings)
         }
     }
 }

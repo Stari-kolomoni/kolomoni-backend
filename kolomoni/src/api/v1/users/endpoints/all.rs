@@ -2,7 +2,7 @@ use actix_web::get;
 use futures_util::StreamExt;
 use kolomoni_core::api_models::RegisteredUsersListResponse;
 use kolomoni_core::permissions::Permission;
-use kolomoni_database::entities;
+use kolomoni_database::entities::user::UserQuery;
 
 use crate::{
     api::{
@@ -61,7 +61,7 @@ pub async fn get_all_registered_users(
 
 
     // Load all users from the database and parse each into [`UserInfo`].
-    let mut all_users_stream = entities::UserQuery::get_all_users(&mut database_connection);
+    let mut all_users_stream = UserQuery::get_all_users(&mut database_connection);
 
     let mut parsed_users = Vec::new();
     while let Some(next_user_result) = all_users_stream.next().await {

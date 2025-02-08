@@ -2,21 +2,21 @@ use futures_core::stream::BoxStream;
 use kolomoni_core::{ids::UserId, password_hasher::ArgonHasher};
 use sqlx::PgConnection;
 
-use super::{UserQueryError, UserQueryResult};
-use crate::{IntoExternalModel, QueryError, QueryResult};
+use super::{internal::InternalUserModel, UserQueryError, UserQueryResult};
+use crate::{macros::create_mapped_async_stream, IntoExternalModel, QueryError, QueryResult};
 
 
 
 
-type RawUserStream<'c> = BoxStream<'c, Result<super::InternalUserModel, sqlx::Error>>;
+type RawUserStream<'c> = BoxStream<'c, Result<InternalUserModel, sqlx::Error>>;
 
-create_async_stream_wrapper!(
+create_mapped_async_stream!(
     pub struct UserStream<'c>;
     transforms stream RawUserStream<'c> => stream of QueryResult<super::UserModel>:
         |value|
             value.map(|result| {
                 result
-                    .map(super::InternalUserModel::into_external_model)
+                    .map(InternalUserModel::into_external_model)
                     .map_err(|error| QueryError::SqlxError { error })
             })
 );
@@ -32,7 +32,7 @@ impl UserQuery {
         user_id: UserId,
     ) -> QueryResult<Option<super::UserModel>> {
         let optional_intermediate_model = sqlx::query_as!(
-            super::InternalUserModel,
+            InternalUserModel,
             "SELECT \
                     id, username, display_name, hashed_password, \
                     joined_at, last_modified_at, last_active_at \
@@ -43,7 +43,7 @@ impl UserQuery {
         .fetch_optional(connection)
         .await?;
 
-        Ok(optional_intermediate_model.map(super::InternalUserModel::into_external_model))
+        Ok(optional_intermediate_model.map(InternalUserModel::into_external_model))
     }
 
     pub async fn get_user_by_username<U>(
@@ -54,7 +54,7 @@ impl UserQuery {
         U: AsRef<str>,
     {
         let optional_intermediate_model = sqlx::query_as!(
-            super::InternalUserModel,
+            InternalUserModel,
             "SELECT \
                     id, username, display_name, hashed_password, \
                     joined_at, last_modified_at, last_active_at \
@@ -65,7 +65,7 @@ impl UserQuery {
         .fetch_optional(connection)
         .await?;
 
-        Ok(optional_intermediate_model.map(super::InternalUserModel::into_external_model))
+        Ok(optional_intermediate_model.map(InternalUserModel::into_external_model))
     }
 
     pub async fn exists_by_id(connection: &mut PgConnection, user_id: UserId) -> QueryResult<bool> {
@@ -143,7 +143,7 @@ impl UserQuery {
 
     pub fn get_all_users(connection: &mut PgConnection) -> UserStream<'_> {
         let user_stream = sqlx::query_as!(
-            super::InternalUserModel,
+            InternalUserModel,
             "SELECT \
                     id, username, display_name, hashed_password, \
                     joined_at, last_modified_at, last_active_at \

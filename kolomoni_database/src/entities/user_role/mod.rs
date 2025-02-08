@@ -1,7 +1,7 @@
-mod model;
+mod models;
 mod mutation;
 mod query;
 
-pub use model::*;
+pub use models::*;
 pub use mutation::*;
 pub use query::*;
