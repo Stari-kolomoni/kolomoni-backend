@@ -26,35 +26,35 @@ use utoipa_rapidoc::RapiDoc;
          * Annotated paths are relative to `kolomoni/src/api/v1`.
          */
 
-        // kolomoni::api::v1::health
+        // `kolomoni::api::v1::health`
         health::ping,
 
 
-        // kolomoni::api::v1::auth
+        // `kolomoni::api::v1::auth`
         auth::endpoints::login,
         auth::endpoints::refresh_login,
         auth::endpoints::register_user,
 
 
-        // kolomoni::api::v1::users::all
+        // `kolomoni::api::v1::users::all`
         users::all::get_all_registered_users,
 
-        // kolomoni::api::v1::users::current
+        // `kolomoni::api::v1::users::current`
         users::current::get_current_user_info,
         users::current::get_current_user_roles,
         users::current::get_current_user_effective_permissions,
         users::current::update_current_user_display_name,
 
-        // kolomoni::api::v1::users::specific
+        // `kolomoni::api::v1::users::specific`
         users::specific::get_specific_user_info,
         users::specific::get_specific_user_roles,
         users::specific::get_specific_user_effective_permissions,
-        users::specific::update_specific_user_display_name,
         users::specific::add_roles_to_specific_user,
         users::specific::remove_roles_from_specific_user,
+        users::specific::update_specific_user_display_name,
 
 
-        // kolomoni::api::v1::dictionary::slovene::endpoints::word
+        // `kolomoni::api::v1::dictionary::slovene::endpoints::word`
         dictionary::slovene::get_all_slovene_words,
         dictionary::slovene::create_slovene_word,
         dictionary::slovene::get_slovene_word_by_id,
@@ -62,7 +62,7 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::slovene::update_slovene_word,
         dictionary::slovene::delete_slovene_word,
 
-        // kolomoni::api::v1::dictionary::slovene::endpoints::meaning
+        // `kolomoni::api::v1::dictionary::slovene::endpoints::meaning`
         dictionary::slovene::get_all_slovene_word_meanings,
         dictionary::slovene::create_slovene_word_meaning,
         dictionary::slovene::update_slovene_word_meaning,
@@ -71,7 +71,7 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::slovene::unlink_category_from_slovene_word_meaning,
 
 
-        // kolomoni::api::v1::dictionary::english::endpoints::word
+        // `kolomoni::api::v1::dictionary::english::endpoints::word`
         dictionary::english::get_all_english_words,
         dictionary::english::create_english_word,
         dictionary::english::get_english_word_by_id,
@@ -79,7 +79,7 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::english::update_english_word,
         dictionary::english::delete_english_word,
 
-        // kolomoni::api::v1::dictionary::english::endpoints::meaning
+        // `kolomoni::api::v1::dictionary::english::endpoints::meaning`
         dictionary::english::get_all_english_word_meanings,
         dictionary::english::create_english_word_meaning,
         dictionary::english::update_english_word_meaning,
@@ -88,12 +88,12 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::english::unlink_category_from_english_word_meaning,
 
 
-        // kolomoni::api::v1::dictionary::translations
+        // `kolomoni::api::v1::dictionary::translations`
         dictionary::translations::create_translation,
         dictionary::translations::delete_translation,
 
         
-        // kolomoni::api::v1::dictionary::categories
+        // `kolomoni::api::v1::dictionary::categories`
         dictionary::categories::create_category,
         dictionary::categories::get_all_categories,
         dictionary::categories::get_specific_category,
@@ -101,44 +101,45 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::categories::delete_specific_category,
 
 
-        // dictionary/search.rs
+        // `dictionary/search.rs`
         // TODO
         // dictionary::search::perform_search,
     ),
     components(
         schemas(
-            // kolomoni_core::api_models::error_reason
+            // `kolomoni_core::api_models::error_reason`
             api_models::ErrorReason,
             api_models::CategoryErrorReason,
             api_models::LoginErrorReason,
             api_models::UsersErrorReason,
             api_models::TranslationsErrorReason,
             api_models::WordErrorReason,
-            // Not needed.
-            // api_models::ResponseWithErrorReason,
+            api_models::InvalidJsonBodyReason,
+            // Unnecessary:
+            // - api_models::ResponseWithErrorReason,
 
-            // kolomoni_auth
+            // `kolomoni_auth`
             kolomoni_core::permissions::Permission,
 
-            // kolomoni_core::id
-            /* Not needed.
-            kolomoni_core::ids::CategoryId,
-            kolomoni_core::ids::EditId,
-            kolomoni_core::ids::UserId,
-            kolomoni_core::ids::WordId,
-            kolomoni_core::ids::WordMeaningId,
-            kolomoni_core::ids::EnglishWordId,
-            kolomoni_core::ids::EnglishWordMeaningId,
-            kolomoni_core::ids::SloveneWordId,
-            kolomoni_core::ids::SloveneWordMeaningId,
-            kolomoni_core::ids::PermissionId,
-            kolomoni_core::ids::RoleId, */
+            // `kolomoni_core::id`
+            // Unnecessary:
+            // - kolomoni_core::ids::CategoryId,
+            // - kolomoni_core::ids::EditId,
+            // - kolomoni_core::ids::UserId,
+            // - kolomoni_core::ids::WordId,
+            // - kolomoni_core::ids::WordMeaningId,
+            // - kolomoni_core::ids::EnglishWordId,
+            // - kolomoni_core::ids::EnglishWordMeaningId,
+            // - kolomoni_core::ids::SloveneWordId,
+            // - kolomoni_core::ids::SloveneWordMeaningId,
+            // - kolomoni_core::ids::PermissionId,
+            // - kolomoni_core::ids::RoleId,
 
-            // kolomoni_core::api_models::health
+            // `kolomoni_core::api_models::health`
             api_models::PingResponse,
 
 
-            // kolomoni_core::api_models::users
+            // `kolomoni_core::api_models::users`
             api_models::UserLoginRequest,
             api_models::UserLoginRefreshRequest,
             api_models::UserLoginRefreshResponse,
@@ -153,11 +154,11 @@ use utoipa_rapidoc::RapiDoc;
             api_models::UserRegistrationRequest,
             api_models::UserRegistrationResponse,
             api_models::UserRoleAddRequest,
-            // Implements IntoParams, not needed.
-            // api_models::UserRoleRemoveRequest,
+            // Implements IntoParams, unnecessary:
+            // - api_models::UserRoleRemoveRequest,
 
 
-            // kolomoni_core::dictionary::categories
+            // `kolomoni_core::dictionary::categories`
             api_models::Category,
             api_models::CategoryCreationRequest,
             api_models::CategoryCreationResponse,
@@ -166,26 +167,29 @@ use utoipa_rapidoc::RapiDoc;
             api_models::CategoryUpdateRequest,
 
 
-            // kolomoni_core::dictionary::translations
+            // `kolomoni_core::dictionary::translations`
             api_models::TranslationCreationRequest,
-            // Implements IntoParams, not needed.
-            // api_models::TranslationDeletionRequest,
+            // Implements IntoParams, unnecessary:
+            // - api_models::TranslationDeletionRequest,
 
 
-            // kolomoni_core::dictionary::slovene::word
+            // `kolomoni_core::dictionary::slovene::word`
+            api_models::SloveneWord,
             api_models::SloveneWordWithMeanings,
             api_models::SloveneWordsResponse,
-            // Implements IntoParams, not needed.
-            // api_models::SloveneWordsListRequest,
             api_models::SloveneWordCreationRequest,
             api_models::SloveneWordCreationResponse,
             api_models::SloveneWordInfoResponse,
             api_models::SloveneWordUpdateRequest,
+            // Implements IntoParams, unnecessary:
+            // - api_models::SloveneWordsListRequest,
 
-            // kolomoni_core::dictionary::slovene::meaning
-            api_models::SloveneWordMeaningWithShallowDetails,
+
+            // `kolomoni_core::dictionary::slovene::meaning`
             api_models::SloveneWordMeaning,
+            api_models::SloveneWordMeaningWithShallowDetails,
             api_models::SloveneWordMeaningWithDetails,
+            api_models::EnglishTranslation,
             api_models::SloveneWordMeaningsResponse,
             api_models::NewSloveneWordMeaningRequest,
             api_models::NewSloveneWordMeaningCreatedResponse,
@@ -193,20 +197,23 @@ use utoipa_rapidoc::RapiDoc;
             api_models::SloveneWordMeaningUpdatedResponse,
 
 
-            // kolomoni_core::dictionary::english::word
+            // `kolomoni_core::dictionary::english::word`
+            api_models::EnglishWord,
             api_models::EnglishWordWithMeanings,
             api_models::EnglishWordsResponse,
-            // Not needed.
-            // api_models::EnglishWordsListRequest,
             api_models::EnglishWordCreationRequest,
             api_models::EnglishWordCreationResponse,
             api_models::EnglishWordInfoResponse,
             api_models::EnglishWordUpdateRequest,
+            // Unnecessary:
+            // - api_models::EnglishWordsListRequest,
 
-            // kolomoni_core::dictionary::english::meaning
-            api_models::EnglishWordMeaningWithShallowDetails,
+
+            // `kolomoni_core::dictionary::english::meaning`
             api_models::EnglishWordMeaning,
+            api_models::EnglishWordMeaningWithShallowDetails,
             api_models::EnglishWordMeaningWithDetails,
+            api_models::SloveneTranslation,
             api_models::EnglishWordMeaningsResponse,
             api_models::NewEnglishWordMeaningRequest,
             api_models::NewEnglishWordMeaningCreatedResponse,

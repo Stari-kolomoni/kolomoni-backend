@@ -19,6 +19,7 @@ pub struct Category {
 
     pub english_name: String,
 
+    #[schema(value_type = Vec<uuid::Uuid>)]
     pub parent_category_id: Option<CategoryId>,
 }
 
