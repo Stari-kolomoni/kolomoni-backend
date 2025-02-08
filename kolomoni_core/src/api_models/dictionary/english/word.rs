@@ -2,8 +2,29 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-use super::EnglishWordMeaningWithCategoriesAndTranslations;
+use super::EnglishWordMeaningWithDetails;
 use crate::ids::EnglishWordId;
+
+
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+pub struct EnglishWord {
+    /// Word UUID.
+    #[schema(value_type = uuid::Uuid)]
+    pub id: EnglishWordId,
+
+    /// When the word was created.
+    pub created_at: DateTime<Utc>,
+
+    /// When the word was last modified.
+    /// This includes the last creation or deletion time of the
+    /// suggestion or translation linked to this word.
+    pub last_modified_at: DateTime<Utc>,
+
+    /// An abstract or base form of the word.
+    pub lemma: String,
+}
+
 
 // TODO needs updated example
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
@@ -33,9 +54,6 @@ pub struct EnglishWordWithMeanings {
     #[schema(value_type = uuid::Uuid)]
     pub id: EnglishWordId,
 
-    /// An abstract or base form of the word.
-    pub lemma: String,
-
     /// When the word was created.
     pub created_at: DateTime<Utc>,
 
@@ -44,8 +62,25 @@ pub struct EnglishWordWithMeanings {
     /// suggestion or translation linked to this word.
     pub last_modified_at: DateTime<Utc>,
 
-    pub meanings: Vec<EnglishWordMeaningWithCategoriesAndTranslations>,
+    /// An abstract or base form of the word.
+    pub lemma: String,
+
+    pub meanings: Vec<EnglishWordMeaningWithDetails>,
 }
+
+impl EnglishWordWithMeanings {
+    pub fn new_without_meanings(english_word: EnglishWord) -> Self {
+        Self {
+            id: english_word.id,
+            created_at: english_word.created_at,
+            last_modified_at: english_word.last_modified_at,
+            lemma: english_word.lemma,
+            meanings: vec![],
+        }
+    }
+}
+
+
 
 
 #[derive(Serialize, PartialEq, Eq, Debug, ToSchema)]
@@ -53,7 +88,6 @@ pub struct EnglishWordWithMeanings {
 pub struct EnglishWordsResponse {
     pub english_words: Vec<EnglishWordWithMeanings>,
 }
-
 
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug, ToSchema, IntoParams)]

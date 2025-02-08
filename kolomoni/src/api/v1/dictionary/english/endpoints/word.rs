@@ -1,6 +1,6 @@
 use actix_web::{delete, get, patch, post, web, Scope};
 use futures_util::StreamExt;
-use kolomoni_core::api_models::WordErrorReason;
+use kolomoni_core::api_models::{EnglishWordWithMeanings, WordErrorReason};
 use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
@@ -13,9 +13,10 @@ use kolomoni_core::{
     },
     ids::EnglishWordId,
 };
-use kolomoni_database::entities::{
-    self,
+use kolomoni_database::entities::word_english::{
     EnglishWordFieldsToUpdate,
+    EnglishWordMutation,
+    EnglishWordQuery,
     EnglishWordsQueryOptions,
     NewEnglishWord,
 };
@@ -85,12 +86,11 @@ pub async fn get_all_english_words(
         only_words_modified_after: request_query_params.into_inner().last_modified_after,
     };
 
-    let mut words_with_meanings_stream =
-        entities::EnglishWordQuery::get_all_english_words_with_meanings(
-            &mut database_connection,
-            word_query_options,
-        )
-        .await;
+    let mut words_with_meanings_stream = EnglishWordQuery::get_all_english_words_with_meanings(
+        &mut database_connection,
+        word_query_options,
+    )
+    .await;
 
 
     let mut english_words = Vec::new();
@@ -168,8 +168,7 @@ pub async fn create_english_word(
 
 
     let word_lemma_already_exists =
-        entities::EnglishWordQuery::exists_by_exact_lemma(&mut transaction, &creation_request.lemma)
-            .await?;
+        EnglishWordQuery::exists_by_exact_lemma(&mut transaction, &creation_request.lemma).await?;
 
     if word_lemma_already_exists {
         return EndpointResponseBuilder::conflict()
@@ -178,7 +177,7 @@ pub async fn create_english_word(
     }
 
 
-    let newly_created_word = entities::EnglishWordMutation::create(
+    let newly_created_word = EnglishWordMutation::create(
         &mut transaction,
         NewEnglishWord {
             lemma: creation_request.lemma,
@@ -189,7 +188,7 @@ pub async fn create_english_word(
 
     info!(
         created_by_user = %authenticated_user.user_id(),
-        "Created new english word: {}", newly_created_word.lemma,
+        "Created new english word: {}", newly_created_word.lemma(),
     );
 
 
@@ -207,7 +206,7 @@ pub async fn create_english_word(
     EndpointResponseBuilder::ok()
         .with_json_body(EnglishWordCreationResponse {
             // A newly-created word can not have any meanings yet.
-            word: newly_created_word.into_api_model(),
+            word: EnglishWordWithMeanings::new_without_meanings(newly_created_word.into_api_model()),
         })
         .build()
 }
@@ -272,11 +271,9 @@ pub async fn get_english_word_by_id(
     let target_english_word_id = parse_uuid::<EnglishWordId>(parameters.into_inner().0)?;
 
 
-    let potential_english_word = entities::EnglishWordQuery::get_by_id_with_meanings(
-        &mut database_connection,
-        target_english_word_id,
-    )
-    .await?;
+    let potential_english_word =
+        EnglishWordQuery::get_by_id_with_meanings(&mut database_connection, target_english_word_id)
+            .await?;
 
     let Some(english_word) = potential_english_word else {
         return EndpointResponseBuilder::not_found()
@@ -349,7 +346,7 @@ pub async fn get_english_word_by_lemma(
     let target_word_lemma = parameters.into_inner().0;
 
 
-    let potential_english_word = entities::EnglishWordQuery::get_by_exact_lemma_with_meanings(
+    let potential_english_word = EnglishWordQuery::get_by_exact_lemma_with_meanings(
         &mut database_connection,
         &target_word_lemma,
     )
@@ -441,7 +438,7 @@ pub async fn update_english_word(
 
 
     let target_word_exists =
-        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_word_uuid).await?;
+        EnglishWordQuery::exists_by_id(&mut transaction, target_word_uuid).await?;
 
     if !target_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -452,7 +449,7 @@ pub async fn update_english_word(
 
     if let Some(new_lemma) = request_data.lemma {
         let new_lemma_already_exists =
-            entities::EnglishWordQuery::exists_by_exact_lemma(&mut transaction, &new_lemma).await?;
+            EnglishWordQuery::exists_by_exact_lemma(&mut transaction, &new_lemma).await?;
 
         if new_lemma_already_exists {
             return EndpointResponseBuilder::conflict()
@@ -461,7 +458,7 @@ pub async fn update_english_word(
         }
 
 
-        let updated_successfully = entities::EnglishWordMutation::update(
+        let updated_successfully = EnglishWordMutation::update(
             &mut transaction,
             target_word_uuid,
             EnglishWordFieldsToUpdate {
@@ -481,14 +478,13 @@ pub async fn update_english_word(
 
 
 
-    let updated_word =
-        entities::EnglishWordQuery::get_by_id_with_meanings(&mut transaction, target_word_uuid)
-            .await?
-            .ok_or_else(|| {
-                EndpointError::internal_error_with_reason(
-                    "Database inconsistency: word did not exist after being updated.",
-                )
-            })?;
+    let updated_word = EnglishWordQuery::get_by_id_with_meanings(&mut transaction, target_word_uuid)
+        .await?
+        .ok_or_else(|| {
+            EndpointError::internal_error_with_reason(
+                "Database inconsistency: word did not exist after being updated.",
+            )
+        })?;
 
 
     transaction.commit().await?;
@@ -567,7 +563,7 @@ pub async fn delete_english_word(
 
 
     let target_word_exists =
-        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_word_uuid).await?;
+        EnglishWordQuery::exists_by_id(&mut transaction, target_word_uuid).await?;
 
     if !target_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -576,8 +572,7 @@ pub async fn delete_english_word(
     }
 
 
-    let has_been_deleted =
-        entities::EnglishWordMutation::delete(&mut transaction, target_word_uuid).await?;
+    let has_been_deleted = EnglishWordMutation::delete(&mut transaction, target_word_uuid).await?;
 
     if !has_been_deleted {
         return Err(EndpointError::invalid_database_state(

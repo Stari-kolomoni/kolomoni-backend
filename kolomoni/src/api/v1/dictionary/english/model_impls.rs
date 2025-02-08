@@ -1,8 +1,10 @@
 use kolomoni_core::api_models::{
+    EnglishWord,
     EnglishWordMeaning,
-    EnglishWordMeaningWithCategoriesAndTranslations,
+    EnglishWordMeaningWithDetails,
+    EnglishWordMeaningWithShallowDetails,
     EnglishWordWithMeanings,
-    ShallowSloveneWordMeaning,
+    SloveneTranslation,
 };
 use kolomoni_database::entities;
 
@@ -13,91 +15,114 @@ use crate::api::traits::IntoApiModel;
  * Impls for the "word" part of the endpoints (word meanings are below).
  */
 
+impl IntoApiModel<EnglishWord> for entities::word_english::EnglishWordModel {
+    fn into_api_model(self) -> EnglishWord {
+        let english_word_id = self.id();
+        let (word, english_word) = self.into_inner();
 
-
-impl IntoApiModel<EnglishWordMeaningWithCategoriesAndTranslations>
-    for entities::EnglishWordMeaningModelWithDetails
-{
-    fn into_api_model(self) -> EnglishWordMeaningWithCategoriesAndTranslations {
-        EnglishWordMeaningWithCategoriesAndTranslations {
-            meaning_id: self.id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            categories: self.categories,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-            translates_into: self
-                .translations
-                .into_iter()
-                .map(|internal_model| internal_model.into_api_model())
-                .collect(),
+        EnglishWord {
+            id: english_word_id,
+            created_at: word.created_at,
+            last_modified_at: word.last_modified_at,
+            lemma: english_word.lemma,
         }
     }
 }
 
-
-impl IntoApiModel<ShallowSloveneWordMeaning>
-    for entities::TranslatedSloveneWordMeaningModelWithDetails
-{
-    fn into_api_model(self) -> ShallowSloveneWordMeaning {
-        ShallowSloveneWordMeaning {
-            meaning_id: self.word_meaning_id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            categories: self.categories,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-        }
-    }
-}
-
-
-impl IntoApiModel<EnglishWordWithMeanings> for entities::EnglishWordWithMeaningsModel {
+impl IntoApiModel<EnglishWordWithMeanings> for entities::word_english::EnglishWordWithMeaningsModel {
     fn into_api_model(self) -> EnglishWordWithMeanings {
-        let meanings = self
-            .meanings
+        let english_word_id = self.id();
+        let (word, english_word, meanings) = self.into_inner();
+
+        let meanings = meanings
             .into_iter()
-            .map(|meaning| meaning.into_api_model())
+            .map(IntoApiModel::into_api_model)
             .collect();
 
         EnglishWordWithMeanings {
-            id: self.word_id,
-            lemma: self.lemma,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
+            id: english_word_id,
+            created_at: word.created_at,
+            last_modified_at: word.last_modified_at,
+            lemma: english_word.lemma,
             meanings,
         }
     }
 }
 
-impl IntoApiModel<EnglishWordWithMeanings> for entities::EnglishWordModel {
-    fn into_api_model(self) -> EnglishWordWithMeanings {
-        EnglishWordWithMeanings {
-            id: self.word_id,
-            lemma: self.lemma,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-            meanings: vec![],
+/*
+ * Impls for the "word meaning" part of the endpoints (words themselves are above).
+ */
+
+
+impl IntoApiModel<EnglishWordMeaning> for entities::word_meaning_english::EnglishWordMeaningModel {
+    fn into_api_model(self) -> EnglishWordMeaning {
+        let english_word_meaning_id = self.word_meaning_id();
+        let (word_meaning, english_word_meaning) = self.into_inner();
+
+        EnglishWordMeaning {
+            word_meaning_id: english_word_meaning_id,
+            created_at: word_meaning.created_at,
+            last_modified_at: word_meaning.last_modified_at,
+            abbreviation: english_word_meaning.abbreviation,
+            description: english_word_meaning.description,
+            disambiguation: english_word_meaning.disambiguation,
         }
     }
 }
 
 
-/*
- * Impls for the "word meaning" part of the endpoints (words themselves are above).
- */
+impl IntoApiModel<EnglishWordMeaningWithShallowDetails>
+    for entities::word_meaning_english::EnglishWordMeaningModelWithShallowDetails
+{
+    fn into_api_model(self) -> EnglishWordMeaningWithShallowDetails {
+        let english_word_meaning_id = self.word_meaning_id();
+        let (word_meaning, english_word_meaning, categories) = self.into_inner();
 
-impl IntoApiModel<EnglishWordMeaning> for entities::EnglishWordMeaningModel {
-    fn into_api_model(self) -> EnglishWordMeaning {
-        EnglishWordMeaning {
-            meaning_id: self.id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
+        EnglishWordMeaningWithShallowDetails {
+            word_meaning_id: english_word_meaning_id,
+            created_at: word_meaning.created_at,
+            last_modified_at: word_meaning.last_modified_at,
+            abbreviation: english_word_meaning.abbreviation,
+            disambiguation: english_word_meaning.disambiguation,
+            description: english_word_meaning.description,
+            categories,
+        }
+    }
+}
+
+impl IntoApiModel<EnglishWordMeaningWithDetails>
+    for entities::word_meaning_english::EnglishWordMeaningModelWithDetails
+{
+    fn into_api_model(self) -> EnglishWordMeaningWithDetails {
+        let english_word_meaning_id = self.word_meaning_id();
+        let (word_meaning, english_word_meaning, categories, translations) = self.into_inner();
+
+        let translations = translations
+            .into_iter()
+            .map(IntoApiModel::into_api_model)
+            .collect();
+
+        EnglishWordMeaningWithDetails {
+            word_meaning_id: english_word_meaning_id,
+            created_at: word_meaning.created_at,
+            last_modified_at: word_meaning.last_modified_at,
+            abbreviation: english_word_meaning.abbreviation,
+            disambiguation: english_word_meaning.disambiguation,
+            description: english_word_meaning.description,
+            categories,
+            translations,
+        }
+    }
+}
+
+
+impl IntoApiModel<SloveneTranslation> for entities::word_meaning_english::SloveneTranslationModel {
+    fn into_api_model(self) -> SloveneTranslation {
+        SloveneTranslation {
+            word: self.word.into_api_model(),
+            word_meaning: self.word_meaning.into_api_model(),
+            translated_at: self.translated_at,
+            translated_by: self.translated_by,
         }
     }
 }

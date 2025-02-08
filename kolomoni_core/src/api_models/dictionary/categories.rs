@@ -11,14 +11,17 @@ pub struct Category {
     #[schema(value_type = uuid::Uuid)]
     pub id: CategoryId,
 
+    pub created_at: DateTime<Utc>,
+
+    pub last_modified_at: DateTime<Utc>,
+
     pub slovene_name: String,
 
     pub english_name: String,
 
-    pub created_at: DateTime<Utc>,
-
-    pub last_modified_at: DateTime<Utc>,
+    pub parent_category_id: Option<CategoryId>,
 }
+
 
 
 
@@ -32,10 +35,11 @@ pub struct Category {
 )]
 pub struct CategoryCreationRequest {
     pub parent_category_id: Option<Uuid>,
+
     pub slovene_name: String,
+
     pub english_name: String,
 }
-
 
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
@@ -56,13 +60,11 @@ pub struct CategoryCreationResponse {
 }
 
 
-
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
 #[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 pub struct CategoriesResponse {
     pub categories: Vec<Category>,
 }
-
 
 
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]

@@ -2,9 +2,28 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-use super::SloveneWordMeaningWithCategoriesAndTranslations;
+use super::SloveneWordMeaningWithDetails;
 use crate::ids::SloveneWordId;
 
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+pub struct SloveneWord {
+    /// Internal UUID of the word.
+    #[schema(value_type = uuid::Uuid)]
+    pub id: SloveneWordId,
+
+    /// When the word was created.
+    pub created_at: DateTime<Utc>,
+
+    /// When the word was last modified.
+    ///
+    /// TODO In the future, this might include last modification time
+    ///      of the linked suggestion and translation relationships.
+    pub last_modified_at: DateTime<Utc>,
+
+    /// An abstract or base form of the word.
+    pub lemma: String,
+}
 
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
@@ -23,9 +42,6 @@ pub struct SloveneWordWithMeanings {
     #[schema(value_type = uuid::Uuid)]
     pub id: SloveneWordId,
 
-    /// An abstract or base form of the word.
-    pub lemma: String,
-
     /// When the word was created.
     pub created_at: DateTime<Utc>,
 
@@ -35,7 +51,22 @@ pub struct SloveneWordWithMeanings {
     ///      of the linked suggestion and translation relationships.
     pub last_modified_at: DateTime<Utc>,
 
-    pub meanings: Vec<SloveneWordMeaningWithCategoriesAndTranslations>,
+    /// An abstract or base form of the word.
+    pub lemma: String,
+
+    pub meanings: Vec<SloveneWordMeaningWithDetails>,
+}
+
+impl SloveneWordWithMeanings {
+    pub fn new_without_meanings(slovene_word: SloveneWord) -> Self {
+        Self {
+            id: slovene_word.id,
+            created_at: slovene_word.created_at,
+            last_modified_at: slovene_word.last_modified_at,
+            lemma: slovene_word.lemma,
+            meanings: vec![],
+        }
+    }
 }
 
 
@@ -87,11 +118,13 @@ pub struct SloveneWordCreationResponse {
     pub word: SloveneWordWithMeanings,
 }
 
+
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, ToSchema)]
 #[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 pub struct SloveneWordInfoResponse {
     pub word: SloveneWordWithMeanings,
 }
+
 
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug, ToSchema, Default)]
 pub struct SloveneWordUpdateRequest {

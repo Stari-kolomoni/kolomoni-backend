@@ -17,8 +17,6 @@ pub mod english;
 pub mod slovene;
 // TODO
 // pub mod search;
-// DEPRECATED
-// pub mod suggestions;
 pub mod translations;
 
 
@@ -65,8 +63,6 @@ pub fn dictionary_router() -> Scope {
     web::scope("/dictionary")
         .service(slovene_dictionary_router())
         .service(english_dictionary_router())
-        // DEPRECATED
-        // .service(suggested_translations_router())
         .service(translations_router())
         .service(categories_router())
         // TODO

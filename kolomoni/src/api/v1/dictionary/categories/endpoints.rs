@@ -12,7 +12,12 @@ use kolomoni_core::{
     },
     ids::CategoryId,
 };
-use kolomoni_database::entities::{self, CategoryValuesToUpdate, NewCategory};
+use kolomoni_database::entities::category::{
+    CategoryMutation,
+    CategoryQuery,
+    CategoryValuesToUpdate,
+    NewCategory,
+};
 
 use crate::{
     api::{
@@ -105,11 +110,8 @@ pub async fn create_category(
     let request_body = request_body.into_inner();
 
 
-    let category_exists_by_slovene_name = entities::CategoryQuery::exists_by_slovene_name(
-        &mut transaction,
-        &request_body.slovene_name,
-    )
-    .await?;
+    let category_exists_by_slovene_name =
+        CategoryQuery::exists_by_slovene_name(&mut transaction, &request_body.slovene_name).await?;
 
     if category_exists_by_slovene_name {
         return EndpointResponseBuilder::conflict()
@@ -117,11 +119,8 @@ pub async fn create_category(
             .build();
     }
 
-    let category_exists_by_english_name = entities::CategoryQuery::exists_by_english_name(
-        &mut transaction,
-        &request_body.english_name,
-    )
-    .await?;
+    let category_exists_by_english_name =
+        CategoryQuery::exists_by_english_name(&mut transaction, &request_body.english_name).await?;
 
     if category_exists_by_english_name {
         return EndpointResponseBuilder::conflict()
@@ -131,7 +130,7 @@ pub async fn create_category(
 
 
 
-    let newly_created_category = entities::CategoryMutation::create(
+    let newly_created_category = CategoryMutation::create(
         &mut transaction,
         NewCategory {
             parent_category_id: request_body.parent_category_id.map(CategoryId::new),
@@ -199,8 +198,7 @@ pub async fn get_all_categories(
 
 
 
-    let mut category_stream =
-        entities::CategoryQuery::get_all_categories(&mut database_connection).await;
+    let mut category_stream = CategoryQuery::get_all_categories(&mut database_connection).await;
 
 
     let mut categories = Vec::new();
@@ -276,8 +274,7 @@ pub async fn get_specific_category(
     let target_category_id = parse_uuid::<CategoryId>(parameters.into_inner().0)?;
 
 
-    let category =
-        entities::CategoryQuery::get_by_id(&mut database_connection, target_category_id).await?;
+    let category = CategoryQuery::get_by_id(&mut database_connection, target_category_id).await?;
 
     let Some(category) = category else {
         return EndpointResponseBuilder::not_found()
@@ -409,7 +406,7 @@ pub async fn update_specific_category(
 
 
     let target_category_exists =
-        entities::CategoryQuery::exists_by_id(&mut transaction, target_category_id).await?;
+        CategoryQuery::exists_by_id(&mut transaction, target_category_id).await?;
 
     if !target_category_exists {
         return EndpointResponseBuilder::not_found()
@@ -419,13 +416,12 @@ pub async fn update_specific_category(
 
 
 
-    let would_conflict_by_slovene_name = if let Some(new_slovene_name) =
-        request_body.new_slovene_name.as_ref()
-    {
-        entities::CategoryQuery::exists_by_slovene_name(&mut transaction, new_slovene_name).await?
-    } else {
-        false
-    };
+    let would_conflict_by_slovene_name =
+        if let Some(new_slovene_name) = request_body.new_slovene_name.as_ref() {
+            CategoryQuery::exists_by_slovene_name(&mut transaction, new_slovene_name).await?
+        } else {
+            false
+        };
 
     if would_conflict_by_slovene_name {
         return EndpointResponseBuilder::conflict()
@@ -435,13 +431,12 @@ pub async fn update_specific_category(
 
 
 
-    let would_conflict_by_english_name = if let Some(new_english_name) =
-        request_body.new_english_name.as_ref()
-    {
-        entities::CategoryQuery::exists_by_english_name(&mut transaction, new_english_name).await?
-    } else {
-        false
-    };
+    let would_conflict_by_english_name =
+        if let Some(new_english_name) = request_body.new_english_name.as_ref() {
+            CategoryQuery::exists_by_english_name(&mut transaction, new_english_name).await?
+        } else {
+            false
+        };
 
     if would_conflict_by_english_name {
         return EndpointResponseBuilder::conflict()
@@ -451,7 +446,7 @@ pub async fn update_specific_category(
 
 
 
-    let successfully_updated = entities::CategoryMutation::update(
+    let successfully_updated = CategoryMutation::update(
         &mut transaction,
         target_category_id,
         CategoryValuesToUpdate {
@@ -473,7 +468,7 @@ pub async fn update_specific_category(
 
 
     let target_category_after_update =
-        entities::CategoryQuery::get_by_id(&mut transaction, target_category_id).await?;
+        CategoryQuery::get_by_id(&mut transaction, target_category_id).await?;
 
     let Some(target_category_after_update) = target_category_after_update else {
         return Err(EndpointError::invalid_database_state(
@@ -558,7 +553,7 @@ pub async fn delete_specific_category(
 
 
     let target_category_exists =
-        entities::CategoryQuery::exists_by_id(&mut transaction, target_category_id).await?;
+        CategoryQuery::exists_by_id(&mut transaction, target_category_id).await?;
 
     if !target_category_exists {
         return EndpointResponseBuilder::not_found()
@@ -568,7 +563,7 @@ pub async fn delete_specific_category(
 
 
     let successfully_deleted =
-        entities::CategoryMutation::delete(&mut transaction, target_category_id).await?;
+        CategoryMutation::delete(&mut transaction, target_category_id).await?;
 
     if !successfully_deleted {
         return Err(EndpointError::invalid_database_state(

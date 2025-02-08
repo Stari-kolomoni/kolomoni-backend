@@ -3,37 +3,16 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{
-    api_models::ShallowEnglishWordMeaning,
-    ids::{CategoryId, SloveneWordMeaningId},
+    api_models::{EnglishWord, EnglishWordMeaningWithShallowDetails},
+    ids::{CategoryId, SloveneWordMeaningId, UserId},
 };
 
 
-// TODO this should actually probably be named SloveneWordMeaningWithCategories
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct ShallowSloveneWordMeaning {
-    #[schema(value_type = uuid::Uuid)]
-    pub meaning_id: SloveneWordMeaningId,
 
-    pub disambiguation: Option<String>,
-
-    pub abbreviation: Option<String>,
-
-    pub description: Option<String>,
-
-    #[schema(value_type = Vec<uuid::Uuid>)]
-    pub categories: Vec<CategoryId>,
-
-    pub created_at: DateTime<Utc>,
-
-    pub last_modified_at: DateTime<Utc>,
-}
-
-
-// TODO refactor these names, this one is the same as ShallowSloveneWordMeaning, but without categories
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct SloveneWordMeaning {
     #[schema(value_type = uuid::Uuid)]
-    pub meaning_id: SloveneWordMeaningId,
+    pub word_meaning_id: SloveneWordMeaningId,
 
     pub disambiguation: Option<String>,
 
@@ -46,10 +25,15 @@ pub struct SloveneWordMeaning {
     pub last_modified_at: DateTime<Utc>,
 }
 
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
-pub struct SloveneWordMeaningWithCategoriesAndTranslations {
+pub struct SloveneWordMeaningWithShallowDetails {
     #[schema(value_type = uuid::Uuid)]
-    pub meaning_id: SloveneWordMeaningId,
+    pub word_meaning_id: SloveneWordMeaningId,
+
+    pub created_at: DateTime<Utc>,
+
+    pub last_modified_at: DateTime<Utc>,
 
     pub disambiguation: Option<String>,
 
@@ -57,21 +41,51 @@ pub struct SloveneWordMeaningWithCategoriesAndTranslations {
 
     pub description: Option<String>,
 
+    #[schema(value_type = Vec<uuid::Uuid>)]
+    pub categories: Vec<CategoryId>,
+}
+
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+pub struct SloveneWordMeaningWithDetails {
+    #[schema(value_type = uuid::Uuid)]
+    pub word_meaning_id: SloveneWordMeaningId,
+
     pub created_at: DateTime<Utc>,
 
     pub last_modified_at: DateTime<Utc>,
+
+    pub disambiguation: Option<String>,
+
+    pub abbreviation: Option<String>,
+
+    pub description: Option<String>,
 
     #[schema(value_type = Vec<uuid::Uuid>)]
     pub categories: Vec<CategoryId>,
 
-    pub translates_into: Vec<ShallowEnglishWordMeaning>,
+    pub translations: Vec<EnglishTranslation>,
 }
+
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
+pub struct EnglishTranslation {
+    pub word: EnglishWord,
+
+    pub word_meaning: EnglishWordMeaningWithShallowDetails,
+
+    pub translated_at: DateTime<Utc>,
+
+    #[schema(value_type = Option<uuid::Uuid>)]
+    pub translated_by: Option<UserId>,
+}
+
 
 
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct SloveneWordMeaningsResponse {
-    pub meanings: Vec<SloveneWordMeaningWithCategoriesAndTranslations>,
+    pub meanings: Vec<SloveneWordMeaningWithDetails>,
 }
 
 
@@ -107,5 +121,5 @@ pub struct SloveneWordMeaningUpdateRequest {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct SloveneWordMeaningUpdatedResponse {
-    pub meaning: SloveneWordMeaningWithCategoriesAndTranslations,
+    pub meaning: SloveneWordMeaningWithDetails,
 }

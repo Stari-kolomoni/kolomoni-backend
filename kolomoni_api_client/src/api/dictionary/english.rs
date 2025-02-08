@@ -7,7 +7,7 @@ use kolomoni_core::{
         EnglishWordMeaning,
         EnglishWordMeaningUpdateRequest,
         EnglishWordMeaningUpdatedResponse,
-        EnglishWordMeaningWithCategoriesAndTranslations,
+        EnglishWordMeaningWithDetails,
         EnglishWordMeaningsResponse,
         EnglishWordUpdateRequest,
         EnglishWordWithMeanings,
@@ -501,10 +501,7 @@ pub enum EnglishWordMeaningCategoryUnlinkingError {
 async fn get_english_word_meanings<C>(
     client: &C,
     english_word_id: EnglishWordId,
-) -> ClientResult<
-    Vec<EnglishWordMeaningWithCategoriesAndTranslations>,
-    EnglishWordMeaningsFetchingError,
->
+) -> ClientResult<Vec<EnglishWordMeaningWithDetails>, EnglishWordMeaningsFetchingError>
 where
     C: ApiClient,
 {
@@ -591,7 +588,7 @@ async fn update_english_word_meaning<C>(
     english_word_id: EnglishWordId,
     english_word_meaning_id: EnglishWordMeaningId,
     fields_to_update: EnglishWordMeaningFieldsToUpdate,
-) -> ClientResult<EnglishWordMeaningWithCategoriesAndTranslations, EnglishWordMeaningUpdatingError>
+) -> ClientResult<EnglishWordMeaningWithDetails, EnglishWordMeaningUpdatingError>
 where
     C: AuthenticatedApiClient,
 {
@@ -823,10 +820,7 @@ where
     pub async fn english_word_meanings(
         &self,
         english_word_id: EnglishWordId,
-    ) -> ClientResult<
-        Vec<EnglishWordMeaningWithCategoriesAndTranslations>,
-        EnglishWordMeaningsFetchingError,
-    > {
+    ) -> ClientResult<Vec<EnglishWordMeaningWithDetails>, EnglishWordMeaningsFetchingError> {
         get_english_word_meanings(self.client, english_word_id).await
     }
 }
@@ -901,10 +895,7 @@ where
     pub async fn english_word_meanings(
         &self,
         english_word_id: EnglishWordId,
-    ) -> ClientResult<
-        Vec<EnglishWordMeaningWithCategoriesAndTranslations>,
-        EnglishWordMeaningsFetchingError,
-    > {
+    ) -> ClientResult<Vec<EnglishWordMeaningWithDetails>, EnglishWordMeaningsFetchingError> {
         get_english_word_meanings(self.client, english_word_id).await
     }
 
@@ -926,8 +917,7 @@ where
         english_word_id: EnglishWordId,
         english_word_meaning_id: EnglishWordMeaningId,
         fields_to_update: EnglishWordMeaningFieldsToUpdate,
-    ) -> ClientResult<EnglishWordMeaningWithCategoriesAndTranslations, EnglishWordMeaningUpdatingError>
-    {
+    ) -> ClientResult<EnglishWordMeaningWithDetails, EnglishWordMeaningUpdatingError> {
         update_english_word_meaning(
             self.client,
             english_word_id,

@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct TranslationCreationRequest {
     pub english_word_meaning_id: Uuid,
+
     pub slovene_word_meaning_id: Uuid,
 }
 
@@ -22,5 +23,6 @@ pub struct TranslationCreationRequest {
 )]
 pub struct TranslationDeletionRequest {
     pub english_word_meaning_id: Uuid,
+
     pub slovene_word_meaning_id: Uuid,
 }

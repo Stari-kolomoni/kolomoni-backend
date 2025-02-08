@@ -8,7 +8,7 @@ use kolomoni_core::{
         SloveneWordMeaning,
         SloveneWordMeaningUpdateRequest,
         SloveneWordMeaningUpdatedResponse,
-        SloveneWordMeaningWithCategoriesAndTranslations,
+        SloveneWordMeaningWithDetails,
         SloveneWordMeaningsResponse,
         SloveneWordUpdateRequest,
         SloveneWordWithMeanings,
@@ -470,10 +470,7 @@ pub enum SloveneWordMeaningCategoryUnlinkingError {
 async fn get_slovene_word_meanings<C>(
     client: &C,
     slovene_word_id: SloveneWordId,
-) -> ClientResult<
-    Vec<SloveneWordMeaningWithCategoriesAndTranslations>,
-    SloveneWordMeaningsFetchingError,
->
+) -> ClientResult<Vec<SloveneWordMeaningWithDetails>, SloveneWordMeaningsFetchingError>
 where
     C: ApiClient,
 {
@@ -560,7 +557,7 @@ async fn update_slovene_word_meaning<C>(
     slovene_word_id: SloveneWordId,
     slovene_word_meaning_id: SloveneWordMeaningId,
     fields_to_update: SloveneWordMeaningFieldsToUpdate,
-) -> ClientResult<SloveneWordMeaningWithCategoriesAndTranslations, SloveneWordMeaningUpdatingError>
+) -> ClientResult<SloveneWordMeaningWithDetails, SloveneWordMeaningUpdatingError>
 where
     C: AuthenticatedApiClient,
 {
@@ -792,10 +789,7 @@ where
     pub async fn slovene_word_meanings(
         &self,
         slovene_word_id: SloveneWordId,
-    ) -> ClientResult<
-        Vec<SloveneWordMeaningWithCategoriesAndTranslations>,
-        SloveneWordMeaningsFetchingError,
-    > {
+    ) -> ClientResult<Vec<SloveneWordMeaningWithDetails>, SloveneWordMeaningsFetchingError> {
         get_slovene_word_meanings(self.client, slovene_word_id).await
     }
 }
@@ -867,10 +861,7 @@ where
     pub async fn slovene_word_meanings(
         &self,
         slovene_word_id: SloveneWordId,
-    ) -> ClientResult<
-        Vec<SloveneWordMeaningWithCategoriesAndTranslations>,
-        SloveneWordMeaningsFetchingError,
-    > {
+    ) -> ClientResult<Vec<SloveneWordMeaningWithDetails>, SloveneWordMeaningsFetchingError> {
         get_slovene_word_meanings(self.client, slovene_word_id).await
     }
 
@@ -892,8 +883,7 @@ where
         slovene_word_id: SloveneWordId,
         slovene_word_meaning_id: SloveneWordMeaningId,
         fields_to_update: SloveneWordMeaningFieldsToUpdate,
-    ) -> ClientResult<SloveneWordMeaningWithCategoriesAndTranslations, SloveneWordMeaningUpdatingError>
-    {
+    ) -> ClientResult<SloveneWordMeaningWithDetails, SloveneWordMeaningUpdatingError> {
         update_slovene_word_meaning(
             self.client,
             slovene_word_id,

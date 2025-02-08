@@ -11,7 +11,7 @@ use kolomoni_core::api_models::{
     UsersErrorReason,
 };
 use kolomoni_core::token::{JWTClaims, JWTTokenType, JWTValidationError};
-use kolomoni_database::entities::{self, UserRegistrationInfo};
+use kolomoni_database::entities::user::{UserMutation, UserQuery, UserRegistrationInfo};
 use tracing::{debug, warn};
 
 use crate::api::errors::{EndpointResponseBuilder, EndpointResult};
@@ -86,7 +86,7 @@ pub async fn register_user(
 
 
     // Ensure the provided username is unique.
-    let username_already_exists = entities::UserQuery::exists_by_username(
+    let username_already_exists = UserQuery::exists_by_username(
         &mut transaction,
         &registration_request_data.username,
     )
@@ -100,7 +100,7 @@ pub async fn register_user(
 
 
     // Ensure the provided display name is unique.
-    let display_name_already_exists = entities::UserQuery::exists_by_display_name(
+    let display_name_already_exists = UserQuery::exists_by_display_name(
         &mut transaction,
         &registration_request_data.display_name,
     )
@@ -114,7 +114,7 @@ pub async fn register_user(
 
 
     // Create new user.
-    let newly_created_user = entities::UserMutation::create_user(
+    let newly_created_user = UserMutation::create_user(
         &mut transaction,
         state.hasher(),
         UserRegistrationInfo {
@@ -187,7 +187,7 @@ pub async fn login(
 
 
     // Validate user login credentials.
-    let login_result = entities::UserQuery::validate_credentials(
+    let login_result = UserQuery::validate_credentials(
         &mut database_connection,
         state.hasher(),
         &login_info.username,

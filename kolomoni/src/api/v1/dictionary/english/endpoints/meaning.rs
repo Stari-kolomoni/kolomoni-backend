@@ -12,9 +12,15 @@ use kolomoni_core::{
     },
     ids::{EnglishWordId, EnglishWordMeaningId},
 };
-use kolomoni_database::entities::{
-    self,
+use kolomoni_database::entities::word_english::EnglishWordQuery;
+use kolomoni_database::entities::word_meaning_category::{
+    WordMeaningCategoryMutation,
+    WordMeaningCategoryQuery,
+};
+use kolomoni_database::entities::word_meaning_english::{
     EnglishWordMeaningLookup,
+    EnglishWordMeaningMutation,
+    EnglishWordMeaningQuery,
     EnglishWordMeaningUpdate,
     NewEnglishWordMeaning,
 };
@@ -94,8 +100,7 @@ pub async fn get_all_english_word_meanings(
 
 
     let english_word_exists =
-        entities::EnglishWordQuery::exists_by_id(&mut database_connection, target_english_word_id)
-            .await?;
+        EnglishWordQuery::exists_by_id(&mut database_connection, target_english_word_id).await?;
 
     if !english_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -104,7 +109,7 @@ pub async fn get_all_english_word_meanings(
     }
 
 
-    let english_word_meanings = entities::EnglishWordMeaningQuery::get_all_by_english_word_id(
+    let english_word_meanings = EnglishWordMeaningQuery::get_all_by_english_word_id(
         &mut database_connection,
         target_english_word_id,
     )
@@ -196,16 +201,15 @@ pub async fn create_english_word_meaning(
     let new_word_meaning_data = request_data.into_inner();
 
 
-    let identical_meaning_already_exists =
-        entities::EnglishWordMeaningQuery::exists_by_distinguishing_fields(
-            &mut transaction,
-            EnglishWordMeaningLookup {
-                abbreviation: new_word_meaning_data.abbreviation.clone(),
-                disambiguation: new_word_meaning_data.disambiguation.clone(),
-                description: new_word_meaning_data.description.clone(),
-            },
-        )
-        .await?;
+    let identical_meaning_already_exists = EnglishWordMeaningQuery::exists_by_distinguishing_fields(
+        &mut transaction,
+        EnglishWordMeaningLookup {
+            abbreviation: new_word_meaning_data.abbreviation.clone(),
+            disambiguation: new_word_meaning_data.disambiguation.clone(),
+            description: new_word_meaning_data.description.clone(),
+        },
+    )
+    .await?;
 
     if identical_meaning_already_exists {
         return EndpointResponseBuilder::conflict()
@@ -214,7 +218,7 @@ pub async fn create_english_word_meaning(
     }
 
 
-    let newly_created_meaning = entities::EnglishWordMeaningMutation::create(
+    let newly_created_meaning = EnglishWordMeaningMutation::create(
         &mut transaction,
         target_english_word_id,
         NewEnglishWordMeaning {
@@ -326,7 +330,7 @@ pub async fn update_english_word_meaning(
 
 
     let word_exists =
-        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
+        EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
 
     if !word_exists {
         return EndpointResponseBuilder::not_found()
@@ -335,13 +339,12 @@ pub async fn update_english_word_meaning(
     }
 
 
-    let word_and_meaning_id_pair_exists =
-        entities::EnglishWordMeaningQuery::exists_by_meaning_and_word_id(
-            &mut transaction,
-            target_english_word_id,
-            target_english_word_meaning_id,
-        )
-        .await?;
+    let word_and_meaning_id_pair_exists = EnglishWordMeaningQuery::exists_by_meaning_and_word_id(
+        &mut transaction,
+        target_english_word_id,
+        target_english_word_meaning_id,
+    )
+    .await?;
 
     if !word_and_meaning_id_pair_exists {
         return EndpointResponseBuilder::not_found()
@@ -350,7 +353,7 @@ pub async fn update_english_word_meaning(
     }
 
 
-    let updated_meaning_successfully = entities::EnglishWordMeaningMutation::update(
+    let updated_meaning_successfully = EnglishWordMeaningMutation::update(
         &mut transaction,
         target_english_word_meaning_id,
         EnglishWordMeaningUpdate {
@@ -372,7 +375,7 @@ pub async fn update_english_word_meaning(
 
 
 
-    let updated_meaning = entities::EnglishWordMeaningQuery::get(
+    let updated_meaning = EnglishWordMeaningQuery::get(
         &mut transaction,
         target_english_word_id,
         target_english_word_meaning_id,
@@ -466,7 +469,7 @@ pub async fn delete_english_word_meaning(
 
 
     let word_exists =
-        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
+        EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
 
     if !word_exists {
         return EndpointResponseBuilder::not_found()
@@ -476,7 +479,7 @@ pub async fn delete_english_word_meaning(
 
 
     let word_to_meaning_relationship_exists =
-        entities::EnglishWordMeaningQuery::exists_by_meaning_and_word_id(
+        EnglishWordMeaningQuery::exists_by_meaning_and_word_id(
             &mut transaction,
             target_english_word_id,
             target_english_word_meaning_id,
@@ -490,11 +493,8 @@ pub async fn delete_english_word_meaning(
     }
 
 
-    let successfully_deleted_meaning = entities::EnglishWordMeaningMutation::delete(
-        &mut transaction,
-        target_english_word_meaning_id,
-    )
-    .await?;
+    let successfully_deleted_meaning =
+        EnglishWordMeaningMutation::delete(&mut transaction, target_english_word_meaning_id).await?;
 
 
     if !successfully_deleted_meaning {
@@ -600,7 +600,7 @@ pub async fn link_category_to_english_word_meaning(
 
 
     let english_word_exists =
-        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
+        EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
 
     if !english_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -610,11 +610,9 @@ pub async fn link_category_to_english_word_meaning(
 
 
 
-    let english_word_meaning_exists = entities::EnglishWordMeaningQuery::exists_by_id(
-        &mut transaction,
-        target_english_word_meaning_id,
-    )
-    .await?;
+    let english_word_meaning_exists =
+        EnglishWordMeaningQuery::exists_by_id(&mut transaction, target_english_word_meaning_id)
+            .await?;
 
     if !english_word_meaning_exists {
         return EndpointResponseBuilder::not_found()
@@ -625,7 +623,7 @@ pub async fn link_category_to_english_word_meaning(
 
 
     let category_relationship_already_exists =
-        entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
+        WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
             target_english_word_id.to_word_id(),
             target_english_word_meaning_id.to_word_meaning_id(),
@@ -640,7 +638,7 @@ pub async fn link_category_to_english_word_meaning(
     }
 
 
-    entities::WordMeaningCategoryMutation::link_category_with_word_meaning(
+    WordMeaningCategoryMutation::link_category_with_word_meaning(
         &mut transaction,
         target_english_word_meaning_id.to_word_meaning_id(),
         target_category_id,
@@ -744,7 +742,7 @@ pub async fn unlink_category_from_english_word_meaning(
 
 
     let english_word_exists =
-        entities::EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
+        EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
 
     if !english_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -754,11 +752,9 @@ pub async fn unlink_category_from_english_word_meaning(
 
 
 
-    let english_word_meaning_exists = entities::EnglishWordMeaningQuery::exists_by_id(
-        &mut transaction,
-        target_english_word_meaning_id,
-    )
-    .await?;
+    let english_word_meaning_exists =
+        EnglishWordMeaningQuery::exists_by_id(&mut transaction, target_english_word_meaning_id)
+            .await?;
 
     if !english_word_meaning_exists {
         return EndpointResponseBuilder::not_found()
@@ -769,7 +765,7 @@ pub async fn unlink_category_from_english_word_meaning(
 
 
     let category_relationship_exists =
-        entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
+        WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
             target_english_word_id.to_word_id(),
             target_english_word_meaning_id.to_word_meaning_id(),
@@ -784,13 +780,12 @@ pub async fn unlink_category_from_english_word_meaning(
     }
 
 
-    let unlinked_successfully =
-        entities::WordMeaningCategoryMutation::unlink_category_from_word_meaning(
-            &mut transaction,
-            target_english_word_meaning_id.to_word_meaning_id(),
-            target_category_id,
-        )
-        .await?;
+    let unlinked_successfully = WordMeaningCategoryMutation::unlink_category_from_word_meaning(
+        &mut transaction,
+        target_english_word_meaning_id.to_word_meaning_id(),
+        target_category_id,
+    )
+    .await?;
 
     if !unlinked_successfully {
         return Err(EndpointError::invalid_database_state(

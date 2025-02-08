@@ -183,9 +183,9 @@ use utoipa_rapidoc::RapiDoc;
             api_models::SloveneWordUpdateRequest,
 
             // kolomoni_core::dictionary::slovene::meaning
-            api_models::ShallowSloveneWordMeaning,
+            api_models::SloveneWordMeaningWithShallowDetails,
             api_models::SloveneWordMeaning,
-            api_models::SloveneWordMeaningWithCategoriesAndTranslations,
+            api_models::SloveneWordMeaningWithDetails,
             api_models::SloveneWordMeaningsResponse,
             api_models::NewSloveneWordMeaningRequest,
             api_models::NewSloveneWordMeaningCreatedResponse,
@@ -204,9 +204,9 @@ use utoipa_rapidoc::RapiDoc;
             api_models::EnglishWordUpdateRequest,
 
             // kolomoni_core::dictionary::english::meaning
-            api_models::ShallowEnglishWordMeaning,
+            api_models::EnglishWordMeaningWithShallowDetails,
             api_models::EnglishWordMeaning,
-            api_models::EnglishWordMeaningWithCategoriesAndTranslations,
+            api_models::EnglishWordMeaningWithDetails,
             api_models::EnglishWordMeaningsResponse,
             api_models::NewEnglishWordMeaningRequest,
             api_models::NewEnglishWordMeaningCreatedResponse,

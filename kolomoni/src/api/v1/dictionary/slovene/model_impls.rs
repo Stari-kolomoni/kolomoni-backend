@@ -1,18 +1,12 @@
 use kolomoni_core::api_models::{
-    ShallowEnglishWordMeaning,
+    EnglishTranslation,
+    SloveneWord,
     SloveneWordMeaning,
-    SloveneWordMeaningWithCategoriesAndTranslations,
+    SloveneWordMeaningWithDetails,
+    SloveneWordMeaningWithShallowDetails,
     SloveneWordWithMeanings,
 };
-use kolomoni_database::entities::{
-    self,
-    word_meaning_slovene::{
-        EnglishTranslationModel,
-        SloveneWordMeaningModelWithDetails,
-        TranslatesIntoEnglishWordMeaningModel,
-    },
-    word_slovene::SloveneWordWithMeaningsModel,
-};
+use kolomoni_database::entities;
 
 use crate::api::traits::IntoApiModel;
 
@@ -24,71 +18,38 @@ use crate::api::traits::IntoApiModel;
  */
 
 
-impl IntoApiModel<SloveneWordMeaningWithCategoriesAndTranslations>
-    for SloveneWordMeaningModelWithDetails
-{
-    fn into_api_model(self) -> SloveneWordMeaningWithCategoriesAndTranslations {
-        SloveneWordMeaningWithCategoriesAndTranslations {
-            meaning_id: self.id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-            categories: self.categories,
-            translates_into: self
-                .translates_into
-                .into_iter()
-                .map(|translation| translation.into_api_model())
-                .collect(),
-        }
-    }
-}
-
-
-
-impl IntoApiModel<ShallowEnglishWordMeaning> for EnglishTranslationModel {
-    fn into_api_model(self) -> ShallowEnglishWordMeaning {
-        ShallowEnglishWordMeaning {
-            meaning_id: self.word_meaning_id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-            categories: self.categories,
-        }
-    }
-}
-
-
-
-impl IntoApiModel<SloveneWordWithMeanings> for SloveneWordWithMeaningsModel {
+impl IntoApiModel<SloveneWordWithMeanings> for entities::word_slovene::SloveneWordWithMeaningsModel {
     fn into_api_model(self) -> SloveneWordWithMeanings {
+        let slovene_word_id = self.id();
+        let (word, slovene_word, meanings) = self.into_inner();
+
+        let meanings = meanings
+            .into_iter()
+            .map(IntoApiModel::into_api_model)
+            .collect();
+
         SloveneWordWithMeanings {
-            id: self.word_id,
-            lemma: self.lemma,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-            meanings: self
-                .meanings
-                .into_iter()
-                .map(|meaning| meaning.into_api_model())
-                .collect(),
+            id: slovene_word_id,
+            created_at: word.created_at,
+            last_modified_at: word.last_modified_at,
+            lemma: slovene_word.lemma,
+            meanings,
         }
     }
 }
 
 
 
-impl IntoApiModel<SloveneWordWithMeanings> for entities::SloveneWordModel {
-    fn into_api_model(self) -> SloveneWordWithMeanings {
-        SloveneWordWithMeanings {
-            id: self.word_id,
-            lemma: self.lemma,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
-            meanings: vec![],
+impl IntoApiModel<SloveneWord> for entities::word_slovene::SloveneWordModel {
+    fn into_api_model(self) -> SloveneWord {
+        let slovene_word_id = self.id();
+        let (word, slovene_word) = self.into_inner();
+
+        SloveneWord {
+            id: slovene_word_id,
+            created_at: word.created_at,
+            last_modified_at: word.last_modified_at,
+            lemma: slovene_word.lemma,
         }
     }
 }
@@ -99,15 +60,76 @@ impl IntoApiModel<SloveneWordWithMeanings> for entities::SloveneWordModel {
  * Impls for the "word meaning" part of the endpoints (words themselves are above).
  */
 
-impl IntoApiModel<SloveneWordMeaning> for entities::SloveneWordMeaningModel {
+
+impl IntoApiModel<SloveneWordMeaning> for entities::word_meaning_slovene::SloveneWordMeaningModel {
     fn into_api_model(self) -> SloveneWordMeaning {
+        let slovene_word_meaning_id = self.word_meaning_id();
+        let (word_meaning, slovene_word_meaning) = self.into_inner();
+
         SloveneWordMeaning {
-            meaning_id: self.id,
-            disambiguation: self.disambiguation,
-            abbreviation: self.abbreviation,
-            description: self.description,
-            created_at: self.created_at,
-            last_modified_at: self.last_modified_at,
+            word_meaning_id: slovene_word_meaning_id,
+            created_at: word_meaning.created_at,
+            last_modified_at: word_meaning.last_modified_at,
+            abbreviation: slovene_word_meaning.abbreviation,
+            description: slovene_word_meaning.description,
+            disambiguation: slovene_word_meaning.disambiguation,
+        }
+    }
+}
+
+
+impl IntoApiModel<SloveneWordMeaningWithShallowDetails>
+    for entities::word_meaning_slovene::SloveneWordMeaningModelWithShallowDetails
+{
+    fn into_api_model(self) -> SloveneWordMeaningWithShallowDetails {
+        let slovene_word_meaning_id = self.word_meaning_id();
+        let (word_meaning, slovene_word_meaning, categories) = self.into_inner();
+
+        SloveneWordMeaningWithShallowDetails {
+            word_meaning_id: slovene_word_meaning_id,
+            created_at: word_meaning.created_at,
+            last_modified_at: word_meaning.last_modified_at,
+            disambiguation: slovene_word_meaning.disambiguation,
+            abbreviation: slovene_word_meaning.abbreviation,
+            description: slovene_word_meaning.description,
+            categories,
+        }
+    }
+}
+
+
+impl IntoApiModel<SloveneWordMeaningWithDetails>
+    for entities::word_meaning_slovene::SloveneWordMeaningModelWithDetails
+{
+    fn into_api_model(self) -> SloveneWordMeaningWithDetails {
+        let slovene_word_meaning_id = self.word_meaning_id();
+        let (word_meaning, slovene_word_meaning, categories, translations) = self.into_inner();
+
+        let translations = translations
+            .into_iter()
+            .map(IntoApiModel::into_api_model)
+            .collect();
+
+        SloveneWordMeaningWithDetails {
+            word_meaning_id: slovene_word_meaning_id,
+            created_at: word_meaning.created_at,
+            last_modified_at: word_meaning.last_modified_at,
+            disambiguation: slovene_word_meaning.disambiguation,
+            abbreviation: slovene_word_meaning.abbreviation,
+            description: slovene_word_meaning.description,
+            categories,
+            translations,
+        }
+    }
+}
+
+impl IntoApiModel<EnglishTranslation> for entities::word_meaning_slovene::EnglishTranslationModel {
+    fn into_api_model(self) -> EnglishTranslation {
+        EnglishTranslation {
+            word: self.word.into_api_model(),
+            word_meaning: self.word_meaning.into_api_model(),
+            translated_at: self.translated_at,
+            translated_by: self.translated_by,
         }
     }
 }

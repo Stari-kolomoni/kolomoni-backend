@@ -373,7 +373,7 @@ impl ErrorReasonName for CategoryErrorReason {
 /// Reasons for a JSON body to not be accepted by the server.
 ///
 /// See also: [`EndpointError::invalid_json_body`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub enum InvalidJsonBodyReason {
     /// Indicates that the provided JSON data was invalid,
     /// possibly due to an IO / syntax / EOF error while parsing.

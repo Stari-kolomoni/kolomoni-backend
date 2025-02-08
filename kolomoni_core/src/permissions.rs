@@ -15,8 +15,8 @@ use utoipa::ToSchema;
 /// See also [`Role`][super::roles::Role].
 ///
 /// # Maintenance
-/// **The defined permissions must match with the `*_seed_permissions.rs` file
-/// in `kolomoni_migrations`!**
+/// **The defined permissions must match the corresponding
+/// migration (see `kolomoni_migrations`)!**
 #[derive(
     Serialize,
     Deserialize,

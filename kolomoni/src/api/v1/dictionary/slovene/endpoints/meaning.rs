@@ -12,12 +12,18 @@ use kolomoni_core::{
     },
     ids::{SloveneWordId, SloveneWordMeaningId},
 };
-use kolomoni_database::entities::{
-    self,
+use kolomoni_database::entities::word_meaning_category::{
+    WordMeaningCategoryMutation,
+    WordMeaningCategoryQuery,
+};
+use kolomoni_database::entities::word_meaning_slovene::{
     NewSloveneWordMeaning,
     SloveneWordMeaningLookup,
+    SloveneWordMeaningMutation,
+    SloveneWordMeaningQuery,
     SloveneWordMeaningUpdate,
 };
+use kolomoni_database::entities::word_slovene::SloveneWordQuery;
 
 use crate::api::openapi;
 use crate::api::openapi::response::{requires, AsErrorReason};
@@ -94,8 +100,7 @@ pub async fn get_all_slovene_word_meanings(
 
 
     let slovene_word_exists =
-        entities::SloveneWordQuery::exists_by_id(&mut database_connection, target_slovene_word_id)
-            .await?;
+        SloveneWordQuery::exists_by_id(&mut database_connection, target_slovene_word_id).await?;
 
     if !slovene_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -104,7 +109,7 @@ pub async fn get_all_slovene_word_meanings(
     }
 
 
-    let slovene_word_meanings = entities::SloveneWordMeaningQuery::get_all_by_slovene_word_id(
+    let slovene_word_meanings = SloveneWordMeaningQuery::get_all_by_slovene_word_id(
         &mut database_connection,
         target_slovene_word_id,
     )
@@ -196,16 +201,15 @@ pub async fn create_slovene_word_meaning(
     let new_word_meaning_data = request_data.into_inner();
 
 
-    let identical_meaning_already_exists =
-        entities::SloveneWordMeaningQuery::exists_by_distinguishing_fields(
-            &mut transaction,
-            SloveneWordMeaningLookup {
-                abbreviation: new_word_meaning_data.abbreviation.clone(),
-                disambiguation: new_word_meaning_data.disambiguation.clone(),
-                description: new_word_meaning_data.description.clone(),
-            },
-        )
-        .await?;
+    let identical_meaning_already_exists = SloveneWordMeaningQuery::exists_by_distinguishing_fields(
+        &mut transaction,
+        SloveneWordMeaningLookup {
+            abbreviation: new_word_meaning_data.abbreviation.clone(),
+            disambiguation: new_word_meaning_data.disambiguation.clone(),
+            description: new_word_meaning_data.description.clone(),
+        },
+    )
+    .await?;
 
     if identical_meaning_already_exists {
         return EndpointResponseBuilder::conflict()
@@ -215,7 +219,7 @@ pub async fn create_slovene_word_meaning(
 
 
 
-    let newly_created_meaning = entities::SloveneWordMeaningMutation::create(
+    let newly_created_meaning = SloveneWordMeaningMutation::create(
         &mut transaction,
         target_slovene_word_id,
         NewSloveneWordMeaning {
@@ -332,7 +336,7 @@ pub async fn update_slovene_word_meaning(
 
 
     let word_exists =
-        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
+        SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
 
     if !word_exists {
         return EndpointResponseBuilder::not_found()
@@ -341,13 +345,12 @@ pub async fn update_slovene_word_meaning(
     }
 
 
-    let word_and_meaning_id_pair_exists =
-        entities::SloveneWordMeaningQuery::exists_by_meaning_and_word_id(
-            &mut transaction,
-            target_slovene_word_id,
-            target_slovene_word_meaning_id,
-        )
-        .await?;
+    let word_and_meaning_id_pair_exists = SloveneWordMeaningQuery::exists_by_meaning_and_word_id(
+        &mut transaction,
+        target_slovene_word_id,
+        target_slovene_word_meaning_id,
+    )
+    .await?;
 
     if !word_and_meaning_id_pair_exists {
         return EndpointResponseBuilder::not_found()
@@ -356,7 +359,7 @@ pub async fn update_slovene_word_meaning(
     }
 
 
-    let successfully_updated_meaning = entities::SloveneWordMeaningMutation::update(
+    let successfully_updated_meaning = SloveneWordMeaningMutation::update(
         &mut transaction,
         target_slovene_word_meaning_id,
         SloveneWordMeaningUpdate {
@@ -377,7 +380,7 @@ pub async fn update_slovene_word_meaning(
 
 
 
-    let updated_meaning = entities::SloveneWordMeaningQuery::get(
+    let updated_meaning = SloveneWordMeaningQuery::get(
         &mut transaction,
         target_slovene_word_id,
         target_slovene_word_meaning_id,
@@ -472,7 +475,7 @@ pub async fn delete_slovene_word_meaning(
 
 
     let word_to_meaning_relationship_exists =
-        entities::SloveneWordMeaningQuery::exists_by_meaning_and_word_id(
+        SloveneWordMeaningQuery::exists_by_meaning_and_word_id(
             &mut transaction,
             target_slovene_word_id,
             target_slovene_word_meaning_id,
@@ -486,11 +489,8 @@ pub async fn delete_slovene_word_meaning(
     }
 
 
-    let successfully_deleted_meaning = entities::SloveneWordMeaningMutation::delete(
-        &mut transaction,
-        target_slovene_word_meaning_id,
-    )
-    .await?;
+    let successfully_deleted_meaning =
+        SloveneWordMeaningMutation::delete(&mut transaction, target_slovene_word_meaning_id).await?;
 
     if !successfully_deleted_meaning {
         return Err(EndpointError::invalid_database_state(
@@ -595,7 +595,7 @@ pub async fn link_category_to_slovene_word_meaning(
 
 
     let english_word_exists =
-        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
+        SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
 
     if !english_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -605,11 +605,9 @@ pub async fn link_category_to_slovene_word_meaning(
 
 
 
-    let english_word_meaning_exists = entities::SloveneWordMeaningQuery::exists_by_id(
-        &mut transaction,
-        target_slovene_word_meaning_id,
-    )
-    .await?;
+    let english_word_meaning_exists =
+        SloveneWordMeaningQuery::exists_by_id(&mut transaction, target_slovene_word_meaning_id)
+            .await?;
 
     if !english_word_meaning_exists {
         return EndpointResponseBuilder::not_found()
@@ -620,7 +618,7 @@ pub async fn link_category_to_slovene_word_meaning(
 
 
     let category_relationship_already_exists =
-        entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
+        WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
             target_slovene_word_id.to_word_id(),
             target_slovene_word_meaning_id.to_word_meaning_id(),
@@ -635,7 +633,7 @@ pub async fn link_category_to_slovene_word_meaning(
     }
 
 
-    entities::WordMeaningCategoryMutation::link_category_with_word_meaning(
+    WordMeaningCategoryMutation::link_category_with_word_meaning(
         &mut transaction,
         target_slovene_word_meaning_id.to_word_meaning_id(),
         target_category_id,
@@ -739,7 +737,7 @@ pub async fn unlink_category_from_slovene_word_meaning(
 
 
     let english_word_exists =
-        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
+        SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
 
     if !english_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -749,11 +747,9 @@ pub async fn unlink_category_from_slovene_word_meaning(
 
 
 
-    let english_word_meaning_exists = entities::SloveneWordMeaningQuery::exists_by_id(
-        &mut transaction,
-        target_slovene_word_meaning_id,
-    )
-    .await?;
+    let english_word_meaning_exists =
+        SloveneWordMeaningQuery::exists_by_id(&mut transaction, target_slovene_word_meaning_id)
+            .await?;
 
     if !english_word_meaning_exists {
         return EndpointResponseBuilder::not_found()
@@ -764,7 +760,7 @@ pub async fn unlink_category_from_slovene_word_meaning(
 
 
     let category_relationship_exists =
-        entities::WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
+        WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
             target_slovene_word_id.to_word_id(),
             target_slovene_word_meaning_id.to_word_meaning_id(),
@@ -779,13 +775,12 @@ pub async fn unlink_category_from_slovene_word_meaning(
     }
 
 
-    let unlinked_successfully =
-        entities::WordMeaningCategoryMutation::unlink_category_from_word_meaning(
-            &mut transaction,
-            target_slovene_word_meaning_id.to_word_meaning_id(),
-            target_category_id,
-        )
-        .await?;
+    let unlinked_successfully = WordMeaningCategoryMutation::unlink_category_from_word_meaning(
+        &mut transaction,
+        target_slovene_word_meaning_id.to_word_meaning_id(),
+        target_category_id,
+    )
+    .await?;
 
     if !unlinked_successfully {
         return Err(EndpointError::invalid_database_state(

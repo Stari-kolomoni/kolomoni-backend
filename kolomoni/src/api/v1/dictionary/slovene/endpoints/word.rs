@@ -1,6 +1,6 @@
 use actix_web::{delete, get, patch, post, web, Scope};
 use futures_util::StreamExt;
-use kolomoni_core::api_models::WordErrorReason;
+use kolomoni_core::api_models::{SloveneWordWithMeanings, WordErrorReason};
 use kolomoni_core::permissions::Permission;
 use kolomoni_core::{
     api_models::{
@@ -13,10 +13,11 @@ use kolomoni_core::{
     },
     ids::SloveneWordId,
 };
-use kolomoni_database::entities::{
-    self,
+use kolomoni_database::entities::word_slovene::{
     NewSloveneWord,
     SloveneWordFieldsToUpdate,
+    SloveneWordMutation,
+    SloveneWordQuery,
     SloveneWordsQueryOptions,
 };
 use tracing::info;
@@ -86,13 +87,11 @@ pub async fn get_all_slovene_words(
 
 
     // Load words from the database.
-    // TODO fix: this can return duplicated translates_into for a word's meaning, investigate
-    let mut words_with_meanings_stream =
-        entities::SloveneWordQuery::get_all_slovene_words_with_meanings(
-            &mut database_connection,
-            word_query_options,
-        )
-        .await;
+    let mut words_with_meanings_stream = SloveneWordQuery::get_all_slovene_words_with_meanings(
+        &mut database_connection,
+        word_query_options,
+    )
+    .await;
 
 
     let mut slovene_words = Vec::new();
@@ -172,8 +171,7 @@ pub async fn create_slovene_word(
 
 
     let word_lemma_already_exists =
-        entities::SloveneWordQuery::exists_by_exact_lemma(&mut transaction, &creation_request.lemma)
-            .await?;
+        SloveneWordQuery::exists_by_exact_lemma(&mut transaction, &creation_request.lemma).await?;
 
     if word_lemma_already_exists {
         return EndpointResponseBuilder::conflict()
@@ -182,7 +180,7 @@ pub async fn create_slovene_word(
     }
 
 
-    let newly_created_word = entities::SloveneWordMutation::create(
+    let newly_created_word = SloveneWordMutation::create(
         &mut transaction,
         NewSloveneWord {
             lemma: creation_request.lemma,
@@ -192,7 +190,7 @@ pub async fn create_slovene_word(
 
     info!(
         created_by_user = %authenticated_user.user_id(),
-        "Created new slovene word: {}", newly_created_word.lemma,
+        "Created new slovene word: {}", newly_created_word.lemma(),
     );
 
     /* TODO pending rewrite of cache layer
@@ -208,7 +206,7 @@ pub async fn create_slovene_word(
     EndpointResponseBuilder::ok()
         .with_json_body(SloveneWordCreationResponse {
             // Newly created words do not belong to any categories.
-            word: newly_created_word.into_api_model(),
+            word: SloveneWordWithMeanings::new_without_meanings(newly_created_word.into_api_model()),
         })
         .build()
 }
@@ -274,11 +272,9 @@ pub async fn get_slovene_word_by_id(
     let target_word_uuid = parse_uuid::<SloveneWordId>(parameters.into_inner().0)?;
 
 
-    let potential_slovene_word = entities::SloveneWordQuery::get_by_id_with_meanings(
-        &mut database_connection,
-        target_word_uuid,
-    )
-    .await?;
+    let potential_slovene_word =
+        SloveneWordQuery::get_by_id_with_meanings(&mut database_connection, target_word_uuid)
+            .await?;
 
     let Some(slovene_word_with_meanings) = potential_slovene_word else {
         return EndpointResponseBuilder::not_found()
@@ -350,7 +346,7 @@ pub async fn get_slovene_word_by_lemma(
     let target_word_lemma = &parameters.into_inner().0;
 
 
-    let potential_slovene_word = entities::SloveneWordQuery::get_by_exact_lemma_with_meanings(
+    let potential_slovene_word = SloveneWordQuery::get_by_exact_lemma_with_meanings(
         &mut database_connection,
         target_word_lemma,
     )
@@ -437,7 +433,7 @@ pub async fn update_slovene_word(
 
 
     let target_word_exists =
-        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_word_id).await?;
+        SloveneWordQuery::exists_by_id(&mut transaction, target_word_id).await?;
 
     if !target_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -446,7 +442,7 @@ pub async fn update_slovene_word(
     }
 
 
-    let updated_successfully = entities::SloveneWordMutation::update(
+    let updated_successfully = SloveneWordMutation::update(
         &mut transaction,
         target_word_id,
         SloveneWordFieldsToUpdate {
@@ -465,15 +461,14 @@ pub async fn update_slovene_word(
     }
 
 
-    let updated_word =
-        entities::SloveneWordQuery::get_by_id_with_meanings(&mut transaction, target_word_id)
-            .await?
-            .ok_or_else(|| {
-                EndpointError::invalid_database_state(
-                    "slovene word did not exist after just having updated it \
+    let updated_word = SloveneWordQuery::get_by_id_with_meanings(&mut transaction, target_word_id)
+        .await?
+        .ok_or_else(|| {
+            EndpointError::invalid_database_state(
+                "slovene word did not exist after just having updated it \
                     inside the same transaction",
-                )
-            })?;
+            )
+        })?;
 
 
     transaction.commit().await?;
@@ -554,7 +549,7 @@ pub async fn delete_slovene_word(
 
 
     let target_word_exists =
-        entities::SloveneWordQuery::exists_by_id(&mut transaction, target_word_id).await?;
+        SloveneWordQuery::exists_by_id(&mut transaction, target_word_id).await?;
 
     if !target_word_exists {
         return EndpointResponseBuilder::not_found()
@@ -563,8 +558,7 @@ pub async fn delete_slovene_word(
     }
 
 
-    let has_been_deleted =
-        entities::SloveneWordMutation::delete(&mut transaction, target_word_id).await?;
+    let has_been_deleted = SloveneWordMutation::delete(&mut transaction, target_word_id).await?;
 
     if !has_been_deleted {
         return Err(EndpointError::invalid_database_state(
