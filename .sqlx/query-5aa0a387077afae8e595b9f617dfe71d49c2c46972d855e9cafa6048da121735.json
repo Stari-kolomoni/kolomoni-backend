@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM kolomoni.word_meaning_slovene AS wms WHERE wms.disambiguation = $1 AND wms.abbreviation = $2 AND wms.description = $3\n            )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5aa0a387077afae8e595b9f617dfe71d49c2c46972d855e9cafa6048da121735"
+}

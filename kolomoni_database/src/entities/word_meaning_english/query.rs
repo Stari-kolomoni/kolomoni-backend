@@ -61,7 +61,7 @@ impl EnglishWordMeaningQuery {
     ) -> QueryResult<Option<EnglishWordMeaningModelWithDetails>> {
         let weak_internal_meaning = sqlx::query_file_as!(
             WeakInternalEnglishWordMeaningModelWithDetails,
-            "src/entities/word_meaning_english/queries/meaning_by_both_ids.sql",
+            "src/entities/word_meaning_english/queries/single_meaning_by_both_ids.sql",
             english_word_id.into_uuid(),
             english_word_meaning_id.into_uuid()
         )

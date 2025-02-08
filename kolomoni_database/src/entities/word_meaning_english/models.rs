@@ -7,7 +7,10 @@ use crate::{
     entities::{
         word::{WordLanguage, WordModel},
         word_meaning::WordMeaningModel,
-        word_meaning_slovene::{BareSloveneWordMeaningModel, SloveneWordMeaningModel},
+        word_meaning_slovene::{
+            BareSloveneWordMeaningModel,
+            SloveneWordMeaningModelWithShallowDetails,
+        },
         word_slovene::SloveneWordModel,
     },
     IntoExternalModel,
@@ -160,6 +163,8 @@ pub(crate) mod internal {
         pub(crate) abbreviation: Option<String>,
 
         pub(crate) description: Option<String>,
+
+        pub(crate) categories: Vec<Uuid>,
     }
 
     #[derive(Debug, Deserialize)]
@@ -182,7 +187,7 @@ mod external {
 
     use crate::entities::{
         word_meaning::WordMeaningModel,
-        word_meaning_slovene::SloveneWordMeaningModel,
+        word_meaning_slovene::SloveneWordMeaningModelWithShallowDetails,
         word_slovene::SloveneWordModel,
     };
 
@@ -259,6 +264,69 @@ mod external {
     impl AsRef<BareEnglishWordMeaningModel> for EnglishWordMeaningModel {
         fn as_ref(&self) -> &BareEnglishWordMeaningModel {
             &self.bare_english_word_meaning
+        }
+    }
+
+
+
+    pub struct EnglishWordMeaningModelWithShallowDetails {
+        word_meaning: WordMeaningModel,
+
+        bare_english_word_meaning: BareEnglishWordMeaningModel,
+
+        categories: Vec<CategoryId>,
+    }
+
+    impl EnglishWordMeaningModelWithShallowDetails {
+        #[inline]
+        pub fn new(
+            word_meaning: WordMeaningModel,
+            english_word_meaning: BareEnglishWordMeaningModel,
+            categories: Vec<CategoryId>,
+        ) -> Self {
+            Self {
+                word_meaning,
+                bare_english_word_meaning: english_word_meaning,
+                categories,
+            }
+        }
+
+        pub fn word_meaning_id(&self) -> EnglishWordMeaningId {
+            EnglishWordMeaningId::new(self.word_meaning.word_meaning_id.into_uuid())
+        }
+
+        pub fn word_id(&self) -> EnglishWordId {
+            EnglishWordId::new(self.word_meaning.word_id.into_uuid())
+        }
+
+        pub fn description(&self) -> Option<&str> {
+            self.bare_english_word_meaning.description.as_deref()
+        }
+
+        pub fn disambiguation(&self) -> Option<&str> {
+            self.bare_english_word_meaning.disambiguation.as_deref()
+        }
+
+        pub fn abbreviation(&self) -> Option<&str> {
+            self.bare_english_word_meaning.abbreviation.as_deref()
+        }
+
+        pub fn categories(&self) -> &[CategoryId] {
+            &self.categories
+        }
+
+        pub fn into_inner(
+            self,
+        ) -> (
+            WordMeaningModel,
+            BareEnglishWordMeaningModel,
+            Vec<CategoryId>,
+        ) {
+            (
+                self.word_meaning,
+                self.bare_english_word_meaning,
+                self.categories,
+            )
         }
     }
 
@@ -364,7 +432,7 @@ mod external {
     pub struct SloveneTranslationModel {
         pub word: SloveneWordModel,
 
-        pub word_meaning: SloveneWordMeaningModel,
+        pub word_meaning: SloveneWordMeaningModelWithShallowDetails,
 
         pub translated_at: DateTime<Utc>,
 
@@ -506,9 +574,11 @@ impl IntoExternalModel for internal::InternalTranslatedSloveneWordModel {
 }
 
 impl IntoExternalModel for internal::InternalTranslatedSloveneMeaningModel {
-    type ExternalModel = SloveneWordMeaningModel;
+    type ExternalModel = SloveneWordMeaningModelWithShallowDetails;
 
     fn into_external_model(self) -> Self::ExternalModel {
+        let categories = self.categories.into_iter().map(CategoryId::new).collect();
+
         Self::ExternalModel::new(
             WordMeaningModel {
                 word_id: WordId::new(self.word_id),
@@ -521,6 +591,7 @@ impl IntoExternalModel for internal::InternalTranslatedSloveneMeaningModel {
                 abbreviation: self.abbreviation,
                 disambiguation: self.disambiguation,
             },
+            categories,
         )
     }
 }

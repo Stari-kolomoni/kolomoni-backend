@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS ( SELECT 1 FROM kolomoni.word_meaning wm WHERE wm.id = $1 AND wm.word_id = $2 )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a34ce228972a2db65c0b2d2342958de627c9324fdb0c71e92b4bad0fdb100723"
+}

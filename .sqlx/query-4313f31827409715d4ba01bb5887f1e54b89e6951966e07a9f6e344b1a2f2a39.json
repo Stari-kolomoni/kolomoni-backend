@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\r\n        wm_e.word_id as \"word_id\",\r\n        wm_e.id as \"word_meaning_id\",\r\n        wm_e.created_at as \"created_at\",\r\n        wm_e.last_modified_at as \"last_modified_at\",\r\n        wme.disambiguation as \"disambiguation\",\r\n        wme.abbreviation as \"abbreviation\",\r\n        wme.description as \"description\",\r\n        jsonb_agg_strict(DISTINCT categories.category_id) as \"categories\",\r\n        jsonb_agg_strict(DISTINCT translations.data) as \"translations\"\r\n    FROM kolomoni.word_meaning wm_e\r\n    INNER JOIN kolomoni.word_meaning_english wme\r\n        ON wme.word_meaning_id = wm_e.id\r\n    INNER JOIN LATERAL (\r\n        SELECT\r\n                wmc_e.category_id as \"category_id\"\r\n            FROM kolomoni.word_meaning_category wmc_e\r\n            WHERE wmc_e.word_meaning_id = wm_e.id\r\n    ) categories ON TRUE\r\n    INNER JOIN LATERAL (\r\n        SELECT\r\n                jsonb_build_object(\r\n                    'word', jsonb_build_object(\r\n                        'word_id', w_s.id,\r\n                        'created_at', w_s.created_at,\r\n                        'last_modified_at', w_s.last_modified_at,\r\n                        'lemma', ws.lemma\r\n                    ),\r\n                    'word_meaning', jsonb_build_object(\r\n                        'word_id', w_s.id,\r\n                        'word_meaning_id', wm_s.id,\r\n                        'created_at', wm_s.created_at,\r\n                        'last_modified_at', wm_s.last_modified_at,\r\n                        'description', wms.description,\r\n                        'disambiguation', wms.disambiguation,\r\n                        'abbreviation', wms.abbreviation,\r\n                        'categories', jsonb_agg_strict(DISTINCT t_categories.category_id)\r\n                    ),\r\n                    'translated_at', wmt.translated_at,\r\n                    'translated_by', wmt.translated_by\r\n                )::jsonb as \"data\"\r\n            FROM kolomoni.word_meaning_translation wmt\r\n            INNER JOIN kolomoni.word_meaning wm_s\r\n                ON wm_s.id = wmt.slovene_word_meaning_id\r\n            INNER JOIN kolomoni.word_meaning_slovene as wms\r\n                ON wms.word_meaning_id = wmt.slovene_word_meaning_id\r\n            INNER JOIN kolomoni.word w_s\r\n                ON w_s.id = wm_s.word_id\r\n            INNER JOIN kolomoni.word_slovene ws\r\n                ON ws.word_id = wm_s.word_id\r\n            INNER JOIN LATERAL (\r\n                SELECT\r\n                        wmc_e.category_id AS \"category_id\"\r\n                    FROM kolomoni.word_meaning_category AS wmc_e\r\n                    WHERE wmc_e.word_meaning_id = wmt.slovene_word_meaning_id\r\n            ) AS t_categories ON TRUE\r\n            WHERE wmt.english_word_meaning_id = wm_e.id\r\n            GROUP BY\r\n                w_s.id,\r\n                ws.lemma,\r\n                wm_s.id,\r\n                wm_s.created_at,\r\n                wm_s.last_modified_at,\r\n                wms.description,\r\n                wms.disambiguation,\r\n                wms.abbreviation,\r\n                wmt.translated_at,\r\n                wmt.translated_by\r\n    ) translations ON TRUE\r\n    WHERE wm_e.word_id = $1\r\n    GROUP BY\r\n        wm_e.id,\r\n        wm_e.created_at,\r\n        wm_e.last_modified_at,\r\n        wme.disambiguation,\r\n        wme.abbreviation,\r\n        wme.description",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "word_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "word_meaning_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_modified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "disambiguation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "abbreviation",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "categories",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "translations",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "4313f31827409715d4ba01bb5887f1e54b89e6951966e07a9f6e344b1a2f2a39"
+}

@@ -9,7 +9,10 @@ use crate::{
         word::{WordLanguage, WordModel},
         word_english::EnglishWordModel,
         word_meaning::WordMeaningModel,
-        word_meaning_english::{BareEnglishWordMeaningModel, EnglishWordMeaningModel},
+        word_meaning_english::{
+            BareEnglishWordMeaningModel,
+            EnglishWordMeaningModelWithShallowDetails,
+        },
     },
     IntoExternalModel,
     TryIntoStronglyTypedInternalModel,
@@ -133,6 +136,8 @@ pub(crate) mod internal {
         pub(crate) abbreviation: Option<String>,
 
         pub(crate) description: Option<String>,
+
+        pub(crate) categories: Vec<Uuid>,
     }
 
     #[derive(Debug, Deserialize)]
@@ -151,18 +156,12 @@ pub(crate) mod internal {
 
 mod external {
     use chrono::{DateTime, Utc};
-    use kolomoni_core::ids::{
-        CategoryId,
-        EnglishWordMeaningId,
-        SloveneWordId,
-        SloveneWordMeaningId,
-        UserId,
-    };
+    use kolomoni_core::ids::{CategoryId, SloveneWordId, SloveneWordMeaningId, UserId};
 
     use crate::entities::{
         word_english::EnglishWordModel,
         word_meaning::WordMeaningModel,
-        word_meaning_english::EnglishWordMeaningModel,
+        word_meaning_english::EnglishWordMeaningModelWithShallowDetails,
     };
 
 
@@ -228,6 +227,71 @@ mod external {
     impl AsRef<BareSloveneWordMeaningModel> for SloveneWordMeaningModel {
         fn as_ref(&self) -> &BareSloveneWordMeaningModel {
             &self.bare_slovene_word_meaning
+        }
+    }
+
+
+
+    pub struct SloveneWordMeaningModelWithShallowDetails {
+        word_meaning: WordMeaningModel,
+
+        bare_slovene_word_meaning: BareSloveneWordMeaningModel,
+
+        categories: Vec<CategoryId>,
+    }
+
+    impl SloveneWordMeaningModelWithShallowDetails {
+        #[inline]
+        pub(crate) fn new(
+            word_meaning: WordMeaningModel,
+            slovene_word_meaning: BareSloveneWordMeaningModel,
+            categories: Vec<CategoryId>,
+        ) -> Self {
+            Self {
+                word_meaning,
+                bare_slovene_word_meaning: slovene_word_meaning,
+                categories,
+            }
+        }
+
+        pub fn word_meaning_id(&self) -> SloveneWordMeaningId {
+            SloveneWordMeaningId::new(self.word_meaning.word_id.into_uuid())
+        }
+
+        pub fn word_id(&self) -> SloveneWordId {
+            SloveneWordId::new(self.word_meaning.word_id.into_uuid())
+        }
+
+
+        pub fn description(&self) -> Option<&str> {
+            self.bare_slovene_word_meaning.description.as_deref()
+        }
+
+        pub fn disambiguation(&self) -> Option<&str> {
+            self.bare_slovene_word_meaning.disambiguation.as_deref()
+        }
+
+        pub fn abbreviation(&self) -> Option<&str> {
+            self.bare_slovene_word_meaning.abbreviation.as_deref()
+        }
+
+        pub fn categories(&self) -> &[CategoryId] {
+            &self.categories
+        }
+
+
+        pub fn into_inner(
+            self,
+        ) -> (
+            WordMeaningModel,
+            BareSloveneWordMeaningModel,
+            Vec<CategoryId>,
+        ) {
+            (
+                self.word_meaning,
+                self.bare_slovene_word_meaning,
+                self.categories,
+            )
         }
     }
 
@@ -306,13 +370,13 @@ mod external {
         }
     }
 
-    impl AsRef<WordMeaningModel> for SloveneWordMeaningModelWithDetails {
+    impl AsRef<WordMeaningModel> for SloveneWordMeaningModelWithShallowDetails {
         fn as_ref(&self) -> &WordMeaningModel {
             &self.word_meaning
         }
     }
 
-    impl AsRef<BareSloveneWordMeaningModel> for SloveneWordMeaningModelWithDetails {
+    impl AsRef<BareSloveneWordMeaningModel> for SloveneWordMeaningModelWithShallowDetails {
         fn as_ref(&self) -> &BareSloveneWordMeaningModel {
             &self.bare_slovene_word_meaning
         }
@@ -323,7 +387,7 @@ mod external {
     pub struct EnglishTranslationModel {
         pub word: EnglishWordModel,
 
-        pub word_meaning: EnglishWordMeaningModel,
+        pub word_meaning: EnglishWordMeaningModelWithShallowDetails,
 
         pub translated_at: DateTime<Utc>,
 
@@ -459,9 +523,11 @@ impl IntoExternalModel for internal::InternalTranslatedEnglishWordModel {
 }
 
 impl IntoExternalModel for internal::InternalTranslatedEnglishMeaningModel {
-    type ExternalModel = EnglishWordMeaningModel;
+    type ExternalModel = EnglishWordMeaningModelWithShallowDetails;
 
     fn into_external_model(self) -> Self::ExternalModel {
+        let categories = self.categories.into_iter().map(CategoryId::new).collect();
+
         Self::ExternalModel::new(
             WordMeaningModel {
                 word_id: WordId::new(self.word_id),
@@ -474,6 +540,7 @@ impl IntoExternalModel for internal::InternalTranslatedEnglishMeaningModel {
                 abbreviation: self.abbreviation,
                 disambiguation: self.disambiguation,
             },
+            categories,
         )
     }
 }

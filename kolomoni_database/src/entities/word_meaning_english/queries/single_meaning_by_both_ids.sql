@@ -67,7 +67,7 @@ SELECT
                 wmt.translated_at,
                 wmt.translated_by
     ) translations ON TRUE
-    WHERE wm_e.word_id = $1
+    WHERE wm_e.word_id = $1 AND wm_e.id = $2
     GROUP BY
         wm_e.id,
         wm_e.created_at,

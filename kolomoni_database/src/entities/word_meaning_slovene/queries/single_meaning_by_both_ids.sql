@@ -33,7 +33,8 @@ SELECT
                         'last_modified_at', wm_s.last_modified_at,
                         'description', wms.description,
                         'disambiguation', wms.disambiguation,
-                        'abbreviation', wms.abbreviation
+                        'abbreviation', wms.abbreviation,
+                        'categories', jsonb_agg_strict(DISTINCT t_categories.category_id)
                     ),
                     'translated_at', wmt.translated_at,
                     'translated_by', wmt.translated_by
@@ -47,6 +48,12 @@ SELECT
                 ON w_e.id = wm_e.word_id
             INNER JOIN kolomoni.word_english AS we
                 ON we.word_id = wm_e.word_id
+            INNER JOIN LATERAL (
+                SELECT
+                        wmc_e.category_id AS "category_id"
+                    FROM kolomoni.word_meaning_category AS wmc_e
+                    WHERE wmc_e.word_meaning_id = wmt.english_word_meaning_id
+            ) AS t_categories ON TRUE
             WHERE wmt.slovene_word_meaning_id = wm_s.id
             GROUP BY
                 w_e.id,
