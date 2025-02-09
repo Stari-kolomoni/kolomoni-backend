@@ -166,9 +166,7 @@ jobs:
             --no-fail-fast \
             --test "end_to_end" \
             -- \
-            --test-threads 1 \
-            --report-time \
-            --ensure-time
+            --test-threads 1
 
       - name: "Stop API server"
         if: ${{ always() }}
