@@ -17,13 +17,13 @@ jobs:
   build-documentation:
     runs-on: ubuntu-latest
     steps:
-    - name: "Set up required tools"
+    - name: "Prepare environment"
       run: |
         sudo apt-get update
         sudo apt-get install curl build-essential -y
 
     - name: Checkout repository
-      uses: actions/checkout@v4.1.1
+      uses: actions/checkout@v4.2.2
 
     - name: Install stable Rust
       uses: dtolnay/rust-toolchain@stable
@@ -42,7 +42,8 @@ jobs:
         chmod --changes -R +rX "./target/doc"
       
     - name: Upload pages artifact
-      uses: actions/upload-pages-artifact@v3.0.0
+      id: deployment
+      uses: actions/upload-pages-artifact@v3.0.1
       with:
         name: github-pages
         path: ./target/doc
@@ -62,4 +63,3 @@ jobs:
     steps:
       - name: Deploy documentation on GitHub Pages
         uses: actions/deploy-pages@v4
-    

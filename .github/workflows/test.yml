@@ -31,26 +31,37 @@ jobs:
 
       - name: "Set up Rust cache"
         uses: Swatinem/rust-cache@v2
+      
+      - name: "Build tests"
+        run: |
+          set -e
+
+          echo "Building tests for non-kolomoni_test crates..."
+          cargo test --verbose --workspace --exclude kolomoni_test --all-features --all-targets --no-run
+
+          echo "Building non-integration tests for kolomoni_test..."
+          cargo test --verbose --package kolomoni_test --all-features --lib --no-run
+          cargo test --verbose --package kolomoni_test --all-features --examples --no-run
 
       - name: "Run tests(lib,bins,examples,tests,benches) on full workspace excluding kolomoni_test"
         # Excludes the end-to-end testing crate (tested separately).
         # This one also doesn't execute doctests due to --all-targets.
-        run: cargo test --verbose --workspace --exclude kolomoni_test --all-features --all-targets
+        run: cargo test --workspace --exclude kolomoni_test --all-features --all-targets
 
       - name: "Run tests(doc) on full workspace excluding kolomoni_test"
         # Excludes the end-to-end testing crate (tested separately).
-        run: cargo test --verbose --workspace --exclude kolomoni_test --all-features --doc
+        run: cargo test --workspace --exclude kolomoni_test --all-features --doc
       
       # The following three invocations purposefully exclude integration tests,
       # which are tested in the `run-end-to-end-tests` job below.
       - name: "Run tests(lib) on kolomoni_test"
-        run: cargo test --verbose --package kolomoni_test --all-features --lib
+        run: cargo test --package kolomoni_test --all-features --lib
 
       - name: "Run tests(examples) on kolomoni_test"
-        run: cargo test --verbose --package kolomoni_test --all-features --examples
+        run: cargo test --package kolomoni_test --all-features --examples
 
       - name: "Run tests(doc) on kolomoni_test"
-        run: cargo test --verbose --package kolomoni_test --all-features --doc
+        run: cargo test --package kolomoni_test --all-features --doc
 
   run-end-to-end-tests:
     runs-on: ubuntu-latest
@@ -95,6 +106,13 @@ jobs:
             --detach \
             postgres:17.2-alpine
 
+      - name: "Build database migration CLI"
+        run: |
+          set -e
+
+          echo "Building kolomoni_migrations CLI..."
+          cargo build --verbose --release --package kolomoni_migrations
+
       - name: "Perform database migrations"
         env:
           KOLOMONI_MIGRATIONS_DATABASE_URL_PRIVILEGED_USER: "postgres://postgres:postgres@127.0.0.1:5432/stari_kolomoni"
@@ -102,24 +120,25 @@ jobs:
         run: |
           set -e
 
-          echo "Building kolomoni_migrations CLI..."
-          cargo build --verbose --release --package kolomoni_migrations
-
           echo "Applying all migrations..."
-          cargo run --verbose --release --package kolomoni_migrations -- up --assume-yes
+          cargo run --release --package kolomoni_migrations -- up --assume-yes
+      
+      - name: "Build API server"
+        run: |
+          set -e
 
-      - name: "Build and start API server"
+          echo "Building server."
+          cargo build --verbose --release --features e2e-testing
+
+      - name: "Start API server"
         timeout-minutes: 60
         run: |
           set -e
           echo "Creating log directory."
           mkdir -p logs
-
-          echo "Building server."
-          cargo build --verbose --release --features e2e-testing
           
           echo "Starting server in the background."
-          nohup cargo run --verbose --release --features e2e-testing -- \
+          nohup cargo run --release --features e2e-testing -- \
             --configurationFilePath ./kolomoni_test/assets/configuration.TESTING.toml > logs/server.log 2>&1 &
           SERVER_PID=$!
 
@@ -153,7 +172,17 @@ jobs:
 
             sleep 4
           done
+      
+      - name: "Build end-to-end tests"
+        run: |
+          set -e
 
+          cargo test \
+            --package kolomoni_test \
+            --verbose \
+            --test "end_to_end" \
+            --no-run
+        
       - name: "Run end-to-end tests"
         env:
           KOLOMONI_TEST_SERVER_URL: "http://127.0.0.1:8866"
@@ -162,7 +191,6 @@ jobs:
         run: |
           cargo test \
             --package kolomoni_test \
-            --verbose \
             --no-fail-fast \
             --test "end_to_end" \
             -- \
