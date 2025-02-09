@@ -301,7 +301,6 @@ impl ErrorReasonName for UsersErrorReason {
 
 
 
-// TODO
 /// Pertains to all endpoints under `/dictionary/category`.
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone, ToSchema)]
 #[serde(tag = "category-error-type")]

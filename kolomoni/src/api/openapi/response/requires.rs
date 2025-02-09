@@ -13,7 +13,7 @@ use kolomoni_core::permissions::Permission;
 /// OpenAPI documentation.
 ///
 /// [`openapi`]: crate::api::openapi
-pub(super) trait RequiredPermission {
+pub trait RequiredPermission {
     fn permission() -> Permission;
 }
 
@@ -22,7 +22,7 @@ pub(super) trait RequiredPermission {
 /// OpenAPI documentation.
 ///
 /// [`openapi`]: crate::api::openapi
-pub(super) trait RequiredPermissionSet<const N: usize> {
+pub trait RequiredPermissionSet<const N: usize> {
     fn permissions() -> [Permission; N];
 }
 
@@ -77,12 +77,13 @@ where
 /// will result in the following code:
 ///
 /// ```no_run
-/// # use kolomoni::api::openapi::RequiredPermission;
+/// # use kolomoni::api::openapi::response::requires::RequiredPermission;
 /// # use kolomoni_core::permissions::Permission;
 /// pub struct RequiresUserSelfRead;
+///
 /// impl RequiredPermission for RequiresUserSelfRead {
-///     fn name() -> &'static str {
-///         Permission::UserSelfRead.name()
+///     fn permission() -> Permission {
+///         Permission::UserSelfRead
 ///     }
 /// }
 /// ```

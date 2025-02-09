@@ -214,7 +214,7 @@ pub enum FromPermissionNamesError {
 
 
 /// Set of permissions, usually associated with some user.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PermissionSet {
     /// Set of permissions.
     permissions: HashSet<Permission>,

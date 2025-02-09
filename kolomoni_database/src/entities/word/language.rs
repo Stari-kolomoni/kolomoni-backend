@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 /// A word language (Slovene or English).
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum WordLanguage {
@@ -16,7 +18,7 @@ impl WordLanguage {
     ///
     ///
     /// ```
-    /// # use crate::entities::WordLanguage;
+    /// # use kolomoni_database::entities::word::WordLanguage;
     ///
     /// assert_eq!(
     ///     WordLanguage::from_ietf_bcp_47_language_tag("en"),
@@ -50,5 +52,20 @@ impl WordLanguage {
             WordLanguage::Slovene => "sl",
             WordLanguage::English => "en",
         }
+    }
+}
+
+
+impl Debug for WordLanguage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "WordLanguage<{} ({})>",
+            match self {
+                Self::English => "English",
+                Self::Slovene => "Slovene",
+            },
+            self.to_ietf_bcp_47_language_tag()
+        )
     }
 }

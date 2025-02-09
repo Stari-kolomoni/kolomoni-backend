@@ -86,7 +86,7 @@ fn sha256_to_u8_array_token_stream(sha: &Sha256Hash) -> proc_macro2::TokenStream
 ///
 /// For example, when using this in `kolomoni_migrations`, which is adjacent to `kolomoni_migrations_macros`,
 /// we use the following:
-/// ```no_run
+/// ```ignore
 /// use kolomoni_migrations_macros::embed_migrations;
 ///
 /// embed_migrations!(
@@ -323,17 +323,20 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 
 /// Validates and prepares the `async fn up` function of a given migration script.
 ///
-/// It ensures the visibility is `pub(super)`, that the function is `async`,
-/// that it is named `up`, etc. Internally a shim is created to bridge the gap between
+/// It ensures the visibility is `pub`, that the function is `async`,
+/// that it is named `up`, etc. Internally, a shim function is created to bridge the gap between
 /// a boxed future that is used in `kolomoni_migrations_core` and this "normal" async function.
 ///
 /// The following is an example of using this in an `up.rs` file of a migration:
 /// ```no_run
-/// use kolomoni_migrations_core::errors::MigrationApplyError;
 /// use sqlx::PgConnection;
 ///
+/// use kolomoni_migrations_core::context::MigrationContext;
+/// use kolomoni_migrations_core::errors::MigrationApplyError;
+///
+///
 /// #[kolomoni_migrations_macros::up]
-/// pub(super) async fn up(database_connection: &mut PgConnection) -> Result<(), MigrationApplyError> {
+/// pub async fn up(context: MigrationContext<'_>) -> Result<(), MigrationApplyError> {
 ///     // ... migration ...
 ///     Ok(())
 /// }
@@ -436,17 +439,20 @@ pub fn up(_attr: TokenStream, input: TokenStream) -> TokenStream {
 
 /// Validates and prepares the `async fn down` function of a given migration script.
 ///
-/// It ensures the visibility is `pub(super)`, that the function is `async`,
-/// that it is named `down`, etc. Internally a shim is created to bridge the gap between
+/// It ensures the visibility is `pub`, that the function is `async`,
+/// that it is named `down`, etc. Internally, a shim function is created to bridge the gap between
 /// a boxed future that is used in `kolomoni_migrations_core` and this "normal" async function.
 ///
 /// The following is an example of using this in an `down.rs` file of a migration:
 /// ```no_run
-/// use kolomoni_migrations_core::errors::MigrationRollbackError;
 /// use sqlx::PgConnection;
 ///
+/// use kolomoni_migrations_core::errors::MigrationRollbackError;
+/// use kolomoni_migrations_core::context::MigrationContext;
+///
+///
 /// #[kolomoni_migrations_macros::down]
-/// pub(super) async fn up(database_connection: &mut PgConnection) -> Result<(), MigrationRollbackError> {
+/// pub async fn down(context: MigrationContext<'_>) -> Result<(), MigrationRollbackError> {
 ///     // ... rollback ...
 ///     Ok(())
 /// }

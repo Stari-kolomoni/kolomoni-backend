@@ -41,6 +41,8 @@ pub fn construct_last_modified_header_value(last_modification_time: &DateTime<Ut
 /// use kolomoni::api::errors::EndpointResult;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 /// use kolomoni::authentication::AuthenticatedUser;
+/// use kolomoni::require_user_authentication;
+///
 ///
 /// #[utoipa::path(
 ///     get,
@@ -134,12 +136,16 @@ macro_rules! require_user_authentication {
 ///
 /// # Example
 /// ```no_run
+/// use kolomoni_core::permissions::Permission;
+///
 /// use kolomoni::api::openapi;
 /// use kolomoni::api::openapi::response::requires;
 /// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::state::ApplicationState;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 /// use kolomoni::authentication::AuthenticatedUser;
-/// use kolomoni_core::permissions::Permission;
+/// use kolomoni::require_permission_with_optional_authentication;
+///
 ///
 /// #[utoipa::path(
 ///     get,
@@ -277,12 +283,17 @@ macro_rules! require_permission_with_optional_authentication {
 ///
 /// # Example
 /// ```no_run
+/// use kolomoni_core::permissions::Permission;
+///
 /// use kolomoni::api::openapi;
 /// use kolomoni::api::openapi::response::requires;
 /// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::state::ApplicationState;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 /// use kolomoni::authentication::AuthenticatedUser;
-/// use kolomoni_core::permissions::Permission;
+/// use kolomoni::require_permission_in_set;
+/// use kolomoni::require_user_authentication;
+///
 ///
 /// #[utoipa::path(
 ///     get,
@@ -374,12 +385,17 @@ macro_rules! require_permission_in_set {
 ///
 /// # Example
 /// ```no_run
+/// use kolomoni_core::permissions::Permission;
+///
 /// use kolomoni::api::openapi;
 /// use kolomoni::api::openapi::response::requires;
 /// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::state::ApplicationState;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 /// use kolomoni::authentication::AuthenticatedUser;
-/// use kolomoni_core::permissions::Permission;
+/// use kolomoni::require_permissions_on_user;
+/// use kolomoni::require_user_authentication;
+///
 ///
 /// #[utoipa::path(
 ///     get,
@@ -441,6 +457,31 @@ macro_rules! require_permission_in_set {
 /// [mutably deref it]: https://docs.rs/sqlx/0.8.2/sqlx/pool/struct.PoolConnection.html#impl-AsMut%3C%3CDB+as+Database%3E::Connection%3E-for-PoolConnection%3CDB%3E
 #[macro_export]
 macro_rules! require_permissions_on_user {
+    ($database_connection:expr, $authenticated_user:expr, [$($required_permission:expr),+]) => {{
+        use kolomoni_core::permissions::PermissionSet;
+        use kolomoni_core::api_models::ErrorReason;
+
+        let required_permission_set = PermissionSet::from_permissions(
+            &[$($required_permission),+]
+        );
+
+
+        if !$authenticated_user
+            .transitively_has_permissions($database_connection, required_permission_set.clone())
+            .await?
+        {
+            return $crate::api::errors::EndpointResponseBuilder::new(
+                actix_web::http::StatusCode::FORBIDDEN,
+            )
+            .with_error_reason(
+                ErrorReason::missing_permissions_from_set(&required_permission_set),
+            )
+            .build();
+        }
+
+        $authenticated_user
+    }};
+
     ($database_connection:expr, $authenticated_user:expr, $required_permission:expr) => {{
         if !$authenticated_user
             .transitively_has_permission($database_connection, $required_permission)
@@ -451,28 +492,6 @@ macro_rules! require_permissions_on_user {
                     kolomoni_core::api_models::ErrorReason::missing_permission($required_permission),
                 )
                 .build();
-        }
-
-        $authenticated_user
-    }};
-
-    ($database_connection:expr, $authenticated_user:expr, [$($required_permission:expr),+]) => {{
-        let required_permission_set = PermissionSet::from_permissions(
-            &[$($required_permission:expr),+]
-        );
-
-
-        if !$authenticated_user
-            .transitively_has_permissions($database_connection, required_permission_set)
-            .await?
-        {
-            return $crate::api::errors::EndpointResponseBuilder::new(
-                actix_web::http::StatusCode::FORBIDDEN,
-            )
-            .with_error_reason(
-                $crate::api::errors::ErrorReason::missing_permissions(required_permission_set),
-            )
-            .build();
         }
 
         $authenticated_user
@@ -509,12 +528,16 @@ macro_rules! require_permissions_on_user {
 ///
 /// # Example
 /// ```no_run
+/// use kolomoni_core::permissions::Permission;
+///
 /// use kolomoni::api::openapi;
 /// use kolomoni::api::openapi::response::requires;
 /// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::state::ApplicationState;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 /// use kolomoni::authentication::AuthenticatedUser;
-/// use kolomoni_core::permissions::Permission;
+/// use kolomoni::require_user_authentication_and_permissions;
+///
 ///
 /// #[utoipa::path(
 ///     get,
@@ -576,6 +599,16 @@ macro_rules! require_permissions_on_user {
 /// [`UserAuthenticationExtractor`]: crate::authentication::UserAuthenticationExtractor
 #[macro_export]
 macro_rules! require_user_authentication_and_permissions {
+    ($database_connection:expr, $authentication_extractor:expr, [$($required_permission:expr),+]) => {{
+        let __authenticated_user = $crate::require_user_authentication!($authentication_extractor);
+
+        $crate::require_permissions_on_user!(
+            $database_connection,
+            __authenticated_user,
+            [$($required_permission),+]
+        )
+    }};
+
     ($database_connection:expr, $authentication_extractor:expr, $required_permission:expr) => {{
         let __authenticated_user = $crate::require_user_authentication!($authentication_extractor);
 
@@ -583,16 +616,6 @@ macro_rules! require_user_authentication_and_permissions {
             $database_connection,
             __authenticated_user,
             $required_permission
-        )
-    }};
-
-    ($database_connection:expr, $authentication_extractor:expr, [$($required_permission:expr),+]) => {{
-        let __authenticated_user = $crate::require_user_authentication!($authentication_extractor);
-
-        $crate::require_permissions_on_user!(
-            $database_connection,
-            __authenticated_user,
-            [$($required_permission:expr),+]
         )
     }};
 }

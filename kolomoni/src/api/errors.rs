@@ -342,7 +342,7 @@ pub struct EndpointResponseBuilder {
 /// Endpoint response builder initialization methods, named after
 /// the status codes they initialize with.
 impl EndpointResponseBuilder {
-    fn new(status_code: StatusCode) -> Self {
+    pub fn new(status_code: StatusCode) -> Self {
         Self {
             status_code,
             body: None,

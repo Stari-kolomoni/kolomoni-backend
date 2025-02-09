@@ -71,11 +71,11 @@ use kolomoni_core::api_models::InvalidJsonBodyReason;
 use miette::{Context, IntoDiagnostic, Result};
 use tracing::info;
 
-mod api;
-mod authentication;
-mod cli;
-mod logging;
-mod state;
+pub mod api;
+pub mod authentication;
+pub mod cli;
+pub mod logging;
+pub mod state;
 
 #[cfg(feature = "e2e-testing")]
 mod testing;

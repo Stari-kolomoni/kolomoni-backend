@@ -39,10 +39,13 @@
 //! Types that implement [`utoipa::ToResponse`] can be used
 //! inside an individual response in the `responses` section (example based on the [`AsErrorReason`] annotation):
 //! ```no_run
+//! use kolomoni_core::api_models::WordErrorReason;
+//!
 //! use kolomoni::declare_openapi_error_reason_response;
 //! use kolomoni::api::errors::EndpointResult;
-//! use kolomoni::api::errors::WordErrorReason;
 //! use kolomoni::api::openapi::response::InternalServerError;
+//! use kolomoni::api::openapi::response::AsErrorReason;
+//!
 //!
 //! declare_openapi_error_reason_response!(
 //!     pub struct MyCustomErrorReason {
@@ -244,6 +247,8 @@ impl utoipa::IntoResponses for MissingAuthentication {
 /// use kolomoni::require_user_authentication_and_permissions;
 /// use kolomoni::authentication::UserAuthenticationExtractor;
 ///
+/// use kolomoni_core::permissions::Permission;
+///
 /// #[utoipa::path(
 ///     post,
 ///     path = "/update",
@@ -251,7 +256,8 @@ impl utoipa::IntoResponses for MissingAuthentication {
 ///         MissingAuthentication,
 ///         // Notice how we used the `And` operator to combine two permission requirements.
 ///         // Additionally, we had to set MissingPermissions' second generic to 2, since
-///         // we require two permissions, not just one.
+///         // we require two permissions, not just one. Sadly, we cannot infer this
+///         // constant in stable Rust yet.
 ///         MissingPermissions<And<requires::WordRead, requires::WordUpdate>, 2>
 ///     )
 /// )]
@@ -385,6 +391,7 @@ where
 /// use kolomoni::api::OptionalIfModifiedSince;
 /// use kolomoni::api::openapi::response::Unmodified;
 /// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::api::errors::EndpointResponseBuilder;
 ///
 /// #[utoipa::path(
 ///     get,
@@ -458,6 +465,7 @@ impl utoipa::IntoResponses for Unmodified {
 /// use kolomoni::api::OptionalIfModifiedSince;
 /// use kolomoni::api::openapi::response::InternalServerError;
 /// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::state::ApplicationState;
 ///
 /// #[utoipa::path(
 ///     get,
@@ -673,9 +681,13 @@ impl utoipa::IntoResponses for RequiredJsonBodyErrors {
 /// # Example
 /// ```no_run
 /// use actix_web::web;
-/// use kolomoni_core::id::EnglishWordId;
+///
+/// use kolomoni_core::ids::EnglishWordId;
+///
 /// use kolomoni::api::openapi::response::UuidUrlParameterError;
 /// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::api::v1::dictionary::parse_uuid;
+///
 ///
 /// #[utoipa::path(
 ///     post,
@@ -806,8 +818,15 @@ macro_rules! declare_openapi_error_reason_response {
 ///
 /// # Example
 /// ```no_run
+/// use actix_web::web;
+/// use actix_web::get;
+///
+/// use kolomoni_core::api_models::WordErrorReason;
+///
 /// use kolomoni::declare_openapi_error_reason_response;
-/// use kolomoni::api::error::WordErrorReason;
+/// use kolomoni::api::errors::EndpointResponseBuilder;
+/// use kolomoni::api::errors::EndpointResult;
+/// use kolomoni::api::openapi::response::AsErrorReason;
 ///
 /// declare_openapi_error_reason_response!(
 ///     pub struct EnglishWordNotFound {
@@ -850,11 +869,11 @@ macro_rules! declare_openapi_error_reason_response {
 ///     if !word_exists {
 ///         return EndpointResponseBuilder::not_found()
 ///             .with_error_reason(WordErrorReason::word_not_found())
-///             .build;
+///             .build();
 ///     }
 ///
 ///     // ...
-///     # todo!();
+///     # EndpointResponseBuilder::ok().build()
 /// }
 /// ```
 ///

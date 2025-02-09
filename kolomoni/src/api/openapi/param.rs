@@ -11,22 +11,24 @@
 ///
 /// ```no_run
 /// use miette::IntoDiagnostic;
+///
 /// use actix_web::{get, http::{StatusCode, header}};
 /// use actix_web::HttpResponse;
+///
 /// use kolomoni::state::ApplicationState;
 /// use kolomoni::api::OptionalIfModifiedSince;
 /// use kolomoni::api::openapi;
-/// use kolomoni::api::errors::{APIError, EndpointResult};
+/// use kolomoni::api::errors::EndpointResult;
 /// use kolomoni::api::macros::construct_last_modified_header_value;
 ///
 /// #[utoipa::path(
 ///     get,
 ///     path = "/hello-world",
 ///     params(
-///         openapi::IfModifiedSinceParameter,
+///         openapi::param::IfModifiedSince,
 ///     ),
 ///     responses(
-///         openapi::InternalServerErrorResponse,
+///         openapi::response::InternalServerError,
 ///     )
 /// )]
 /// #[get("/hello-world")]
@@ -37,16 +39,14 @@
 ///     # let last_modification_time = chrono::Utc::now();
 ///     // ...
 ///
-///     if if_modified_since.has_not_changed_since(&last_modification_time) {
+///     if if_modified_since.enabled_and_has_not_changed_since(&last_modification_time) {
 ///         let mut unchanged_response = HttpResponse::new(StatusCode::NOT_MODIFIED);
 ///
 ///         unchanged_response
 ///             .headers_mut()
 ///             .append(
 ///                 header::LAST_MODIFIED,
-///                 construct_last_modified_header_value(&last_modification_time)
-///                     .into_diagnostic()
-///                     .map_err(APIError::InternalError)?,
+///                 construct_last_modified_header_value(&last_modification_time),
 ///             );
 ///         
 ///         return Ok(unchanged_response);

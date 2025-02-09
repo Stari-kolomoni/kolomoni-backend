@@ -27,8 +27,10 @@ pub mod translations;
 ///
 /// # Example
 /// ```rust
-/// use crate::api::v1::dictionary::parse_uuid;
-/// use crate::api::errors::EndpointResult;
+/// use kolomoni_core::ids::UserId;
+///
+/// use kolomoni::api::v1::dictionary::parse_uuid;
+/// use kolomoni::api::errors::EndpointResult;
 ///
 /// #[actix_web::get("/{hello_world}")]
 /// async fn hello_world(
@@ -37,9 +39,9 @@ pub mod translations;
 /// ) -> EndpointResult {
 ///     // ...
 ///     
-///     // Both flavors are valid, the turbofish syntax perhaps slightly clearer.
+///     // Both flavors are valid, though the turbofish syntax is perhaps slightly clearer?
+///     // let user_id: UserId = parse_uuid(parameters.into_inner().0)?;
 ///     let user_id = parse_uuid::<UserId>(parameters.into_inner().0)?;
-///     let user_id: UserId = parse_uuid(parameters.into_inner().0)?;
 ///
 ///     // ...
 ///     # todo!();

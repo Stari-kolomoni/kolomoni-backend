@@ -62,9 +62,8 @@ use std::borrow::Cow;
 
 use thiserror::Error;
 
-pub(crate) mod macros;
-
 pub mod entities;
+pub mod macros;
 
 mod connection;
 pub use connection::*;

@@ -11,10 +11,10 @@
 /// *This is precisely what this macro aims to simplify.*
 ///
 /// ```rust,no_run
-/// use crate::macros::create_mapped_async_stream;
+/// use futures_core::stream::BoxStream;
 /// use std::num::TryFromIntError;
 ///
-/// use futures_core::BoxStream;
+/// use kolomoni_database::macros::create_mapped_async_stream;
 ///
 ///
 /// type OriginalStreamType<'c> = BoxStream<'c, i32>;
@@ -22,7 +22,7 @@
 /// create_mapped_async_stream!(
 ///     pub struct UnsignedIntStream<'c>;
 ///     transforms stream OriginalStreamType<'c> => stream of Result<u32, TryFromIntError>:
-///         |value| u32::try_from(value)
+///         |value| value.map(TryFrom::try_from)
 /// );
 ///
 ///
@@ -44,6 +44,7 @@
 ///
 /// [`Stream`]: futures_core::Stream
 /// [`BoxStream`]: futures_core::BoxStream
+#[macro_export]
 macro_rules! create_mapped_async_stream {
     (
         $struct_visibility:vis struct $struct_identifier:ident<$struct_lifetime:lifetime>;
@@ -82,4 +83,4 @@ macro_rules! create_mapped_async_stream {
     };
 }
 
-pub(crate) use create_mapped_async_stream;
+pub use create_mapped_async_stream;

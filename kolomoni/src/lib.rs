@@ -1,8 +1,8 @@
 #![allow(rustdoc::private_intra_doc_links)]
 
 pub mod api;
-pub(crate) mod authentication;
-pub(crate) mod cli;
+pub mod authentication;
+pub mod cli;
 pub mod logging;
 pub mod state;
 

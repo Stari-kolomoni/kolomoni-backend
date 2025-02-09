@@ -1554,6 +1554,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde",
+ "sqlx",
  "syn 2.0.79",
  "thiserror",
  "toml",
