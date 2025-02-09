@@ -291,6 +291,16 @@ pub struct UpCommandArguments {
                 and must be greater than the currently applied version. If unspecified, it defaults to the newest version."
     )]
     pub migrate_to_version: Option<i64>,
+
+    #[arg(
+        short = 'y',
+        long = "assume-yes",
+        default_value = "false",
+        action = ArgAction::SetTrue,
+        help = "Indicates that the user does not want (or cannot) interactively answer confirmations. \
+                As such, any confirmation will default to yes."
+    )]
+    pub assume_user_confirmation: bool,
 }
 
 

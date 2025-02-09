@@ -179,20 +179,22 @@ pub async fn cli_up_inner(arguments: UpCommandArguments) -> Result<()> {
     }
     println!();
 
-    print!("Are you sure you want to continue? The migrations above will be applied. [y/N] ");
-    io::stdout()
-        .flush()
-        .into_diagnostic()
-        .wrap_err("failed to flush terminal output")?;
+    if !arguments.assume_user_confirmation {
+        print!("Are you sure you want to continue? The migrations above will be applied. [y/N] ");
+        io::stdout()
+            .flush()
+            .into_diagnostic()
+            .wrap_err("failed to flush terminal output")?;
 
-    let mut user_response = String::new();
-    io::stdin()
-        .read_line(&mut user_response)
-        .into_diagnostic()
-        .wrap_err("failed to read user terminal input")?;
+        let mut user_response = String::new();
+        io::stdin()
+            .read_line(&mut user_response)
+            .into_diagnostic()
+            .wrap_err("failed to read user terminal input")?;
 
-    if user_response.trim_end().to_ascii_lowercase() != "y" {
-        return Err(miette!("User aborted command."));
+        if user_response.trim_end().to_ascii_lowercase() != "y" {
+            return Err(miette!("User aborted command."));
+        }
     }
 
 

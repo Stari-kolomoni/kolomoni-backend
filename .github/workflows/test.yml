@@ -8,68 +8,122 @@ on:
   workflow_dispatch: 
 
 jobs:
-  run-unit-tests:
+  run-workspace-tests:
     runs-on: ubuntu-latest
-    name: "Run doc and unit tests"
+    name: "Run tests on entire workspace"
+    timeout-minutes: 60
+    env:
+      SQLX_OFFLINE: "true"
     steps:
-      - name: "Set up required tools"
+      - name: "Prepare environment"
         run: |
+          set -e
           sudo apt-get update \
             && sudo apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
+
       - name: "Checkout repository"
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.2.2
+
       - name: "Install stable Rust"
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - name: Cache
+
+      - name: "Set up Rust cache"
         uses: Swatinem/rust-cache@v2
-      - name: "Run unit tests"
+
+      - name: "Run tests(lib,bins,examples,tests,benches) on full workspace excluding kolomoni_test"
         # Excludes the end-to-end testing crate (tested separately).
         # This one also doesn't execute doctests due to --all-targets.
         run: cargo test --verbose --workspace --exclude kolomoni_test --all-features --all-targets
-      - name: "Run doctests"
+
+      - name: "Run tests(doc) on full workspace excluding kolomoni_test"
         # Excludes the end-to-end testing crate (tested separately).
         run: cargo test --verbose --workspace --exclude kolomoni_test --all-features --doc
+      
+      # The following three invocations purposefully exclude integration tests,
+      # which are tested in the `run-end-to-end-tests` job below.
+      - name: "Run tests(lib) on kolomoni_test"
+        run: cargo test --verbose --package kolomoni_test --all-features --lib
+
+      - name: "Run tests(examples) on kolomoni_test"
+        run: cargo test --verbose --package kolomoni_test --all-features --examples
+
+      - name: "Run tests(doc) on kolomoni_test"
+        run: cargo test --verbose --package kolomoni_test --all-features --doc
+
   run-end-to-end-tests:
     runs-on: ubuntu-latest
     name: "Run end-to-end tests"
+    timeout-minutes: 60
+    env:
+      SQLX_OFFLINE: "true"
     steps:
-      - name: "Set up required tools"
+      - name: "Prepare environment"
         run: |
+          set -e
           sudo apt-get update \
             && sudo apt-get install -y --no-install-recommends build-essential libssl-dev pkg-config
       - name: "Checkout repository"
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.2.2
+
       - name: "Install stable Rust"
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - name: Cache
+
+      - name: "Set up Rust cache"
         uses: Swatinem/rust-cache@v2
+
       - name: "Initialize PostgreSQL database"
+        # Steps explained:
+        # - We remove the old test database container and its volume, if present.
+        # - We spin up a new PostgreSQL docker container and execute our initialization scripts on it.
         run: |
+          set -e
           docker stop --time 30 kolomoni-e2e-test-database || true
+          
           docker rm --volumes kolomoni-e2e-test-database || true
-          docker run --name kolomoni-e2e-test-database \
-            -p 127.0.0.1:5432:5432 \
-            --env POSTGRES_PASSWORD=postgres --env POSTGRES_USER=postgres \
-            --env POSTGRES_HOST_AUTH_METHOD=trust --env POSTGRES_DB=kolomoni \
-            -v ./kolomoni_test/assets/postgres-initialization-script.sh:/docker-entrypoint-initdb.d/postgres-initialization-script.sh \
-            --rm --detach postgres:16.2-alpine
-      - name: "Compile and start API server"
+
+          docker run \
+            --name kolomoni-e2e-test-database \
+            --publish 127.0.0.1:5432:5432 \
+            --env POSTGRES_USER=postgres \
+            --env POSTGRES_PASSWORD=postgres \
+            --env POSTGRES_DB=kolomoni_test \
+            --rm \
+            --detach \
+            postgres:17.2-alpine
+
+      - name: "Perform database migrations"
+        env:
+          KOLOMONI_MIGRATIONS_DATABASE_URL_PRIVILEGED_USER: "postgres://postgres:postgres@127.0.0.1:5432/kolomoni_test"
+          KOLOMONI_MIGRATIONS_DATABASE_URL_NORMAL_USER: "postgres://kolomoni_migrator:kolomoni_migrator@127.0.0.1:5432/kolomoni_test"
+        run: |
+          set -e
+
+          echo "Building kolomoni_migrations CLI..."
+          cargo build --verbose --release --package kolomoni_migrations
+
+          echo "Applying all migrations..."
+          cargo run --verbose --release --package kolomoni_migrations -- up --assume-yes
+
+      - name: "Build and start API server"
         timeout-minutes: 60
         run: |
           set -e
           echo "Creating log directory."
           mkdir -p logs
+
+          echo "Building server."
+          cargo build --verbose --release --features e2e-testing
           
-          echo "Compiling and running server in the background."
-          nohup cargo run --verbose --release --features e2e-testing \
-            -- --configurationFilePath ./kolomoni_test/assets/configuration.TESTING.toml > logs/server.log 2>&1 &
+          echo "Starting server in the background."
+          nohup cargo run --verbose --release --features e2e-testing -- \
+            --configurationFilePath ./kolomoni_test/assets/configuration.TESTING.toml > logs/server.log 2>&1 &
           SERVER_PID=$!
 
-          echo "Server compiling and starting with PID $SERVER_PID."
+          echo "Server is starting in the background with PID $SERVER_PID."
           rm -f -- server.pid
           echo $SERVER_PID > server.pid
 
@@ -79,10 +133,11 @@ jobs:
               sleep 1
           done
 
-          echo "File ./logs/server.log exists, waiting until server is ready."
+          echo "File ./logs/server.log exists!"
+          echo "Waiting until server is ready..."
           while true
           do
-            if tail -n100 ./logs/server.log | grep -q "initialized and running"
+            if tail -n1000 ./logs/server.log | grep -q "initialized and running"
             then
               echo "Server is ready!"
               break
@@ -96,29 +151,50 @@ jobs:
               exit 1
             fi
 
-            sleep 5
+            sleep 4
           done
+
       - name: "Run end-to-end tests"
         env:
-          TEST_API_SERVER_URL: "http://127.0.0.1:8866"
+          KOLOMONI_TEST_SERVER_BASE_URL: "http://127.0.0.1:8866"
           RUST_BACKTRACE: "1"
-        run: cd kolomoni_test && cargo test --verbose --test '*' -- --test-threads 1
+          RUST_TEST_TIME_INTEGRATION: "300000,1800000"
+        run: |
+          cargo test \
+            --package kolomoni_test \
+            --verbose \
+            --no-fail-fast \
+            --test "end_to_end" \
+            -- \
+            --test-threads 1 \
+            --report-time \
+            --ensure-time
+
       - name: "Stop API server"
         if: ${{ always() }}
         run: |
+          set -e
+
           SERVER_PID=$(<server.pid)
+
           echo "Killing API server with PID $SERVER_PID."
           kill -s SIGTERM "$SERVER_PID"
+
           echo "API server killed."
-      - name: "Output API server log"
+
+      - name: "Echo API server log"
         if: ${{ always() }}
         run: |
+          set -e
           echo "-- SERVER LOG START --"
           cat ./logs/server.log
           echo "-- SERVER LOG END --"
+
       - name: "Stop PostgreSQL database"
         if: ${{ always() }}
         run: |
+          set -e
           echo "Stopping PostgreSQL database container."
           docker stop --time 60 kolomoni-e2e-test-database
-          echo "PostgreSQL database container stopped."
+          docker rm --volumes kolomoni-e2e-test-database || true
+          echo "PostgreSQL database container stopped and removed."
