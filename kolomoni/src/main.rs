@@ -86,54 +86,6 @@ use crate::cli::CLIArgs;
 use crate::logging::initialize_tracing;
 use crate::state::ApplicationStateInner;
 
-/*
-#[derive(Debug, Error)]
-pub enum PendingMigrationApplyError {
-    #[error("failed to retrieve database migration status")]
-    StatusError(
-        #[from]
-        #[source]
-        StatusError,
-    ),
-
-    #[error("failed to apply migration")]
-    MigrationApplyError(
-        #[from]
-        #[source]
-        MigrationApplyError,
-    ),
-}
-
-// TODO needs logging
-pub async fn apply_pending_migrations(
-    database_connection: &mut PgConnection,
-) -> Result<(), PendingMigrationApplyError> {
-    let manager = kolomoni_migrations::migrations::manager();
-
-    let migrations = manager
-        .migrations_with_status(
-            database_connection,
-            MigrationsWithStatusOptions::strict(),
-        )
-        .await?;
-
-    let pending_migrations = migrations
-        .into_iter()
-        .filter(|migration| migration.status() == &MigrationStatus::Pending)
-        .collect::<Vec<_>>();
-
-
-    if pending_migrations.is_empty() {
-        return Ok(());
-    }
-
-
-    for pending_migration in pending_migrations {
-        pending_migration.execute_up(database_connection).await?;
-    }
-
-    Ok(())
-} */
 
 
 #[tokio::main]

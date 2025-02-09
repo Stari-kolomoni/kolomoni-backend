@@ -15,6 +15,9 @@ use kolomoni_core::{
 };
 use reqwest::StatusCode;
 
+use crate::{macros::assert_request_ok, response::AssertableServerResponse};
+
+
 pub const TEST_USER_AGENT: &str = concat!("kolomoni-e2e-test/v", env!("CARGO_PKG_VERSION"));
 
 
@@ -39,13 +42,14 @@ where
     /// with the `e2e-testing` feature flag, exposing the required
     /// additional endpoints we use while testing.
     pub async fn assert_testing_is_enabled_on_server(&self) {
-        let response = self
-            .client
-            .get_request_builder()
-            .endpoint_url("/testing/enabled")
-            .send()
-            .await
-            .unwrap();
+        let response = assert_request_ok!(
+            self.client
+                .get_request_builder()
+                .raw_endpoint_url("/testing/enabled")
+                .send()
+                .await,
+            "failed to check whether the server has been compiled with the testing feature flag"
+        );
 
         if response.status() != StatusCode::OK {
             panic!("expected the server to have the testing feature flag enabled");
@@ -55,38 +59,47 @@ where
     pub async fn perform_full_reset(&self) {
         self.assert_testing_is_enabled_on_server().await;
 
-        let response = self
-            .client
-            .post_request_builder()
-            .endpoint_url("/testing/state/reset")
-            .send()
-            .await
-            .unwrap();
+        let response = assert_request_ok!(
+            self.client
+                .post_request_builder()
+                .raw_endpoint_url("/testing/state/reset")
+                .send()
+                .await,
+            "failed to execute request to perform full backend reset"
+        );
 
         if response.status() != StatusCode::OK {
-            panic!("failed to perform full backend reset")
+            panic!(
+                "failed to perform full backend reset: {}",
+                response.format_with_debug_info()
+            );
         }
     }
 
     pub async fn give_user_administrator_role(&self, user_id: UserId) {
         self.assert_testing_is_enabled_on_server().await;
 
-        let response = self
-            .client
-            .post_request_builder()
-            .endpoint_url("/testing/user/give-administrator-role")
-            .json(&GiveAdministratorRoleRequest {
-                user_id: user_id.into_uuid(),
-            })
-            .send()
-            .await
-            .unwrap();
+        let response = assert_request_ok!(
+            self.client
+                .post_request_builder()
+                .raw_endpoint_url("/testing/user/give-administrator-role")
+                .json(&GiveAdministratorRoleRequest {
+                    user_id: user_id.into_uuid(),
+                })
+                .send()
+                .await,
+            format!(
+                "failed to execute request to give user {:?} the administrator role",
+                user_id
+            )
+        );
 
 
         if response.status() != StatusCode::OK {
             panic!(
-                "failed to give user {:?} administrator role",
-                user_id
+                "failed to give user {:?} the administrator role: {}",
+                user_id,
+                response.format_with_debug_info()
             );
         }
     }
@@ -94,21 +107,26 @@ where
     pub async fn reset_user_roles_to_default(&self, user_id: UserId) {
         self.assert_testing_is_enabled_on_server().await;
 
-        let response = self
-            .client
-            .post_request_builder()
-            .endpoint_url("/testing/user/reset-roles-to-default")
-            .json(&ResetUserRolesRequest {
-                user_id: user_id.into_uuid(),
-            })
-            .send()
-            .await
-            .unwrap();
+        let response = assert_request_ok!(
+            self.client
+                .post_request_builder()
+                .raw_endpoint_url("/testing/user/reset-roles-to-default")
+                .json(&ResetUserRolesRequest {
+                    user_id: user_id.into_uuid(),
+                })
+                .send()
+                .await,
+            format!(
+                "failed to execute request to reset roles for user {:?} to default",
+                user_id
+            )
+        );
 
         if response.status() != StatusCode::OK {
             panic!(
-                "failed to reset user {:?}'s roles to default",
-                user_id
+                "failed to reset user {:?}'s roles to default: {}",
+                user_id,
+                response.format_with_debug_info()
             );
         }
     }
@@ -132,14 +150,12 @@ where
     }
 
     pub async fn assert_server_can_be_pinged(&self) {
-        let ping_result = self
-            .client
-            .health()
-            .ping()
-            .await
-            .expect("failed to ping server health endpoint");
+        let ping_result = assert_request_ok!(
+            self.client.health().ping().await,
+            "failed to ping server health endpoint"
+        );
 
-        assert!(ping_result);
+        assert!(ping_result, "failed to ping server");
     }
 }
 
@@ -172,7 +188,7 @@ impl UnauthanticatedTestServerClient {
         S: Into<ApiServer>,
     {
         let client = kolomoni_api_client::UnauthenticatedClient::new_with_options(
-            &Arc::new(server.into()),
+            Arc::new(server.into()),
             ClientOptions {
                 user_agent: Cow::Borrowed(TEST_USER_AGENT),
             },

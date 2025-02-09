@@ -1,3 +1,4 @@
+pub mod macros;
 pub mod prelude;
 pub mod response;
 pub mod sample_categories;
@@ -11,7 +12,7 @@ use kolomoni_api_client::ApiServer;
 use prelude::{TestServerClient, UnauthanticatedTestServerClient};
 
 
-const TEST_SERVER_BASE_URL_ENVIRONMENT_VAR_NAME: &str = "KOLOMONI_TEST_SERVER_BASE_URL";
+const TEST_SERVER_BASE_URL_ENVIRONMENT_VAR_NAME: &str = "KOLOMONI_TEST_SERVER_URL";
 
 
 pub async fn inititialize_fresh_test_server() -> UnauthanticatedTestServerClient {
@@ -24,12 +25,13 @@ pub async fn inititialize_fresh_test_server() -> UnauthanticatedTestServerClient
         });
 
     let test_server =
-        ApiServer::new_from_full_base_url(&test_server_base_url).unwrap_or_else(|error| {
-            panic!(
-                "failed to initialize fresh test server: invalid base url: {}",
-                error
-            )
-        });
+        ApiServer::new_from_server_url_and_base_api_path(&test_server_base_url, "/api/v1/")
+            .unwrap_or_else(|error| {
+                panic!(
+                    "failed to initialize fresh test server: invalid base url: {}",
+                    error
+                )
+            });
 
     let client = UnauthanticatedTestServerClient::new(test_server);
 

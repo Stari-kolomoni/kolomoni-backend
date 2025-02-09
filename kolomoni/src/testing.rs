@@ -210,6 +210,12 @@ pub async fn reset_server(state: ApplicationState) -> EndpointResult {
 
     rollback_and_reapply_non_privileged_migrations(&migrator_connection_options)
         .await
+        .inspect_err(|error| {
+            tracing::error!(
+                "errored while rolling back and reapplying privileged migrations: {:?}",
+                error
+            );
+        })
         .map_err(|error| EndpointError::internal_error(error))?;
 
     Ok(HttpResponse::Ok().finish())

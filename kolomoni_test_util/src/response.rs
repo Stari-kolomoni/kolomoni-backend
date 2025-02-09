@@ -3,6 +3,8 @@ use reqwest::{header::HeaderValue, StatusCode};
 
 
 pub trait AssertableServerResponse {
+    fn format_with_debug_info(&self) -> String;
+
     fn assert_status_equals(&self, status_code: StatusCode);
 
     fn assert_header_exists(&self, header_name: &str);
@@ -26,6 +28,10 @@ fn format_debug_info_for_panic(server_response: &ServerResponse) -> String {
 
 
 impl AssertableServerResponse for ServerResponse {
+    fn format_with_debug_info(&self) -> String {
+        format_debug_info_for_panic(self)
+    }
+
     fn assert_status_equals(&self, status_code: StatusCode) {
         assert_eq!(
             self.status(),

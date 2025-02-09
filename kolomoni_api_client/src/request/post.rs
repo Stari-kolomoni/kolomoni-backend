@@ -2,7 +2,7 @@ use reqwest::header::{self, HeaderMap, HeaderValue};
 use serde::Serialize;
 use url::Url;
 
-use super::build_request_url;
+use super::{build_request_url, UrlBuildType};
 use crate::{
     errors::{ClientError, ClientResult},
     response::ServerResponse,
@@ -38,7 +38,7 @@ where
         }
     }
 
-    pub fn endpoint_url<U>(self, relative_endpoint_url: U) -> PostRequestBuilder<'c, HC, true>
+    pub fn endpoint_url<U>(self, relative_endpoint_path: U) -> PostRequestBuilder<'c, HC, true>
     where
         U: AsRef<str>,
     {
@@ -46,7 +46,26 @@ where
             client: self.client,
             url: Some(build_request_url(
                 self.client.server(),
-                relative_endpoint_url.as_ref(),
+                relative_endpoint_path.as_ref(),
+                UrlBuildType::UnderBaseApiPath,
+            )),
+            body: self.body,
+            headers: self.headers,
+        }
+    }
+
+    /// Same as [`Self::endpoint_url`], but does not prepend the server's base URL (`/api/v1`)
+    /// to `relative_endpoint_url`.
+    pub fn raw_endpoint_url<U>(self, relative_endpoint_path: U) -> PostRequestBuilder<'c, HC, true>
+    where
+        U: AsRef<str>,
+    {
+        PostRequestBuilder {
+            client: self.client,
+            url: Some(build_request_url(
+                self.client.server(),
+                relative_endpoint_path.as_ref(),
+                UrlBuildType::WithoutBaseApiPath,
             )),
             body: self.body,
             headers: self.headers,

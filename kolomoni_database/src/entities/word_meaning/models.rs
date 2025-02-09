@@ -12,13 +12,13 @@ pub(crate) mod internal {
     /// Contains the fields that all word meaning models share, which are currently:
     /// UUID and the creation and modification timestamp.
     ///
-    /// For language-specific internal models, see the [`word_english_meaning`] and
-    /// [`word_slovene_meaning`] modules (e.g. [`InternalEnglishWordMeaningModel`],
+    /// For language-specific internal models, see the [`word_meaning_english`] and
+    /// [`word_meaning_slovene`] modules (e.g. [`InternalEnglishWordMeaningModel`],
     /// [`InternalSloveneWordMeaningModel`], etc.).
     ///
     ///
-    /// [`word_english_meaning`]: crate::entities::word_english_meaning
-    /// [`word_slovene_meaning`]: crate::entities::word_slovene_meaning
+    /// [`word_meaning_english`]: crate::entities::word_meaning_english
+    /// [`word_meaning_slovene`]: crate::entities::word_meaning_slovene
     /// [`InternalEnglishWordMeaningModel`]: crate::entities::InternalEnglishWordMeaningModel
     /// [`InternalSloveneWordMeaningModel`]: crate::entities::InternalSloveneWordMeaningModel
     pub(crate) struct InternalWordMeaningModel {
@@ -41,8 +41,8 @@ mod external {
     /// An external language-agnostic word model. Contains the fields that all word meaning
     /// models share, which are currently: UUID, creation and modification timestamps.
     ///
-    /// For language-specific external models, see the [`word_english_meaning`] and
-    /// [`word_slovene_meaning`] modules (e.g. [`EnglishWordMeaningModel`],
+    /// For language-specific external models, see the [`word_meaning_english`] and
+    /// [`word_meaning_slovene`] modules (e.g. [`EnglishWordMeaningModel`],
     /// [`SloveneWordMeaningModel`], etc.).
     ///
     ///
@@ -52,8 +52,8 @@ mod external {
     /// that the Stari Kolomoni backend server exposes. For those REST API models, see the [`kolomoni_core`] crate.
     ///
     ///
-    /// [`word_english_meaning`]: crate::entities::word_english_meaning
-    /// [`word_slovene_meaning`]: crate::entities::word_slovene_meaning
+    /// [`word_meaning_english`]: crate::entities::word_meaning_english
+    /// [`word_meaning_slovene`]: crate::entities::word_meaning_slovene
     /// [`EnglishWordMeaningModel`]: crate::entities::EnglishWordMeaningModel
     /// [`SloveneWordMeaningModel`]: crate::entities::SloveneWordMeaningModel
     pub struct WordMeaningModel {

@@ -47,17 +47,31 @@ impl RequestBuilder {
 }
 
 
-fn build_request_url(server: &ApiServer, endpoint: &str) -> Result<Url, url::ParseError> {
-    if !endpoint.starts_with('/') {
-        Url::parse(&format!("{}/{}", server.base_url(), endpoint))
-    } else {
-        Url::parse(&format!("{}{}", server.base_url(), endpoint))
-    }
+enum UrlBuildType {
+    WithoutBaseApiPath,
+    UnderBaseApiPath,
+}
+
+
+fn build_request_url(
+    server: &ApiServer,
+    endpoint: &str,
+    build_type: UrlBuildType,
+) -> Result<Url, url::ParseError> {
+    let endpoint_without_leading_slash = endpoint.strip_prefix('/').unwrap_or(endpoint);
+
+    let url_to_build_on = match build_type {
+        UrlBuildType::WithoutBaseApiPath => server.url_without_base_api_path(),
+        UrlBuildType::UnderBaseApiPath => server.url_with_base_api_path(),
+    };
+
+    url_to_build_on.join(endpoint_without_leading_slash)
 }
 
 fn build_request_url_with_parameters<P, K, V>(
     server: &ApiServer,
     endpoint: &str,
+    build_type: UrlBuildType,
     parameters: P,
 ) -> Result<Url, url::ParseError>
 where
@@ -66,17 +80,29 @@ where
     K: AsRef<str>,
     V: AsRef<str>,
 {
-    if !endpoint.starts_with('/') {
-        Url::parse_with_params(
-            &format!("{}/{}", server.base_url(), endpoint),
-            parameters,
-        )
-    } else {
-        Url::parse_with_params(
-            &format!("{}{}", server.base_url(), endpoint),
-            parameters,
-        )
+    let endpoint_without_leading_slash = endpoint.strip_prefix('/').unwrap_or(endpoint);
+
+    let url_to_build_on = match build_type {
+        UrlBuildType::WithoutBaseApiPath => server.url_without_base_api_path(),
+        UrlBuildType::UnderBaseApiPath => server.url_with_base_api_path(),
+    };
+
+
+    let mut full_url = url_to_build_on.join(endpoint_without_leading_slash)?;
+
+    {
+        let mut full_url_params = full_url.query_pairs_mut();
+
+        for item in parameters.into_iter() {
+            let (name, value) = item.borrow();
+            let name = name.as_ref();
+            let value = value.as_ref();
+
+            full_url_params.append_pair(name, value);
+        }
     }
+
+    Ok(full_url)
 }
 
 

@@ -3,7 +3,7 @@ use std::borrow::Borrow;
 use reqwest::header::HeaderMap;
 use url::Url;
 
-use super::{build_request_url, build_request_url_with_parameters};
+use super::{build_request_url, build_request_url_with_parameters, UrlBuildType};
 use crate::{
     errors::{ClientError, ClientResult},
     response::ServerResponse,
@@ -26,7 +26,7 @@ where
         GetRequestBuilder { client, url: None }
     }
 
-    pub fn endpoint_url<U>(self, relative_endpoint_url: U) -> GetRequestBuilder<'c, HC, true>
+    pub fn endpoint_url<U>(self, relative_endpoint_path: U) -> GetRequestBuilder<'c, HC, true>
     where
         U: AsRef<str>,
     {
@@ -34,7 +34,24 @@ where
             client: self.client,
             url: Some(build_request_url(
                 self.client.server(),
-                relative_endpoint_url.as_ref(),
+                relative_endpoint_path.as_ref(),
+                UrlBuildType::UnderBaseApiPath,
+            )),
+        }
+    }
+
+    /// Same as [`Self::endpoint_url`], but does not prepend the server's base URL (`/api/v1`)
+    /// to `relative_endpoint_url`.
+    pub fn raw_endpoint_url<U>(self, relative_endpoint_path: U) -> GetRequestBuilder<'c, HC, true>
+    where
+        U: AsRef<str>,
+    {
+        GetRequestBuilder {
+            client: self.client,
+            url: Some(build_request_url(
+                self.client.server(),
+                relative_endpoint_path.as_ref(),
+                UrlBuildType::WithoutBaseApiPath,
             )),
         }
     }
@@ -56,6 +73,7 @@ where
             url: Some(build_request_url_with_parameters(
                 self.client.server(),
                 relative_endpoint_url.as_ref(),
+                UrlBuildType::UnderBaseApiPath,
                 parameters,
             )),
         }

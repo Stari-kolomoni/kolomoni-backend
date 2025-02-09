@@ -48,12 +48,16 @@ fn build_api_client(
     server_port: usize,
     access_token: &str,
 ) -> miette::Result<AuthenticatedClient> {
-    let api_server = Arc::new(ApiServer::new_from_host(
-        ServerHost::DomainName(format!("{}:{}", server_host_or_ip, server_port)),
-        ApiServerOptions { use_https: false },
-    ));
+    let api_server = Arc::new(
+        ApiServer::new_from_server_url(
+            ServerHost::DomainName(format!("{}:{}", server_host_or_ip, server_port)),
+            ApiServerOptions { use_https: false },
+        )
+        .into_diagnostic()
+        .wrap_err("failed to construct API server URL")?,
+    );
 
-    let client = kolomoni_api_client::UnauthenticatedClient::new(&api_server)
+    let client = kolomoni_api_client::UnauthenticatedClient::new(api_server)
         .into_diagnostic()
         .wrap_err("failed to initialize API client")?;
 

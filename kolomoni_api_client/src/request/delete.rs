@@ -4,7 +4,7 @@ use reqwest::header::{self, HeaderMap, HeaderValue};
 use serde::Serialize;
 use url::Url;
 
-use super::{build_request_url, build_request_url_with_parameters};
+use super::{build_request_url, build_request_url_with_parameters, UrlBuildType};
 use crate::{
     errors::{ClientError, ClientResult},
     response::ServerResponse,
@@ -46,6 +46,7 @@ where
             url: Some(build_request_url(
                 self.client.server(),
                 relative_endpoint_url.as_ref(),
+                UrlBuildType::UnderBaseApiPath,
             )),
             body: self.body,
             headers: self.headers,
@@ -69,6 +70,7 @@ where
             url: Some(build_request_url_with_parameters(
                 self.client.server(),
                 relative_endpoint_url.as_ref(),
+                UrlBuildType::UnderBaseApiPath,
                 parameters,
             )),
             body: self.body,

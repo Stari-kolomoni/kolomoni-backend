@@ -130,7 +130,7 @@ pub struct UnauthenticatedClient {
 }
 
 impl UnauthenticatedClient {
-    pub fn new(server: &Arc<ApiServer>) -> Result<Self, ClientInitializationError> {
+    pub fn new(server: Arc<ApiServer>) -> Result<Self, ClientInitializationError> {
         Self::new_with_options(
             server,
             ClientOptions {
@@ -140,7 +140,7 @@ impl UnauthenticatedClient {
     }
 
     pub fn new_with_options(
-        server: &Arc<ApiServer>,
+        server: Arc<ApiServer>,
         options: ClientOptions,
     ) -> Result<Self, ClientInitializationError> {
         let http_client_partial = reqwest::Client::builder()
@@ -157,7 +157,7 @@ impl UnauthenticatedClient {
             .map_err(|error| ClientInitializationError::UnableToInitializeReqwestClient { error })?;
 
         Ok(Self {
-            server: server.clone(),
+            server,
             http_client,
         })
     }
