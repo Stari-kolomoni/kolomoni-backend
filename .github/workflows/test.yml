@@ -156,7 +156,7 @@ jobs:
 
       - name: "Run end-to-end tests"
         env:
-          KOLOMONI_TEST_SERVER_BASE_URL: "http://127.0.0.1:8866"
+          KOLOMONI_TEST_SERVER_URL: "http://127.0.0.1:8866"
           RUST_BACKTRACE: "1"
           RUST_TEST_TIME_INTEGRATION: "300000,1800000"
         run: |
