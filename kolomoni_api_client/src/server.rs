@@ -1,5 +1,9 @@
 use std::{fmt::Display, net::SocketAddr};
 
+use thiserror::Error;
+use url::Url;
+
+
 pub enum ServerHost {
     Ip(SocketAddr),
     DomainName(String),
@@ -45,12 +49,23 @@ impl Default for ApiServerOptions {
 }
 
 
+
+#[derive(Debug, Error)]
+#[error("invalid server base URL: {}", .url)]
+pub struct InvalidBaseUrl {
+    url: String,
+
+    #[source]
+    error: url::ParseError,
+}
+
+
 pub struct ApiServer {
     base_api_url: String,
 }
 
 impl ApiServer {
-    pub fn new<S>(server_host: S, options: ApiServerOptions) -> Self
+    pub fn new_from_host<S>(server_host: S, options: ApiServerOptions) -> Self
     where
         S: Into<ServerHost>,
     {
@@ -62,6 +77,17 @@ impl ApiServer {
         Self {
             base_api_url: format!("{}://{}/api/v1", protocol, server_host.into()),
         }
+    }
+
+    pub fn new_from_full_base_url(server_base_url: &str) -> Result<Self, InvalidBaseUrl> {
+        Url::parse(server_base_url).map_err(|error| InvalidBaseUrl {
+            url: server_base_url.to_owned(),
+            error,
+        })?;
+
+        Ok(Self {
+            base_api_url: server_base_url.to_owned(),
+        })
     }
 
     pub(crate) fn base_url(&self) -> &str {

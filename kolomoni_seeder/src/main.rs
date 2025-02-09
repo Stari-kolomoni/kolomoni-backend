@@ -48,7 +48,7 @@ fn build_api_client(
     server_port: usize,
     access_token: &str,
 ) -> miette::Result<AuthenticatedClient> {
-    let api_server = Arc::new(ApiServer::new(
+    let api_server = Arc::new(ApiServer::new_from_host(
         ServerHost::DomainName(format!("{}:{}", server_host_or_ip, server_port)),
         ApiServerOptions { use_https: false },
     ));

@@ -1,8 +1,40 @@
 pub mod prelude;
-mod response;
+pub mod response;
 pub mod sample_categories;
 pub mod sample_users;
 pub mod sample_words;
-mod server;
-pub use response::*;
-pub use server::*;
+pub mod server;
+
+use std::env;
+
+use kolomoni_api_client::ApiServer;
+use prelude::{TestServerClient, UnauthanticatedTestServerClient};
+
+
+const TEST_SERVER_BASE_URL_ENVIRONMENT_VAR_NAME: &str = "KOLOMONI_TEST_SERVER_BASE_URL";
+
+
+pub async fn inititialize_fresh_test_server() -> UnauthanticatedTestServerClient {
+    let test_server_base_url =
+        env::var(TEST_SERVER_BASE_URL_ENVIRONMENT_VAR_NAME).unwrap_or_else(|error| {
+            panic!(
+                "failed to initialize fresh test server: environment variable {} error: {:?}",
+                TEST_SERVER_BASE_URL_ENVIRONMENT_VAR_NAME, error
+            )
+        });
+
+    let test_server =
+        ApiServer::new_from_full_base_url(&test_server_base_url).unwrap_or_else(|error| {
+            panic!(
+                "failed to initialize fresh test server: invalid base url: {}",
+                error
+            )
+        });
+
+    let client = UnauthanticatedTestServerClient::new(test_server);
+
+    client.testing().assert_testing_is_enabled_on_server().await;
+    client.testing().perform_full_reset().await;
+
+    client
+}
