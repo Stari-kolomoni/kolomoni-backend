@@ -1,3 +1,5 @@
+use std::io::ErrorKind;
+
 use clap::Parser;
 use cli::{CliArgs, CliCommand};
 use commands::{
@@ -14,13 +16,37 @@ mod commands;
 mod migrations;
 
 
+/// This function executes [`dotenvy::dotenv`], but does not return an error
+/// when no `.env` files are present.
+fn load_dotenv_files_if_exist() -> Result<()> {
+    let dotenv_result = dotenvy::dotenv();
+
+    if let Err(dotenv_err) = dotenv_result {
+        match dotenv_err {
+            dotenvy::Error::Io(error) => match error.kind() {
+                ErrorKind::NotFound => todo!(),
+                _ => {
+                    return Err(error)
+                        .into_diagnostic()
+                        .wrap_err("failed to load any dotenv file")
+                }
+            },
+            error => {
+                return Err(error)
+                    .into_diagnostic()
+                    .wrap_err("failed to load any dotenv file")
+            }
+        }
+    }
+
+    Ok(())
+}
+
+
 pub fn main() -> Result<()> {
     let cli_args = CliArgs::parse();
 
-    dotenvy::dotenv()
-        .into_diagnostic()
-        .wrap_err("failed to load any dotenv file")?;
-
+    load_dotenv_files_if_exist()?;
 
     match cli_args.command {
         CliCommand::Initialize(initialize_command_args) => cli_initialize(initialize_command_args),
