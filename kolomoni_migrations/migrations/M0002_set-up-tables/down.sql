@@ -4,8 +4,8 @@ DROP TABLE kolomoni.edit;
 
 DROP TABLE kolomoni.word_meaning_translation;
 
-DROP TABLE kolomoni.word_english_meaning;
-DROP TABLE kolomoni.word_slovene_meaning;
+DROP TABLE kolomoni.word_meaning_english;
+DROP TABLE kolomoni.word_meaning_slovene;
 
 DROP TABLE kolomoni.word_meaning_category;
 DROP TABLE kolomoni.word_meaning;
