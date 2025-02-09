@@ -75,7 +75,9 @@ where
             .client
             .post_request_builder()
             .endpoint_url("/testing/user/give-administrator-role")
-            .json(&GiveAdministratorRoleRequest { user_id })
+            .json(&GiveAdministratorRoleRequest {
+                user_id: user_id.into_uuid(),
+            })
             .send()
             .await
             .unwrap();
@@ -96,7 +98,9 @@ where
             .client
             .post_request_builder()
             .endpoint_url("/testing/user/reset-roles-to-default")
-            .json(&ResetUserRolesRequest { user_id })
+            .json(&ResetUserRolesRequest {
+                user_id: user_id.into_uuid(),
+            })
             .send()
             .await
             .unwrap();

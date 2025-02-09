@@ -1,31 +1,30 @@
 //! A test-only API. Included only when
 //! the `e2e-testing` feature flag is enabled.
 
-use actix_web::{post, web, HttpResponse, Scope};
-use kolomoni_auth::{Role, RoleSet, DEFAULT_USER_ROLE};
-use kolomoni_configuration::{Configuration, ForMigrationAtApiRuntimeDatabaseConfiguration};
+use actix_web::{get, post, web, HttpResponse, Scope};
+use kolomoni_configuration::ForMigrationAtApiRuntimeDatabaseConfiguration;
 use kolomoni_core::{
     api_models::{GiveAdministratorRoleRequest, ResetUserRolesRequest},
     ids::UserId,
-    roles::{DEFAULT_USER_ROLE, DEFAULT_USER_ROLE_SET},
+    roles::{Role, RoleSet, DEFAULT_USER_ROLE_SET},
 };
-use kolomoni_database::{entities, DatabaseConnectionOptions};
+use kolomoni_database::{
+    entities::user_role::{UserRoleMutation, UserRoleQuery},
+    DatabaseConnectionOptions,
+};
 use kolomoni_migrations::{
     core::{
         errors::{MigrationApplyError, MigrationRollbackError, StatusError},
         identifier::MigrationIdentifier,
-        migrations::{IntegrityVerdict, MigrationsWithStatusOptions},
     },
     migrations,
 };
-use serde::{Deserialize, Serialize};
+use sqlx::ConnectOptions;
 use thiserror::Error;
 use tracing::{info, warn};
-use uuid::Uuid;
 
 use crate::{
     api::errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
-    obtain_database_connection,
     state::ApplicationState,
 };
 
@@ -41,6 +40,9 @@ pub enum RollbackAndReapplyError {
 
     #[error("migration {} does not have a rollback script", .migration)]
     MissingRollbackScript { migration: MigrationIdentifier },
+
+    #[error("unable to rollback through a non-leading privileged migration: {}", .migration)]
+    UnableToRollbackPrivilegedMigration { migration: MigrationIdentifier },
 
     #[error("database error encountered")]
     DatabaseError {
@@ -96,7 +98,9 @@ async fn rollback_and_reapply_non_privileged_migrations(
     info!("Fetching migration status.");
 
     let all_migrations = migrator
-        .migrations_with_status_with_fallback(migrator_user_connection_options)
+        .migrations_with_status_with_fallback(
+            migrator_user_connection_options.as_pg_connect_options(),
+        )
         .await?;
 
 
@@ -110,7 +114,7 @@ async fn rollback_and_reapply_non_privileged_migrations(
     // Ignores leading privileged migrations.
     let migrations_to_rollback_and_reapply = Vec::from_iter(
         all_migrations
-            .into_iter()
+            .migrations()
             .skip_while(|migration| migration.configuration().run_as_privileged_user),
     );
 
@@ -123,6 +127,18 @@ async fn rollback_and_reapply_non_privileged_migrations(
         }
     }
 
+    // Ensures no non-leading privileged migrations are in the execution path.
+    for migration in &migrations_to_rollback_and_reapply {
+        if migration.configuration().run_as_privileged_user {
+            return Err(
+                RollbackAndReapplyError::UnableToRollbackPrivilegedMigration {
+                    migration: migration.identifier().to_owned(),
+                },
+            );
+        }
+    }
+
+
     info!(
         "Will rollback and reapply {} migrations.",
         migrations_to_rollback_and_reapply.len()
@@ -131,7 +147,10 @@ async fn rollback_and_reapply_non_privileged_migrations(
     info!("Connecting to database as migrator...");
 
 
-    let mut database_connection = migrator_user_connection_options.connect().await?;
+    let mut database_connection = migrator_user_connection_options
+        .as_pg_connect_options()
+        .connect()
+        .await?;
 
     for migration_to_roll_back in migrations_to_rollback_and_reapply.iter().rev() {
         info!(
@@ -214,7 +233,7 @@ pub async fn give_administrator_role_to_user(
         target_user_id
     );
 
-    entities::UserRoleMutation::add_roles_to_user(
+    UserRoleMutation::add_roles_to_user(
         &mut transaction,
         target_user_id,
         RoleSet::from_roles(&[Role::Administrator]),
@@ -247,10 +266,10 @@ pub async fn reset_user_roles_to_starting_user_roles(
     );
 
     let current_roles_of_user =
-        entities::UserRoleQuery::roles_for_user(&mut transaction, target_user_id).await?;
+        UserRoleQuery::roles_for_user(&mut transaction, target_user_id).await?;
 
 
-    let remaining_roles = entities::UserRoleMutation::remove_roles_from_user(
+    let remaining_roles = UserRoleMutation::remove_roles_from_user(
         &mut transaction,
         target_user_id,
         current_roles_of_user,
@@ -259,10 +278,10 @@ pub async fn reset_user_roles_to_starting_user_roles(
 
     assert!(remaining_roles.is_empty());
 
-    entities::UserRoleMutation::add_roles_to_user(
+    UserRoleMutation::add_roles_to_user(
         &mut transaction,
         target_user_id,
-        &*DEFAULT_USER_ROLE_SET,
+        (*DEFAULT_USER_ROLE_SET).clone(),
     )
     .await?;
 

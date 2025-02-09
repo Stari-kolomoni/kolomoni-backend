@@ -153,7 +153,7 @@ mod test {
         );
 
         assert_eq!(
-            UserSelfRead::permissions(),
+            UserAnyRead::permissions(),
             [Permission::UserAnyRead]
         );
 
@@ -166,7 +166,7 @@ mod test {
             And::<And<UserSelfRead, UserAnyWrite>, CategoryCreate>::permissions(),
             [
                 Permission::UserSelfRead,
-                Permission::UserSelfWrite,
+                Permission::UserAnyWrite,
                 Permission::CategoryCreate
             ]
         );

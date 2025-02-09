@@ -47,18 +47,18 @@ fn build_english_word_meaning_update_query(
 
 
     if let Some(new_disambiguation) = values_to_update.disambiguation {
-        separated_set_expressions.push_unseparated("disambiguation = ");
-        separated_set_expressions.push_bind(new_disambiguation);
+        separated_set_expressions.push("disambiguation = ");
+        separated_set_expressions.push_bind_unseparated(new_disambiguation);
     }
 
     if let Some(new_abbreviation) = values_to_update.abbreviation {
-        separated_set_expressions.push_unseparated("abbreviation = ");
-        separated_set_expressions.push_bind(new_abbreviation);
+        separated_set_expressions.push("abbreviation = ");
+        separated_set_expressions.push_bind_unseparated(new_abbreviation);
     }
 
     if let Some(new_description) = values_to_update.description {
-        separated_set_expressions.push_unseparated("description = ");
-        separated_set_expressions.push_bind(new_description);
+        separated_set_expressions.push("description = ");
+        separated_set_expressions.push_bind_unseparated(new_description);
     }
 
 
@@ -186,15 +186,16 @@ mod test {
                 EnglishWordMeaningUpdate {
                     abbreviation: Some(Some("a".into())),
                     description: Some(None),
-                    disambiguation: Some(None),
+                    disambiguation: None,
                 }
             )
-                .build()
-                .sql(),
-            format!(
-                "UPDATE kolomoni.word_meaning_english SET abbreviation = $1 WHERE word_meaning_id = {}",
-                meaning_id.into_uuid()
-            )
+            .build()
+            .sql(),
+            "UPDATE kolomoni.word_meaning_english \
+                SET \
+                    abbreviation = $1, \
+                    description = $2 \
+                WHERE word_meaning_id = $3",
         );
 
         // TODO Other tests.

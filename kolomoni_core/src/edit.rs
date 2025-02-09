@@ -457,21 +457,20 @@ pub enum EditAction {
 
 #[cfg(test)]
 mod test {
-    use uuid::Uuid;
-
     use super::*;
 
     #[test]
     fn serializes_as_schema_version_and_data_field() {
         let edit = Edit::VersionOne(VersionOneEdit {
-            authored_by: UserId::new(Uuid::now_v7()),
+            authored_by: UserId::generate(),
             authored_at: Utc::now(),
             action: EditAction::CreatedEnglishWord {
-                id: EnglishWordId::new(Uuid::now_v7()),
+                id: EnglishWordId::generate(),
             },
         });
 
         let serialized_edit = serde_json::to_value(&edit).unwrap();
+        let serialized_edit_string = serde_json::to_string(&edit).unwrap();
         let serialized_object = serialized_edit.as_object().unwrap();
 
         assert_eq!(
@@ -482,15 +481,22 @@ mod test {
                 .unwrap(),
             1
         );
+
         assert!(serialized_object.get("data").unwrap().is_object());
+        assert!(serialized_object
+            .get("data")
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("action"));
 
 
-        let deserialized_edit: Edit = serde_json::from_value(serialized_edit).unwrap();
+        let deserialized_edit: Edit = serde_json::from_str(&serialized_edit_string).unwrap();
 
         #[allow(irrefutable_let_patterns)]
         let Edit::VersionOne(version_one_deserialized_edit) = deserialized_edit
         else {
-            panic!("epxected to deserialize into version one edit");
+            panic!("expected to deserialize into version one edit");
         };
 
         #[allow(irrefutable_let_patterns)]
