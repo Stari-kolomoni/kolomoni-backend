@@ -90,15 +90,15 @@ jobs:
             --publish 127.0.0.1:5432:5432 \
             --env POSTGRES_USER=postgres \
             --env POSTGRES_PASSWORD=postgres \
-            --env POSTGRES_DB=kolomoni_test \
+            --env POSTGRES_DB=stari_kolomoni \
             --rm \
             --detach \
             postgres:17.2-alpine
 
       - name: "Perform database migrations"
         env:
-          KOLOMONI_MIGRATIONS_DATABASE_URL_PRIVILEGED_USER: "postgres://postgres:postgres@127.0.0.1:5432/kolomoni_test"
-          KOLOMONI_MIGRATIONS_DATABASE_URL_NORMAL_USER: "postgres://kolomoni_migrator:kolomoni_migrator@127.0.0.1:5432/kolomoni_test"
+          KOLOMONI_MIGRATIONS_DATABASE_URL_PRIVILEGED_USER: "postgres://postgres:postgres@127.0.0.1:5432/stari_kolomoni"
+          KOLOMONI_MIGRATIONS_DATABASE_URL_NORMAL_USER: "postgres://kolomoni_migrator:kolomoni_migrator@127.0.0.1:5432/stari_kolomoni"
         run: |
           set -e
 

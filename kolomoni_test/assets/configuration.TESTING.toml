@@ -60,7 +60,7 @@ username = "kolomoni_backend"
 # Login password.
 password = "kolomoni_backend"
 # Database to connect to.
-database_name = "kolomoni_test"
+database_name = "stari_kolomoni"
 # The maximum number of prepared statements to store in the cache.
 statement_cache_capacity = 250
 
@@ -75,7 +75,7 @@ username = "kolomoni_migrator"
 # User password.
 password = "kolomoni_migrator"
 # Database to connect to.
-database_name = "kolomoni_test"
+database_name = "stari_kolomoni"
 # The maximum number of prepared statements to store in the cache.
 statement_cache_capacity = 250
 
