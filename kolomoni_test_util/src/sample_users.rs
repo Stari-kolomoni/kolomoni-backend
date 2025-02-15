@@ -3,7 +3,7 @@ use kolomoni_api_client::{
     api::auth::{UserLoginInfo, UserRegistrationInfo},
     authentication::ServerTokenSet,
     SharedApiClientEndpointGroups,
-    UnauthenticatedClient,
+    UnauthenticatedKolomoniClient,
 };
 use kolomoni_core::api_models::UserInfo;
 
@@ -43,7 +43,7 @@ impl SampleUser {
 
     /// Registers the given sample user on the server,
     /// returning their fresh user information.
-    pub async fn register<S>(&self, client: &UnauthenticatedClient) -> UserInfo {
+    pub async fn register(&self, client: &UnauthenticatedKolomoniClient) -> UserInfo {
         let before_registration = Utc::now();
 
         let newly_registered_user = client
@@ -86,7 +86,7 @@ impl SampleUser {
     /// Logins the user and returns the access and refres token as [`ServerTokenSet`]
     /// (which can be turned into [`ServerAuthentication`], which can, in turn, be used to upgrade
     /// an unauthenticated client into an authenticated one).
-    pub async fn login(&self, client: &UnauthenticatedClient) -> ServerTokenSet {
+    pub async fn login(&self, client: &UnauthenticatedKolomoniClient) -> ServerTokenSet {
         let tokens = client
             .authentication()
             .login_user(UserLoginInfo {

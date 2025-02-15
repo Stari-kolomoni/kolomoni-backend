@@ -18,6 +18,7 @@ use reqwest::StatusCode;
 use thiserror::Error;
 
 use crate::errors::ClientError;
+use crate::errors::ClientResult;
 use crate::macros::{
     handle_error_reasons_or_catch_unexpected_status,
     handle_uncaught_status_code,
@@ -25,20 +26,19 @@ use crate::macros::{
     handlers,
 };
 use crate::request::ApiClientRequestBuild;
-use crate::{errors::ClientResult, AuthenticatedApiClient};
-use crate::{ApiClient, UnauthenticatedApiClient};
+use crate::{AuthenticatedHttpClient, Client, UnauthenticatedHttpClient};
 
 pub mod current;
 
 
 async fn get_all_registered_users<C>(client: &C) -> ClientResult<Vec<UserInfo>>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url("/users")
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -72,12 +72,12 @@ async fn get_user_information_by_user_id<C>(
     user_id: UserId,
 ) -> ClientResult<UserInfo, UserDataFetchError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url(format!("/users/{}", user_id))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -106,12 +106,12 @@ async fn get_user_roles_by_user_id<C>(
     user_id: UserId,
 ) -> ClientResult<RoleSet, UserDataFetchError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url(format!("/users/{}/roles", user_id))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -147,12 +147,12 @@ async fn get_user_effective_permissions_by_user_id<C>(
     user_id: UserId,
 ) -> ClientResult<PermissionSet, UserDataFetchError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url(format!("/users/{}/permissions", user_id))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -211,7 +211,7 @@ async fn update_user_display_name_by_user_id<C>(
     new_display_name: &str,
 ) -> ClientResult<UserInfo, UserDisplayNameUpdateError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .patch_request_builder()
@@ -219,7 +219,7 @@ where
         .json(&UserDisplayNameChangeRequest {
             new_display_name: new_display_name.to_string(),
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -292,7 +292,7 @@ async fn add_roles_to_user_by_user_id<C>(
     roles_to_add: RoleSet,
 ) -> ClientResult<RoleSet, UserRolesAddError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -300,7 +300,7 @@ where
         .json(&UserRoleAddRequest {
             roles_to_add: roles_to_add.role_names(),
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -399,7 +399,7 @@ async fn remove_roles_from_user_by_user_id<C>(
     roles_to_remove: RoleSet,
 ) -> ClientResult<RoleSet, UserRolesRemoveError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .delete_request_builder()
@@ -407,7 +407,7 @@ where
         .json(&UserRoleRemoveRequest {
             roles_to_remove: roles_to_remove.role_names(),
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -482,14 +482,14 @@ where
 
 pub struct SpecificUserUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> SpecificUserUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
@@ -521,14 +521,14 @@ where
 
 pub struct AuthenticatedSpecificUserApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> AuthenticatedSpecificUserApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }

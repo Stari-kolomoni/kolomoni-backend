@@ -4,23 +4,16 @@ use kolomoni_core::api_models::{UserLoginRequest, UserLoginResponse};
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::{errors::ClientError, request::RequestBuilder, UnauthenticatedClient};
+use crate::{errors::ClientError, request::RequestBuilder, UnauthenticatedKolomoniClient};
 
 
 #[derive(Debug, Error)]
 pub enum AuthenticationError {
-    #[error("HTTP client error")]
-    ClientError(
-        #[from]
-        #[source]
-        ClientError,
-    ),
-
     #[error("the provided login information is invalid")]
     IncorrectLoginInformation,
 
-    #[error("unexpected status code in response: {}", .status_code)]
-    UnexpectedStatusResponse { status_code: StatusCode },
+    #[error(transparent)]
+    ClientError(#[from] ClientError),
 }
 
 
@@ -37,7 +30,7 @@ impl ServerAuthentication {
     }
 
     pub async fn new_by_server_log_in<U, P>(
-        client: &UnauthenticatedClient,
+        client: &UnauthenticatedKolomoniClient,
         username: U,
         password: P,
     ) -> Result<Self, AuthenticationError>
@@ -51,7 +44,7 @@ impl ServerAuthentication {
                 username: username.into(),
                 password: password.into(),
             })
-            .send()
+            .send_unauthenticated()
             .await?;
 
         if login_response.status() == StatusCode::OK {
@@ -66,9 +59,7 @@ impl ServerAuthentication {
         } else if login_response.status() == StatusCode::FORBIDDEN {
             Err(AuthenticationError::IncorrectLoginInformation)
         } else {
-            Err(AuthenticationError::UnexpectedStatusResponse {
-                status_code: login_response.status(),
-            })
+            Err(ClientError::unexpected_status_code(login_response.status()).into())
         }
     }
 

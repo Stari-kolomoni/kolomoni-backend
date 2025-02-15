@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, future::Future};
 
 use delete::DeleteRequestBuilder;
 use get::GetRequestBuilder;
@@ -6,7 +6,7 @@ use patch::PatchRequestBuilder;
 use post::PostRequestBuilder;
 use url::Url;
 
-use crate::{server::ApiServer, ApiClient};
+use crate::{errors::ClientResult, response::ServerResponse, server::ApiServer, Client};
 
 pub mod delete;
 pub mod get;
@@ -19,28 +19,28 @@ pub struct RequestBuilder;
 impl RequestBuilder {
     pub(crate) fn get<'c, HC>(client: &'c HC) -> GetRequestBuilder<'c, HC, false>
     where
-        HC: ApiClient,
+        HC: Client,
     {
         GetRequestBuilder::<'c, HC, false>::new(client)
     }
 
     pub(crate) fn post<'c, HC>(client: &'c HC) -> PostRequestBuilder<'c, HC, false>
     where
-        HC: ApiClient,
+        HC: Client,
     {
         PostRequestBuilder::<'c, HC, false>::new(client)
     }
 
     pub(crate) fn patch<'c, HC>(client: &'c HC) -> PatchRequestBuilder<'c, HC, false>
     where
-        HC: ApiClient,
+        HC: Client,
     {
         PatchRequestBuilder::<'c, HC, false>::new(client)
     }
 
     pub(crate) fn delete<'c, HC>(client: &'c HC) -> DeleteRequestBuilder<'c, HC, false>
     where
-        HC: ApiClient,
+        HC: Client,
     {
         DeleteRequestBuilder::<'c, HC, false>::new(client)
     }
@@ -106,7 +106,7 @@ where
 }
 
 
-pub trait ApiClientRequestBuild: ApiClient {
+pub trait ApiClientRequestBuild: Client {
     fn get_request_builder(&self) -> GetRequestBuilder<'_, Self, false>
     where
         Self: Sized;
@@ -126,7 +126,7 @@ pub trait ApiClientRequestBuild: ApiClient {
 
 impl<C> ApiClientRequestBuild for C
 where
-    C: ApiClient,
+    C: Client,
 {
     fn get_request_builder(&self) -> GetRequestBuilder<'_, Self, false>
     where
@@ -155,4 +155,14 @@ where
     {
         RequestBuilder::delete(self)
     }
+}
+
+
+
+pub trait PreparedUnauthenticatedRequest {
+    fn execute_unauthenticated(self) -> impl Future<Output = ClientResult<ServerResponse>> + Send;
+}
+
+pub trait PreparedAuthenticatedRequest {
+    fn execute_authenticated(self) -> impl Future<Output = ClientResult<ServerResponse>> + Send;
 }

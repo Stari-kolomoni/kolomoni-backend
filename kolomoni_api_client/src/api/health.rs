@@ -5,9 +5,9 @@ use kolomoni_core::api_models::PingResponse;
 use crate::{
     errors::ClientResult,
     request::RequestBuilder,
-    ApiClient,
-    AuthenticatedApiClient,
-    UnauthenticatedApiClient,
+    AuthenticatedHttpClient,
+    Client,
+    UnauthenticatedHttpClient,
 };
 
 
@@ -18,11 +18,11 @@ pub trait SharedHealthEndpoints {
 
 async fn ping<C>(client: &C) -> ClientResult<bool>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = RequestBuilder::get(client)
         .endpoint_url("/health/ping")
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_body: PingResponse = response.json().await?;
@@ -34,14 +34,14 @@ where
 
 pub struct HealthUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> HealthUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
@@ -50,7 +50,7 @@ where
 
 impl<'c, C> SharedHealthEndpoints for HealthUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     async fn ping(&self) -> ClientResult<bool> {
         ping(self.client).await
@@ -61,14 +61,14 @@ where
 
 pub struct HealthAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> HealthAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
@@ -78,7 +78,7 @@ where
 
 impl<'c, C> SharedHealthEndpoints for HealthAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     async fn ping(&self) -> ClientResult<bool> {
         ping(self.client).await

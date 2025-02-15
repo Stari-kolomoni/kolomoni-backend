@@ -8,12 +8,60 @@ use super::{build_request_url, build_request_url_with_parameters, UrlBuildType};
 use crate::{
     errors::{ClientError, ClientResult},
     response::ServerResponse,
-    ApiClient,
+    AuthenticatedHttpClient,
+    Client,
+    UnauthenticatedHttpClient,
 };
+
+
+pub(crate) struct PreparedDeleteRequest<'c, C>
+where
+    C: Client,
+{
+    client: &'c C,
+
+    request_url: Url,
+
+    request_body: Option<Vec<u8>>,
+
+    request_additional_headers: HeaderMap,
+}
+
+impl<'c, C> PreparedDeleteRequest<'c, C>
+where
+    C: Client + UnauthenticatedHttpClient,
+{
+    async fn execute_unauthenticated(self) -> ClientResult<ServerResponse> {
+        UnauthenticatedHttpClient::delete(
+            self.client,
+            self.request_url,
+            self.request_additional_headers,
+            self.request_body,
+        )
+        .await
+    }
+}
+
+impl<'c, C> PreparedDeleteRequest<'c, C>
+where
+    C: Client + AuthenticatedHttpClient,
+{
+    async fn execute_authenticated(self) -> ClientResult<ServerResponse> {
+        AuthenticatedHttpClient::delete(
+            self.client,
+            self.request_url,
+            self.request_additional_headers,
+            self.request_body,
+        )
+        .await
+    }
+}
+
+
 
 pub struct DeleteRequestBuilder<'c, HC, const HAS_URL: bool>
 where
-    HC: ApiClient,
+    HC: Client,
 {
     client: &'c HC,
 
@@ -26,7 +74,7 @@ where
 
 impl<'c, HC, const HAS_URL: bool> DeleteRequestBuilder<'c, HC, HAS_URL>
 where
-    HC: ApiClient,
+    HC: Client,
 {
     pub(crate) fn new(client: &'c HC) -> DeleteRequestBuilder<'c, HC, false> {
         DeleteRequestBuilder {
@@ -99,12 +147,13 @@ where
     }
 }
 
-impl<'c, HC> DeleteRequestBuilder<'c, HC, true>
+
+impl<'c, C> DeleteRequestBuilder<'c, C, true>
 where
-    HC: ApiClient,
+    C: Client,
 {
-    pub async fn send(self) -> ClientResult<ServerResponse> {
-        // PANIC SAFETY: `url` field is `Some` when `HasUrl` const generic is `true`.
+    pub(crate) fn prepare_request(self) -> ClientResult<PreparedDeleteRequest<'c, C>> {
+        // PANIC SAFETY: `self.url` is `Some` when const generic `HAS_URL` is `true`.
         let request_url = match self.url.unwrap() {
             Ok(request_url) => request_url,
             Err(url_parse_error) => {
@@ -122,6 +171,31 @@ where
             None => None,
         };
 
-        self.client.delete(request_url, self.headers, body).await
+
+        Ok(PreparedDeleteRequest {
+            client: self.client,
+            request_url,
+            request_body: body,
+            request_additional_headers: self.headers,
+        })
+    }
+}
+
+
+impl<'c, HC> DeleteRequestBuilder<'c, HC, true>
+where
+    HC: Client + UnauthenticatedHttpClient,
+{
+    pub async fn send_unauthenticated(self) -> ClientResult<ServerResponse> {
+        self.prepare_request()?.execute_unauthenticated().await
+    }
+}
+
+impl<'c, HC> DeleteRequestBuilder<'c, HC, true>
+where
+    HC: Client + AuthenticatedHttpClient,
+{
+    pub async fn send_authenticated(self) -> ClientResult<ServerResponse> {
+        self.prepare_request()?.execute_authenticated().await
     }
 }

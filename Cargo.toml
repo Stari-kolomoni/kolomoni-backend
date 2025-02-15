@@ -82,6 +82,7 @@ httpdate = "^1.0.3"
 bytes = "^1.7.1"
 dotenvy = "^0.15.7"
 csv = "1.3.0"
+assert_matches = "1.5.0"
 
 reqwest = "^0.12.7"
 tantivy = "^0.22.0"

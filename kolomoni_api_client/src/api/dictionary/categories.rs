@@ -13,7 +13,6 @@ use kolomoni_core::{
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::request::ApiClientRequestBuild;
 use crate::{
     errors::{ClientError, ClientResult},
     macros::{
@@ -23,10 +22,10 @@ use crate::{
         handle_unexpected_error_reason,
         handlers,
     },
-    ApiClient,
-    AuthenticatedApiClient,
-    UnauthenticatedApiClient,
+    AuthenticatedHttpClient,
+    Client,
 };
+use crate::{request::ApiClientRequestBuild, UnauthenticatedHttpClient};
 
 
 
@@ -126,12 +125,12 @@ pub enum CategoryDeletionError {
 
 async fn get_categories<C>(client: &C) -> ClientResult<Vec<Category>>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url("/dictionary/category")
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -154,12 +153,12 @@ async fn get_category_by_id<C>(
     category_id: CategoryId,
 ) -> ClientResult<Category, CategoryFetchingError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url(format!("/dictionary/category/{}", category_id))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -195,7 +194,7 @@ async fn update_category<C>(
     category_fields_to_update: CategoryFieldsToUpdate,
 ) -> ClientResult<Category, CategoryUpdatingError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     if category_fields_to_update.has_no_fields_to_update() {
         return Err(CategoryUpdatingError::NoFieldsToUpdate);
@@ -213,7 +212,7 @@ where
             new_english_name: category_fields_to_update.new_english_name,
             new_slovene_name: category_fields_to_update.new_slovene_name,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -257,7 +256,7 @@ async fn create_category<C>(
     category: CategoryToCreate,
 ) -> ClientResult<Category, CategoryCreationError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -267,7 +266,7 @@ where
             english_name: category.english_category_name,
             slovene_name: category.slovene_category_name,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -302,7 +301,7 @@ async fn delete_category<C>(
     category_id: CategoryId,
 ) -> ClientResult<(), CategoryDeletionError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .delete_request_builder()
@@ -310,7 +309,7 @@ where
             "/dictionary/category/{}",
             category_id.into_uuid()
         ))
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -340,7 +339,7 @@ where
 
 pub struct DictionaryCategoriesUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     client: &'c C,
 }
@@ -348,7 +347,7 @@ where
 
 impl<'c, C> DictionaryCategoriesUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
@@ -370,14 +369,14 @@ where
 
 pub struct DictionaryCategoriesAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + AuthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> DictionaryCategoriesAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }

@@ -7,26 +7,74 @@ use super::{build_request_url, build_request_url_with_parameters, UrlBuildType};
 use crate::{
     errors::{ClientError, ClientResult},
     response::ServerResponse,
-    ApiClient,
+    AuthenticatedHttpClient,
+    Client,
+    UnauthenticatedHttpClient,
 };
 
-pub struct GetRequestBuilder<'c, HC, const HAS_URL: bool>
+
+
+pub(crate) struct PreparedGetRequest<'c, C>
 where
-    HC: ApiClient,
+    C: Client,
 {
-    client: &'c HC,
+    client: &'c C,
+
+    request_url: Url,
+
+    additional_headers: HeaderMap,
+}
+
+impl<'c, C> PreparedGetRequest<'c, C>
+where
+    C: Client + UnauthenticatedHttpClient,
+{
+    async fn execute_unauthenticated(self) -> ClientResult<ServerResponse> {
+        UnauthenticatedHttpClient::get(
+            self.client,
+            self.request_url,
+            self.additional_headers,
+        )
+        .await
+    }
+}
+
+impl<'c, C> PreparedGetRequest<'c, C>
+where
+    C: Client + AuthenticatedHttpClient,
+{
+    async fn execute_authenticated(self) -> ClientResult<ServerResponse> {
+        AuthenticatedHttpClient::get(
+            self.client,
+            self.request_url,
+            self.additional_headers,
+        )
+        .await
+    }
+}
+
+
+
+pub struct GetRequestBuilder<'c, C, const HAS_URL: bool>
+where
+    C: Client,
+{
+    client: &'c C,
+
     url: Option<Result<Url, url::ParseError>>,
 }
 
-impl<'c, HC, const HAS_URL: bool> GetRequestBuilder<'c, HC, HAS_URL>
+
+impl<'c, C, const HAS_URL: bool> GetRequestBuilder<'c, C, HAS_URL>
 where
-    HC: ApiClient,
+    C: Client,
 {
-    pub(crate) fn new(client: &'c HC) -> GetRequestBuilder<'c, HC, false> {
+    pub(crate) fn new(client: &'c C) -> GetRequestBuilder<'c, C, false> {
         GetRequestBuilder { client, url: None }
     }
 
-    pub fn endpoint_url<U>(self, relative_endpoint_path: U) -> GetRequestBuilder<'c, HC, true>
+
+    pub fn endpoint_url<U>(self, relative_endpoint_path: U) -> GetRequestBuilder<'c, C, true>
     where
         U: AsRef<str>,
     {
@@ -42,7 +90,10 @@ where
 
     /// Same as [`Self::endpoint_url`], but does not prepend the server's base URL (`/api/v1`)
     /// to `relative_endpoint_url`.
-    pub fn raw_endpoint_url<U>(self, relative_endpoint_path: U) -> GetRequestBuilder<'c, HC, true>
+    pub fn endpoint_url_without_base_path<U>(
+        self,
+        relative_endpoint_path: U,
+    ) -> GetRequestBuilder<'c, C, true>
     where
         U: AsRef<str>,
     {
@@ -60,7 +111,7 @@ where
         self,
         relative_endpoint_url: U,
         parameters: P,
-    ) -> GetRequestBuilder<'c, HC, true>
+    ) -> GetRequestBuilder<'c, C, true>
     where
         U: AsRef<str>,
         P: IntoIterator,
@@ -80,12 +131,13 @@ where
     }
 }
 
-impl<'c, HC> GetRequestBuilder<'c, HC, true>
+
+impl<'c, C> GetRequestBuilder<'c, C, true>
 where
-    HC: ApiClient,
+    C: Client,
 {
-    pub async fn send(self) -> ClientResult<ServerResponse> {
-        // PANIC SAFETY: `url` field is `Some` when `HasUrl` const generic is `true`.
+    pub(crate) fn prepare_request(self) -> ClientResult<PreparedGetRequest<'c, C>> {
+        // PANIC SAFETY: `self.url` is `Some` when const generic `HAS_URL` is `true`.
         let request_url = match self.url.unwrap() {
             Ok(request_url) => request_url,
             Err(url_parse_error) => {
@@ -95,6 +147,29 @@ where
             }
         };
 
-        self.client.get(request_url, HeaderMap::new()).await
+        Ok(PreparedGetRequest {
+            client: self.client,
+            request_url,
+            additional_headers: HeaderMap::new(),
+        })
+    }
+}
+
+
+impl<'c, HC> GetRequestBuilder<'c, HC, true>
+where
+    HC: Client + UnauthenticatedHttpClient,
+{
+    pub async fn send_unauthenticated(self) -> ClientResult<ServerResponse> {
+        self.prepare_request()?.execute_unauthenticated().await
+    }
+}
+
+impl<'c, HC> GetRequestBuilder<'c, HC, true>
+where
+    HC: Client + AuthenticatedHttpClient,
+{
+    pub async fn send_authenticated(self) -> ClientResult<ServerResponse> {
+        self.prepare_request()?.execute_authenticated().await
     }
 }

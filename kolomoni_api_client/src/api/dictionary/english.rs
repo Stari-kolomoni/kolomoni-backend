@@ -21,7 +21,6 @@ use kolomoni_core::{
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::request::ApiClientRequestBuild;
 use crate::{
     errors::{ClientError, ClientResult},
     macros::{
@@ -31,10 +30,10 @@ use crate::{
         handlers,
     },
     request::RequestBuilder,
-    ApiClient,
-    AuthenticatedApiClient,
-    UnauthenticatedApiClient,
+    AuthenticatedHttpClient,
+    Client,
 };
+use crate::{request::ApiClientRequestBuild, UnauthenticatedHttpClient};
 
 
 
@@ -126,7 +125,7 @@ async fn get_english_words<C>(
     options: EnglishWordFetchingOptions,
 ) -> ClientResult<Vec<EnglishWordWithMeanings>>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let request = if let Some(only_last_modified_after) = options.only_words_modified_after {
         client.get_request_builder().endpoint_url_with_parameters(
@@ -142,7 +141,7 @@ where
             .endpoint_url("/dictionary/english")
     };
 
-    let response = request.send().await?;
+    let response = request.send_unauthenticated().await?;
     let response_status = response.status();
 
 
@@ -163,7 +162,7 @@ async fn get_english_word_by_id<C>(
     english_word_id: EnglishWordId,
 ) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
@@ -171,7 +170,7 @@ where
             "/dictionary/english/words/{}",
             english_word_id.into_uuid()
         ))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -201,7 +200,7 @@ async fn get_english_word_by_lemma<C>(
     english_word_lemma: &str,
 ) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
@@ -209,7 +208,7 @@ where
             "/dictionary/english/words/by-lemma/{}",
             english_word_lemma
         ))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -241,7 +240,7 @@ async fn create_english_word<C>(
     word_to_create: EnglishWordToCreate,
 ) -> ClientResult<EnglishWordWithMeanings, EnglishWordCreationError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -249,7 +248,7 @@ where
         .json(&EnglishWordCreationRequest {
             lemma: word_to_create.lemma,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -282,7 +281,7 @@ async fn update_english_word<C>(
     fields_to_update: EnglishWordFieldsToUpdate,
 ) -> ClientResult<EnglishWordWithMeanings, EnglishWordUpdatingError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     if fields_to_update.has_no_fields_to_update() {
         return Err(EnglishWordUpdatingError::NoFieldsToUpdate);
@@ -298,7 +297,7 @@ where
         .json(&EnglishWordUpdateRequest {
             lemma: fields_to_update.new_lemma,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -335,7 +334,7 @@ async fn delete_english_word<C>(
     english_word_id: EnglishWordId,
 ) -> ClientResult<(), EnglishWordDeletionError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .delete_request_builder()
@@ -343,7 +342,7 @@ where
             "/dictionary/english/words/{}",
             english_word_id
         ))
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -503,14 +502,14 @@ async fn get_english_word_meanings<C>(
     english_word_id: EnglishWordId,
 ) -> ClientResult<Vec<EnglishWordMeaningWithDetails>, EnglishWordMeaningsFetchingError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = RequestBuilder::get(client)
         .endpoint_url(format!(
             "/dictionary/english/words/{}/meanings",
             english_word_id
         ))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -541,7 +540,7 @@ async fn create_english_word_meaning<C>(
     word_meaning_to_create: EnglishWordMeaningToCreate,
 ) -> ClientResult<EnglishWordMeaning, EnglishWordMeaningCreationError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -554,7 +553,7 @@ where
             disambiguation: word_meaning_to_create.disambiguation,
             description: word_meaning_to_create.description,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -590,7 +589,7 @@ async fn update_english_word_meaning<C>(
     fields_to_update: EnglishWordMeaningFieldsToUpdate,
 ) -> ClientResult<EnglishWordMeaningWithDetails, EnglishWordMeaningUpdatingError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     if fields_to_update.has_no_fields_to_update() {
         return Err(EnglishWordMeaningUpdatingError::NoFieldsToUpdate);
@@ -608,7 +607,7 @@ where
             disambiguation: fields_to_update.disambiguation,
             description: fields_to_update.description,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -642,7 +641,7 @@ async fn delete_english_word_meaning<C>(
     english_word_meaning_id: EnglishWordMeaningId,
 ) -> ClientResult<(), EnglishWordMeaningDeletionError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .delete_request_builder()
@@ -650,7 +649,7 @@ where
             "/dictionary/english/words/{}/meanings/{}",
             english_word_id, english_word_meaning_id
         ))
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -683,7 +682,7 @@ async fn link_category_to_english_word_meaning<C>(
     category_id: CategoryId,
 ) -> ClientResult<(), EnglishWordMeaningCategoryLinkingError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -691,7 +690,7 @@ where
             "/dictionary/english/words/{}/meanings/{}/categories/{}",
             english_word_id, english_word_meaning_id, category_id
         ))
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -735,7 +734,7 @@ async fn unlink_category_from_english_word_meaning<C>(
     category_id: CategoryId,
 ) -> ClientResult<(), EnglishWordMeaningCategoryUnlinkingError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .delete_request_builder()
@@ -743,7 +742,7 @@ where
             "/dictionary/english/words/{}/meanings/{}/categories/{}",
             english_word_id, english_word_meaning_id, category_id
         ))
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -777,14 +776,14 @@ where
 
 pub struct EnglishDictionaryUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> EnglishDictionaryUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
@@ -830,14 +829,14 @@ where
 
 pub struct EnglishDictionaryAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> EnglishDictionaryAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }

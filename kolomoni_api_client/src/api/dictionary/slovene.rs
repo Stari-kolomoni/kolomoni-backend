@@ -28,11 +28,11 @@ use crate::{
         handle_unexpected_error_reason,
         handlers,
     },
-    request::RequestBuilder,
-    ApiClient,
-    AuthenticatedApiClient,
+    request::{ApiClientRequestBuild, RequestBuilder},
+    AuthenticatedHttpClient,
+    Client,
+    UnauthenticatedHttpClient,
 };
-use crate::{request::ApiClientRequestBuild, UnauthenticatedApiClient};
 
 
 
@@ -115,12 +115,12 @@ pub enum SloveneWordDeletionError {
 
 async fn get_slovene_words<C>(client: &C) -> ClientResult<Vec<SloveneWordWithMeanings>>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url("/dictionary/slovene/words")
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -143,7 +143,7 @@ async fn get_slovene_word_by_id<C>(
     slovene_word_id: SloveneWordId,
 ) -> ClientResult<SloveneWordWithMeanings, SloveneWordFetchingError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
@@ -151,7 +151,7 @@ where
             "/dictionary/slovene/words/{}",
             slovene_word_id
         ))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -181,7 +181,7 @@ async fn get_slovene_word_by_lemma<C>(
     slovene_word_lemma: &str,
 ) -> ClientResult<SloveneWordWithMeanings, SloveneWordFetchingError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
@@ -189,7 +189,7 @@ where
             "/dictionary/slovene/words/by-lemma/{}",
             slovene_word_lemma
         ))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -219,7 +219,7 @@ async fn create_slovene_word<C>(
     word_to_create: SloveneWordToCreate,
 ) -> ClientResult<SloveneWordWithMeanings, SloveneWordCreationError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -227,7 +227,7 @@ where
         .json(&SloveneWordCreationRequest {
             lemma: word_to_create.lemma,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -260,7 +260,7 @@ async fn update_slovene_word<C>(
     fields_to_update: SloveneWordFieldsToUpdate,
 ) -> ClientResult<SloveneWordWithMeanings, SloveneWordUpdatingError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     if fields_to_update.has_no_fields_to_update() {
         return Err(SloveneWordUpdatingError::NoFieldsToUpdate);
@@ -276,7 +276,7 @@ where
         .json(&SloveneWordUpdateRequest {
             lemma: fields_to_update.new_lemma,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -306,7 +306,7 @@ async fn delete_slovene_word<C>(
     slovene_word_id: SloveneWordId,
 ) -> ClientResult<(), SloveneWordDeletionError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .delete_request_builder()
@@ -314,7 +314,7 @@ where
             "/dictionary/slovene/words/{}",
             slovene_word_id
         ))
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -472,14 +472,14 @@ async fn get_slovene_word_meanings<C>(
     slovene_word_id: SloveneWordId,
 ) -> ClientResult<Vec<SloveneWordMeaningWithDetails>, SloveneWordMeaningsFetchingError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = RequestBuilder::get(client)
         .endpoint_url(format!(
             "/dictionary/slovene/words/{}/meanings",
             slovene_word_id
         ))
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -510,7 +510,7 @@ async fn create_slovene_word_meaning<C>(
     word_meaning_to_create: SloveneWordMeaningToCreate,
 ) -> ClientResult<SloveneWordMeaning, SloveneWordMeaningCreationError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -523,7 +523,7 @@ where
             abbreviation: word_meaning_to_create.abbreviation,
             description: word_meaning_to_create.description,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -559,7 +559,7 @@ async fn update_slovene_word_meaning<C>(
     fields_to_update: SloveneWordMeaningFieldsToUpdate,
 ) -> ClientResult<SloveneWordMeaningWithDetails, SloveneWordMeaningUpdatingError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     if fields_to_update.has_no_fields_to_update() {
         return Err(SloveneWordMeaningUpdatingError::NoFieldsToUpdate);
@@ -577,7 +577,7 @@ where
             description: fields_to_update.description,
             disambiguation: fields_to_update.disambiguation,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -611,7 +611,7 @@ async fn delete_slovene_word_meaning<C>(
     slovene_word_meaning_id: SloveneWordMeaningId,
 ) -> ClientResult<(), SloveneWordMeaningDeletionError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .delete_request_builder()
@@ -619,7 +619,7 @@ where
             "/dictionary/slovene/words/{}/meanings/{}",
             slovene_word_id, slovene_word_meaning_id
         ))
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -653,7 +653,7 @@ async fn link_category_to_slovene_word_meaning<C>(
     category_id: CategoryId,
 ) -> ClientResult<(), SloveneWordMeaningCategoryLinkingError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -661,7 +661,7 @@ where
             "/dictionary/slovene/words/{}/meanings/{}/categories/{}",
             slovene_word_id, slovene_word_meaning_id, category_id
         ))
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -705,7 +705,7 @@ async fn unlink_category_from_slovene_word_meaning<C>(
     category_id: CategoryId,
 ) -> ClientResult<(), SloveneWordMeaningCategoryUnlinkingError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .delete_request_builder()
@@ -713,7 +713,7 @@ where
             "/dictionary/slovene/words/{}/meanings/{}/categories/{}",
             slovene_word_id, slovene_word_meaning_id, category_id
         ))
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -748,14 +748,14 @@ where
 
 pub struct SloveneDictionaryUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> SloveneDictionaryUnauthenticatedApi<'c, C>
 where
-    C: UnauthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
@@ -798,14 +798,14 @@ where
 
 pub struct SloveneDictionaryAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> SloveneDictionaryAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }

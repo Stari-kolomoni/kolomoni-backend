@@ -4,8 +4,8 @@ use kolomoni_api_client::{
     api::health::SharedHealthEndpoints,
     authentication::ServerAuthentication,
     request::ApiClientRequestBuild,
-    ApiClient,
     ApiServer,
+    Client,
     ClientOptions,
     SharedApiClientEndpointGroups,
 };
@@ -15,7 +15,7 @@ use kolomoni_core::{
 };
 use reqwest::StatusCode;
 
-use crate::{macros::assert_request_ok, response::AssertableServerResponse};
+use crate::{macros::ensure_request_is_ok, response::AssertableServerResponse};
 
 
 pub const TEST_USER_AGENT: &str = concat!("kolomoni-e2e-test/v", env!("CARGO_PKG_VERSION"));
@@ -24,14 +24,14 @@ pub const TEST_USER_AGENT: &str = concat!("kolomoni-e2e-test/v", env!("CARGO_PKG
 
 pub struct TestingEndpoints<'s, C>
 where
-    C: kolomoni_api_client::ApiClient,
+    C: kolomoni_api_client::Client + kolomoni_api_client::UnauthenticatedHttpClient,
 {
     client: &'s C,
 }
 
 impl<'s, C> TestingEndpoints<'s, C>
 where
-    C: kolomoni_api_client::ApiClient,
+    C: kolomoni_api_client::Client + kolomoni_api_client::UnauthenticatedHttpClient,
 {
     #[inline]
     fn new(client: &'s C) -> Self {
@@ -42,11 +42,11 @@ where
     /// with the `e2e-testing` feature flag, exposing the required
     /// additional endpoints we use while testing.
     pub async fn assert_testing_is_enabled_on_server(&self) {
-        let response = assert_request_ok!(
+        let response = ensure_request_is_ok!(
             self.client
                 .get_request_builder()
-                .raw_endpoint_url("/testing/enabled")
-                .send()
+                .endpoint_url_without_base_path("/testing/enabled")
+                .send_unauthenticated()
                 .await,
             "failed to check whether the server has been compiled with the testing feature flag"
         );
@@ -59,11 +59,11 @@ where
     pub async fn perform_full_reset(&self) {
         self.assert_testing_is_enabled_on_server().await;
 
-        let response = assert_request_ok!(
+        let response = ensure_request_is_ok!(
             self.client
                 .post_request_builder()
-                .raw_endpoint_url("/testing/state/reset")
-                .send()
+                .endpoint_url_without_base_path("/testing/state/reset")
+                .send_unauthenticated()
                 .await,
             "failed to execute request to perform full backend reset"
         );
@@ -79,14 +79,14 @@ where
     pub async fn give_user_administrator_role(&self, user_id: UserId) {
         self.assert_testing_is_enabled_on_server().await;
 
-        let response = assert_request_ok!(
+        let response = ensure_request_is_ok!(
             self.client
                 .post_request_builder()
-                .raw_endpoint_url("/testing/user/give-administrator-role")
+                .endpoint_url_without_base_path("/testing/user/give-administrator-role")
                 .json(&GiveAdministratorRoleRequest {
                     user_id: user_id.into_uuid(),
                 })
-                .send()
+                .send_unauthenticated()
                 .await,
             format!(
                 "failed to execute request to give user {:?} the administrator role",
@@ -107,14 +107,14 @@ where
     pub async fn reset_user_roles_to_default(&self, user_id: UserId) {
         self.assert_testing_is_enabled_on_server().await;
 
-        let response = assert_request_ok!(
+        let response = ensure_request_is_ok!(
             self.client
                 .post_request_builder()
-                .raw_endpoint_url("/testing/user/reset-roles-to-default")
+                .endpoint_url_without_base_path("/testing/user/reset-roles-to-default")
                 .json(&ResetUserRolesRequest {
                     user_id: user_id.into_uuid(),
                 })
-                .send()
+                .send_unauthenticated()
                 .await,
             format!(
                 "failed to execute request to reset roles for user {:?} to default",
@@ -135,14 +135,14 @@ where
 
 pub struct AssertableHealthEndpoints<'s, C>
 where
-    C: ApiClient + SharedApiClientEndpointGroups,
+    C: Client + SharedApiClientEndpointGroups,
 {
     client: &'s C,
 }
 
 impl<'s, C> AssertableHealthEndpoints<'s, C>
 where
-    C: ApiClient + SharedApiClientEndpointGroups,
+    C: Client + SharedApiClientEndpointGroups,
 {
     #[inline]
     fn new(client: &'s C) -> Self {
@@ -150,7 +150,7 @@ where
     }
 
     pub async fn assert_server_can_be_pinged(&self) {
-        let ping_result = assert_request_ok!(
+        let ping_result = ensure_request_is_ok!(
             self.client.health().ping().await,
             "failed to ping server health endpoint"
         );
@@ -179,7 +179,7 @@ pub trait TestServerClient {
 
 
 pub struct UnauthanticatedTestServerClient {
-    client: kolomoni_api_client::UnauthenticatedClient,
+    client: kolomoni_api_client::UnauthenticatedKolomoniClient,
 }
 
 impl UnauthanticatedTestServerClient {
@@ -187,7 +187,7 @@ impl UnauthanticatedTestServerClient {
     where
         S: Into<ApiServer>,
     {
-        let client = kolomoni_api_client::UnauthenticatedClient::new_with_options(
+        let client = kolomoni_api_client::UnauthenticatedKolomoniClient::new_with_options(
             Arc::new(server.into()),
             ClientOptions {
                 user_agent: Cow::Borrowed(TEST_USER_AGENT),
@@ -209,10 +209,10 @@ impl UnauthanticatedTestServerClient {
 }
 
 impl TestServerClient for UnauthanticatedTestServerClient {
-    type Testing<'c> = TestingEndpoints<'c, kolomoni_api_client::UnauthenticatedClient>;
+    type Testing<'c> = TestingEndpoints<'c, kolomoni_api_client::UnauthenticatedKolomoniClient>;
 
     type AssertableHealth<'c> =
-        AssertableHealthEndpoints<'c, kolomoni_api_client::UnauthenticatedClient>;
+        AssertableHealthEndpoints<'c, kolomoni_api_client::UnauthenticatedKolomoniClient>;
 
     fn testing(&self) -> Self::Testing<'_> {
         TestingEndpoints::new(&self.client)
@@ -224,7 +224,7 @@ impl TestServerClient for UnauthanticatedTestServerClient {
 }
 
 impl Deref for UnauthanticatedTestServerClient {
-    type Target = kolomoni_api_client::UnauthenticatedClient;
+    type Target = kolomoni_api_client::UnauthenticatedKolomoniClient;
 
     fn deref(&self) -> &Self::Target {
         &self.client
@@ -234,14 +234,14 @@ impl Deref for UnauthanticatedTestServerClient {
 
 
 pub struct AuthenticatedTestServerClient {
-    client: kolomoni_api_client::AuthenticatedClient,
+    client: kolomoni_api_client::AuthenticatedKolomoniClient,
 }
 
 impl TestServerClient for AuthenticatedTestServerClient {
-    type Testing<'c> = TestingEndpoints<'c, kolomoni_api_client::AuthenticatedClient>;
+    type Testing<'c> = TestingEndpoints<'c, kolomoni_api_client::AuthenticatedKolomoniClient>;
 
     type AssertableHealth<'c> =
-        AssertableHealthEndpoints<'c, kolomoni_api_client::AuthenticatedClient>;
+        AssertableHealthEndpoints<'c, kolomoni_api_client::AuthenticatedKolomoniClient>;
 
     fn testing(&self) -> Self::Testing<'_> {
         TestingEndpoints::new(&self.client)
@@ -253,7 +253,7 @@ impl TestServerClient for AuthenticatedTestServerClient {
 }
 
 impl Deref for AuthenticatedTestServerClient {
-    type Target = kolomoni_api_client::AuthenticatedClient;
+    type Target = kolomoni_api_client::AuthenticatedKolomoniClient;
 
     fn deref(&self) -> &Self::Target {
         &self.client

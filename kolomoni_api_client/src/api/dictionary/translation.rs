@@ -5,7 +5,6 @@ use kolomoni_core::{
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::request::ApiClientRequestBuild;
 use crate::{
     errors::{ClientError, ClientResult},
     macros::{
@@ -14,8 +13,9 @@ use crate::{
         handle_unexpected_error_reason,
         handlers,
     },
-    AuthenticatedApiClient,
+    Client,
 };
+use crate::{request::ApiClientRequestBuild, AuthenticatedHttpClient};
 
 
 pub struct TranslationRelationshipToCreate {
@@ -75,7 +75,7 @@ async fn create_translation_relationship<C>(
     translation_relationship_to_create: TranslationRelationshipToCreate,
 ) -> ClientResult<(), TranslationRelationshipCreationError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -88,7 +88,7 @@ where
                 .slovene_word_meaning
                 .into_uuid(),
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -135,7 +135,7 @@ async fn delete_translation_relationship<C>(
     translation_relationship_to_delete: TranslationRelationshipToDelete,
 ) -> ClientResult<(), TranslationRelationshipDeletionError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .delete_request_builder()
@@ -156,7 +156,7 @@ where
                 ),
             ],
         )
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -195,14 +195,14 @@ where
 
 pub struct TranslationsAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + AuthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> TranslationsAuthenticatedApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + AuthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }

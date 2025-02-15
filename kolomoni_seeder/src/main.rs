@@ -23,7 +23,7 @@ use kolomoni_api_client::{
     authentication::{ServerAuthentication, ServerTokenSet},
     ApiServer,
     ApiServerOptions,
-    AuthenticatedClient,
+    AuthenticatedKolomoniClient,
     ServerHost,
     SharedApiClientEndpointGroups,
 };
@@ -47,7 +47,7 @@ fn build_api_client(
     server_host_or_ip: &str,
     server_port: usize,
     access_token: &str,
-) -> miette::Result<AuthenticatedClient> {
+) -> miette::Result<AuthenticatedKolomoniClient> {
     let api_server = Arc::new(
         ApiServer::new_from_server_url(
             ServerHost::DomainName(format!("{}:{}", server_host_or_ip, server_port)),
@@ -57,7 +57,7 @@ fn build_api_client(
         .wrap_err("failed to construct API server URL")?,
     );
 
-    let client = kolomoni_api_client::UnauthenticatedClient::new(api_server)
+    let client = kolomoni_api_client::UnauthenticatedKolomoniClient::new(api_server)
         .into_diagnostic()
         .wrap_err("failed to initialize API client")?;
 

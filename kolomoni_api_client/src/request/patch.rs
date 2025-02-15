@@ -6,14 +6,62 @@ use super::{build_request_url, UrlBuildType};
 use crate::{
     errors::{ClientError, ClientResult},
     response::ServerResponse,
-    ApiClient,
+    AuthenticatedHttpClient,
+    Client,
+    UnauthenticatedHttpClient,
 };
+
+
+
+pub(crate) struct PreparedPatchRequest<'c, C>
+where
+    C: Client,
+{
+    client: &'c C,
+
+    request_url: Url,
+
+    request_body: Option<Vec<u8>>,
+
+    request_additional_headers: HeaderMap,
+}
+
+impl<'c, C> PreparedPatchRequest<'c, C>
+where
+    C: Client + UnauthenticatedHttpClient,
+{
+    async fn execute_unauthenticated(self) -> ClientResult<ServerResponse> {
+        UnauthenticatedHttpClient::patch(
+            self.client,
+            self.request_url,
+            self.request_additional_headers,
+            self.request_body,
+        )
+        .await
+    }
+}
+
+impl<'c, C> PreparedPatchRequest<'c, C>
+where
+    C: Client + AuthenticatedHttpClient,
+{
+    async fn execute_authenticated(self) -> ClientResult<ServerResponse> {
+        AuthenticatedHttpClient::patch(
+            self.client,
+            self.request_url,
+            self.request_additional_headers,
+            self.request_body,
+        )
+        .await
+    }
+}
+
 
 
 
 pub struct PatchRequestBuilder<'c, HC, const HAS_URL: bool>
 where
-    HC: ApiClient,
+    HC: Client,
 {
     client: &'c HC,
 
@@ -27,7 +75,7 @@ where
 
 impl<'c, HC, const HAS_URL: bool> PatchRequestBuilder<'c, HC, HAS_URL>
 where
-    HC: ApiClient,
+    HC: Client,
 {
     pub(crate) fn new(client: &'c HC) -> PatchRequestBuilder<'c, HC, false> {
         PatchRequestBuilder {
@@ -75,12 +123,12 @@ where
     }
 }
 
-impl<'c, HC> PatchRequestBuilder<'c, HC, true>
+impl<'c, C> PatchRequestBuilder<'c, C, true>
 where
-    HC: ApiClient,
+    C: Client,
 {
-    pub async fn send(self) -> ClientResult<ServerResponse> {
-        // PANIC SAFETY: `url` field is `Some` when `HasUrl` const generic is `true`.
+    pub(crate) fn prepare_request(self) -> ClientResult<PreparedPatchRequest<'c, C>> {
+        // PANIC SAFETY: `self.url` is `Some` when const generic `HAS_URL` is `true`.
         let request_url = match self.url.unwrap() {
             Ok(request_url) => request_url,
             Err(url_parse_error) => {
@@ -99,6 +147,30 @@ where
         };
 
 
-        self.client.patch(request_url, self.headers, body).await
+        Ok(PreparedPatchRequest {
+            client: self.client,
+            request_url,
+            request_body: body,
+            request_additional_headers: self.headers,
+        })
+    }
+}
+
+
+impl<'c, HC> PatchRequestBuilder<'c, HC, true>
+where
+    HC: Client + UnauthenticatedHttpClient,
+{
+    pub async fn send_unauthenticated(self) -> ClientResult<ServerResponse> {
+        self.prepare_request()?.execute_unauthenticated().await
+    }
+}
+
+impl<'c, HC> PatchRequestBuilder<'c, HC, true>
+where
+    HC: Client + AuthenticatedHttpClient,
+{
+    pub async fn send_authenticated(self) -> ClientResult<ServerResponse> {
+        self.prepare_request()?.execute_authenticated().await
     }
 }

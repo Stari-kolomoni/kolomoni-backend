@@ -15,9 +15,10 @@ use thiserror::Error;
 use crate::errors::{ClientError, ClientResult};
 use crate::macros::{handle_uncaught_status_code, handle_unexpected_error_reason};
 use crate::request::ApiClientRequestBuild;
-use crate::ApiClient;
+use crate::{Client, UnauthenticatedHttpClient};
 
 
+#[derive(Debug)]
 pub struct UserRegistrationInfo {
     pub username: String,
     pub display_name: String,
@@ -25,6 +26,7 @@ pub struct UserRegistrationInfo {
 }
 
 
+#[derive(Debug)]
 pub struct NewUserInfo {
     pub user: UserInfo,
 }
@@ -51,7 +53,7 @@ async fn register_user<C>(
     user_registration_info: UserRegistrationInfo,
 ) -> ClientResult<NewUserInfo, UserRegistrationError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -61,7 +63,7 @@ where
             display_name: user_registration_info.display_name,
             password: user_registration_info.password,
         })
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -121,7 +123,7 @@ async fn login_user<C>(
     user_login_credentials: UserLoginInfo,
 ) -> ClientResult<AccessAndRefreshToken, UserLoginError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -130,7 +132,7 @@ where
             username: user_login_credentials.username,
             password: user_login_credentials.password,
         })
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -190,7 +192,7 @@ async fn refresh_user_login<C>(
     refresh_token_info: UserLoginRefreshInfo,
 ) -> ClientResult<RefreshedAccessToken, UserLoginRefreshError>
 where
-    C: ApiClient,
+    C: UnauthenticatedHttpClient,
 {
     let response = client
         .post_request_builder()
@@ -198,7 +200,7 @@ where
         .json(&UserLoginRefreshRequest {
             refresh_token: refresh_token_info.refresh_token,
         })
-        .send()
+        .send_unauthenticated()
         .await?;
 
     let response_status = response.status();
@@ -234,14 +236,14 @@ where
 
 pub struct AuthenticationApi<'c, C>
 where
-    C: ApiClient,
+    C: Client,
 {
     client: &'c C,
 }
 
 impl<'c, C> AuthenticationApi<'c, C>
 where
-    C: ApiClient,
+    C: Client + UnauthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }

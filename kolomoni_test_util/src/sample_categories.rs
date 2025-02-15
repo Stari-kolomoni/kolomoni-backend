@@ -1,7 +1,7 @@
 use chrono::Utc;
 use kolomoni_api_client::{
     api::dictionary::categories::CategoryToCreate,
-    AuthenticatedClient,
+    AuthenticatedKolomoniClient,
     SharedApiClientEndpointGroups,
 };
 use kolomoni_core::api_models::Category;
@@ -34,7 +34,7 @@ impl SampleCategory {
         }
     }
 
-    pub async fn create(&self, client: &AuthenticatedClient) -> Category {
+    pub async fn create(&self, client: &AuthenticatedKolomoniClient) -> Category {
         let before_category_creation = Utc::now();
 
         let new_category = client

@@ -1,5 +1,5 @@
 use chrono::Utc;
-use kolomoni_api_client::{api::dictionary::{english::{EnglishWordMeaningToCreate, EnglishWordToCreate}, slovene::{SloveneWordMeaningToCreate, SloveneWordToCreate}}, AuthenticatedClient, SharedApiClientEndpointGroups};
+use kolomoni_api_client::{api::dictionary::{english::{EnglishWordMeaningToCreate, EnglishWordToCreate}, slovene::{SloveneWordMeaningToCreate, SloveneWordToCreate}}, AuthenticatedKolomoniClient, SharedApiClientEndpointGroups};
 use kolomoni_core::api_models::{EnglishWordWithMeanings, SloveneWordWithMeanings};
 
 
@@ -64,7 +64,7 @@ impl SampleEnglishWord {
     
     pub async fn create(
         &self,
-        client: &AuthenticatedClient,
+        client: &AuthenticatedKolomoniClient,
     ) -> EnglishWordWithMeanings {
         let before_word_creation = Utc::now();
 
@@ -190,7 +190,7 @@ impl SampleSloveneWord {
 
     pub async fn create(
         &self,
-        client: &AuthenticatedClient,
+        client: &AuthenticatedKolomoniClient,
     ) -> SloveneWordWithMeanings {
         let before_word_creation = Utc::now();
 

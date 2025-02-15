@@ -15,7 +15,7 @@ use thiserror::Error;
 use crate::errors::{ClientError, ClientResult};
 use crate::macros::{handle_uncaught_status_code, handle_unexpected_error_reason};
 use crate::request::ApiClientRequestBuild;
-use crate::AuthenticatedApiClient;
+use crate::{AuthenticatedHttpClient, Client};
 
 
 
@@ -56,12 +56,12 @@ pub enum CurrentUserDisplayNameUpdateError {
 
 async fn get_current_user_information<C>(client: &C) -> ClientResult<UserInfo, CurrentUserReadError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url("/users/me")
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -86,12 +86,12 @@ where
 
 async fn get_current_user_roles<C>(client: &C) -> ClientResult<RoleSet, CurrentUserReadError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url("/users/me/roles")
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -126,12 +126,12 @@ async fn get_current_user_effective_permissions<C>(
     client: &C,
 ) -> ClientResult<PermissionSet, CurrentUserReadError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .get_request_builder()
         .endpoint_url("/users/me/permissions")
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -174,7 +174,7 @@ async fn update_current_user_display_name<C>(
     display_name_update: CurrentUserDisplayNameUpdate,
 ) -> ClientResult<UserInfo, CurrentUserDisplayNameUpdateError>
 where
-    C: AuthenticatedApiClient,
+    C: AuthenticatedHttpClient,
 {
     let response = client
         .patch_request_builder()
@@ -182,7 +182,7 @@ where
         .json(&UserDisplayNameChangeRequest {
             new_display_name: display_name_update.new_display_name,
         })
-        .send()
+        .send_authenticated()
         .await?;
 
     let response_status = response.status();
@@ -217,14 +217,14 @@ where
 
 pub struct CurrentUserApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + AuthenticatedHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> CurrentUserApi<'c, C>
 where
-    C: AuthenticatedApiClient,
+    C: Client + AuthenticatedHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
