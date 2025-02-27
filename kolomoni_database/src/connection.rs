@@ -211,7 +211,6 @@ impl DatabaseConnectionAcquireError {
 }
 
 
-// TODO Migrate main crate to this.
 pub struct DatabaseConnectionPool {
     pool: PgPool,
 }

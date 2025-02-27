@@ -20,9 +20,10 @@ members = [
     "kolomoni_migrations_macros",
     "kolomoni_openapi",
     "kolomoni_seeder",
-    # "kolomoni_search",
+    "kolomoni_search",
     "kolomoni_test",
-    "kolomoni_test_util"
+    "kolomoni_test_util",
+    "kolomoni_cache"
 ]
 
 

@@ -1,0 +1,16 @@
+[package]
+name = "kolomoni_cache"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kolomoni_core = { path = "../kolomoni_core" }
+kolomoni_database = { path = "../kolomoni_database" }
+
+sqlx = { workspace = true }
+
+thiserror = { workspace = true }
+miette = { workspace = true }
+
+slotmap = { workspace = true }
+chrono = { workspace = true }

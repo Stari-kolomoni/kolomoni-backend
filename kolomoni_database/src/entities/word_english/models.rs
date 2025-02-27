@@ -117,6 +117,7 @@ mod external {
     /// have in comparison with language-agnostic word models. At the moment,
     /// this is just the word's lemma (the lemma is intentionally not a shared field
     /// to avoid future problems if we decide to get more granular grammatically).
+    #[derive(Debug, Clone)]
     pub struct BareEnglishWordModel {
         pub lemma: String,
     }
@@ -130,6 +131,7 @@ mod external {
     /// The phrasing "external" in this context refers to a public API that this crate exposes (`pub`-visible models).
     /// Notably, this phrasing *does not* imply that this type is exposed in the sense of the REST API
     /// that the Stari Kolomoni backend server exposes. For those REST API models, see the [`kolomoni_core`] crate.
+    #[derive(Debug, Clone)]
     pub struct EnglishWordModel {
         base_word: WordModel,
 

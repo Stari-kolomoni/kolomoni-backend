@@ -57,6 +57,7 @@ mod external {
     /// [`word_slovene`]: crate::entities::word_slovene
     /// [`EnglishWordModel`]: crate::entities::EnglishWordModel
     /// [`SloveneWordModel`]: crate::entities::SloveneWordModel
+    #[derive(Debug, Clone)]
     pub struct WordModel {
         pub id: WordId,
 

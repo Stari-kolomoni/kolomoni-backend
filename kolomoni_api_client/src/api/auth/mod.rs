@@ -48,6 +48,114 @@ pub enum UserRegistrationError {
 }
 
 
+/*
+pub trait EndpointBuilder {
+    type Context;
+    type Prepared;
+
+    fn prepare<C>(client: &C, context: Self::Context) -> Self::Prepared
+    where
+        C: ApiClientRequestBuild;
+} */
+
+/*pub trait UnauthenticatedPreparedRequestExecutor {
+    type Output;
+
+    fn execute_unauthenticated<C>(prepared_) -> impl Future<Output = Self::Output> + Send;
+}*/
+
+/*
+pub trait AuthenticatedPreparedRequestExecutor {
+    type Output;
+
+    fn execute_authenticated(self) -> impl Future<Output = Self::Output> + Send;
+}
+
+pub trait EndpointResponseProcessor {
+    type Output;
+
+    fn process(endpoint_response: ServerResponse) -> impl Future<Output = Self::Output> + Send;
+}
+
+
+mod register_user_v2 {
+    use kolomoni_core::api_models::{
+        UserRegistrationRequest,
+        UserRegistrationResponse,
+        UsersErrorReason,
+    };
+    use reqwest::StatusCode;
+
+    use super::{
+        EndpointResponseProcessor,
+        NewUserInfo,
+        UserRegistrationError,
+        UserRegistrationInfo,
+    };
+    use crate::{
+        errors::ClientResult,
+        macros::{handle_uncaught_status_code, handle_unexpected_error_reason},
+        request::{post::PreparedPostRequest, ApiClientRequestBuild},
+        response::ServerResponse,
+    };
+
+
+    pub struct RegisterUserEndpoint;
+
+    impl RegisterUserEndpoint {
+        async fn prepare<'c, C>(
+            client: &'c C,
+            user_registration_info: UserRegistrationInfo,
+        ) -> ClientResult<PreparedPostRequest<'c, C>>
+        where
+            C: ApiClientRequestBuild,
+        {
+            let prepared_request: PreparedPostRequest<'c, C> = client
+                .post_request_builder()
+                .endpoint_url("/users")
+                .json(&UserRegistrationRequest {
+                    username: user_registration_info.username,
+                    display_name: user_registration_info.display_name,
+                    password: user_registration_info.password,
+                })
+                .prepare()?;
+
+            Ok(prepared_request)
+        }
+    }
+
+    impl EndpointResponseProcessor for RegisterUserEndpoint {
+        type Output = ClientResult<NewUserInfo, UserRegistrationError>;
+
+        async fn process(response: crate::response::ServerResponse) -> Self::Output {
+            let response_status = response.status();
+
+            if response_status == StatusCode::OK {
+                let response_data = response.json::<UserRegistrationResponse>().await?;
+
+                Ok(NewUserInfo {
+                    user: response_data.user,
+                })
+            } else if response_status == StatusCode::CONFLICT {
+                let users_error_reason = response.users_error_reason().await?;
+
+                match users_error_reason {
+                    UsersErrorReason::UsernameAlreadyExists => {
+                        Err(UserRegistrationError::UsernameAlreadyExists)
+                    }
+                    UsersErrorReason::DisplayNameAlreadyExists => {
+                        Err(UserRegistrationError::DisplayNameAlreadyExists)
+                    }
+                    _ => handle_unexpected_error_reason!(users_error_reason, response_status),
+                }
+            } else {
+                handle_uncaught_status_code!(response_status);
+            }
+        }
+    }
+} */
+
+
 async fn register_user<C>(
     client: &C,
     user_registration_info: UserRegistrationInfo,

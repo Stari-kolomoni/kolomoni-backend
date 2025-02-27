@@ -15,7 +15,7 @@ use prelude::{TestServerClient, UnauthanticatedTestServerClient};
 const TEST_SERVER_BASE_URL_ENVIRONMENT_VAR_NAME: &str = "KOLOMONI_TEST_SERVER_URL";
 
 
-pub async fn inititialize_fresh_test_server() -> UnauthanticatedTestServerClient {
+pub async fn initialize_fresh_test_server() -> UnauthanticatedTestServerClient {
     let test_server_base_url =
         env::var(TEST_SERVER_BASE_URL_ENVIRONMENT_VAR_NAME).unwrap_or_else(|error| {
             panic!(
