@@ -31,7 +31,7 @@ where
     request_additional_headers: HeaderMap,
 }
 
-impl<'c, C> PreparedUnauthenticatedRequest for PreparedPostRequest<'c, C>
+impl<C> PreparedUnauthenticatedRequest for PreparedPostRequest<'_, C>
 where
     C: Client + UnauthenticatedHttpClient,
 {
@@ -46,7 +46,7 @@ where
     }
 }
 
-impl<'c, C> PreparedAuthenticatedRequest for PreparedPostRequest<'c, C>
+impl<C> PreparedAuthenticatedRequest for PreparedPostRequest<'_, C>
 where
     C: Client + AuthenticatedHttpClient,
 {
@@ -189,7 +189,7 @@ where
 }
 
 
-impl<'c, HC> PostRequestBuilder<'c, HC, true>
+impl<HC> PostRequestBuilder<'_, HC, true>
 where
     HC: Client + UnauthenticatedHttpClient,
 {
@@ -198,7 +198,7 @@ where
     }
 }
 
-impl<'c, HC> PostRequestBuilder<'c, HC, true>
+impl<HC> PostRequestBuilder<'_, HC, true>
 where
     HC: Client + AuthenticatedHttpClient,
 {

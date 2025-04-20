@@ -27,7 +27,7 @@ where
     request_additional_headers: HeaderMap,
 }
 
-impl<'c, C> PreparedDeleteRequest<'c, C>
+impl<C> PreparedDeleteRequest<'_, C>
 where
     C: Client + UnauthenticatedHttpClient,
 {
@@ -42,7 +42,7 @@ where
     }
 }
 
-impl<'c, C> PreparedDeleteRequest<'c, C>
+impl<C> PreparedDeleteRequest<'_, C>
 where
     C: Client + AuthenticatedHttpClient,
 {
@@ -182,7 +182,7 @@ where
 }
 
 
-impl<'c, HC> DeleteRequestBuilder<'c, HC, true>
+impl<HC> DeleteRequestBuilder<'_, HC, true>
 where
     HC: Client + UnauthenticatedHttpClient,
 {
@@ -191,7 +191,7 @@ where
     }
 }
 
-impl<'c, HC> DeleteRequestBuilder<'c, HC, true>
+impl<HC> DeleteRequestBuilder<'_, HC, true>
 where
     HC: Client + AuthenticatedHttpClient,
 {

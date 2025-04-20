@@ -65,7 +65,7 @@ impl<'de> Deserialize<'de> for Edit {
 
         struct SchemaVersionFieldVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for SchemaVersionFieldVisitor {
+        impl serde::de::Visitor<'_> for SchemaVersionFieldVisitor {
             type Value = SchemaVersionField;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -142,7 +142,7 @@ impl<'de> Deserialize<'de> for Edit {
 
         struct SchemaVersionOrDataFieldVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for SchemaVersionOrDataFieldVisitor {
+        impl serde::de::Visitor<'_> for SchemaVersionOrDataFieldVisitor {
             type Value = SchemaVersionOrDataField;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

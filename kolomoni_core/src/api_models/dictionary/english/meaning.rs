@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{
-    api_models::{SloveneWord, SloveneWordMeaningWithShallowDetails},
+    api_models::{SloveneWord, SloveneWordMeaning},
     ids::{CategoryId, EnglishWordMeaningId, UserId},
 };
 
@@ -71,7 +71,7 @@ pub struct EnglishWordMeaningWithDetails {
 pub struct SloveneTranslation {
     pub word: SloveneWord,
 
-    pub word_meaning: SloveneWordMeaningWithShallowDetails,
+    pub word_meaning: SloveneWordMeaning,
 
     pub translated_at: DateTime<Utc>,
 

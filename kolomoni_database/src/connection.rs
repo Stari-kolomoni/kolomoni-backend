@@ -477,19 +477,19 @@ impl<'c> DatabaseTransaction<'c> {
 
 
 
-impl<'c> AsRef<PgConnection> for DatabaseTransaction<'c> {
+impl AsRef<PgConnection> for DatabaseTransaction<'_> {
     fn as_ref(&self) -> &PgConnection {
         &self.transaction
     }
 }
 
-impl<'c> AsMut<PgConnection> for DatabaseTransaction<'c> {
+impl AsMut<PgConnection> for DatabaseTransaction<'_> {
     fn as_mut(&mut self) -> &mut PgConnection {
         &mut self.transaction
     }
 }
 
-impl<'c> Deref for DatabaseTransaction<'c> {
+impl Deref for DatabaseTransaction<'_> {
     type Target = PgConnection;
 
     fn deref(&self) -> &Self::Target {
@@ -497,7 +497,7 @@ impl<'c> Deref for DatabaseTransaction<'c> {
     }
 }
 
-impl<'c> DerefMut for DatabaseTransaction<'c> {
+impl DerefMut for DatabaseTransaction<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.transaction.deref_mut()
     }

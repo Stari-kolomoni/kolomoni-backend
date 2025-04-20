@@ -3,6 +3,7 @@ use std::str::FromStr;
 use actix_web::{web, Scope};
 use english::english_dictionary_router;
 use kolomoni_core::ids::KolomoniUuidNewtype;
+use search::search_router;
 use slovene::slovene_dictionary_router;
 
 use self::{
@@ -14,9 +15,8 @@ use crate::api::errors::EndpointError;
 
 pub mod categories;
 pub mod english;
+pub mod search;
 pub mod slovene;
-// TODO
-// pub mod search;
 pub mod translations;
 
 
@@ -67,6 +67,5 @@ pub fn dictionary_router() -> Scope {
         .service(english_dictionary_router())
         .service(translations_router())
         .service(categories_router())
-        // TODO
-        // .service(search_router())
+        .service(search_router())
 }

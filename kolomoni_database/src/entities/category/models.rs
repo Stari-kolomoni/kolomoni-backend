@@ -27,6 +27,7 @@ mod external {
     use chrono::{DateTime, Utc};
     use kolomoni_core::ids::CategoryId;
 
+    #[derive(Clone, Debug)]
     pub struct CategoryModel {
         pub id: CategoryId,
 

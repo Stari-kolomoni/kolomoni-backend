@@ -129,7 +129,7 @@ impl EnglishWordMeaningQuery {
         WordMeaningQuery::exists_by_word_and_meaning_id(
             database_connection,
             english_word_id.to_word_id(),
-            english_word_meaning_id.to_word_meaning_id(),
+            english_word_meaning_id.to_word_meaning_id_unchecked(),
         )
         .await
     }

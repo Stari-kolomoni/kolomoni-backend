@@ -1,8 +1,12 @@
 //! Application-wide state (shared between endpoint functions).
 
+use std::sync::Arc;
+
 use actix_web::web::Data;
+use kolomoni_cache::{CacheSeedingError, EntityCache};
 use kolomoni_configuration::Configuration;
 use kolomoni_core::{
+    cancellation::CancellationToken,
     password_hasher::{ArgonHasher, ArgonHasherError},
     token::JsonWebTokenManager,
 };
@@ -14,7 +18,10 @@ use kolomoni_database::{
     DatabaseConnectionPool,
     DatabaseConnectionPoolOptions,
 };
+use kolomoni_search::{SearchEngine, SearchInitializationError};
+use parking_lot::{ArcRwLockReadGuard, ArcRwLockWriteGuard, RwLock};
 use thiserror::Error;
+use tracing::info;
 
 
 
@@ -188,11 +195,32 @@ pub enum ApplicationStateError {
         error: ArgonHasherError,
     },
 
+    #[error("failed to seed cache")]
+    FailedToSeedCache {
+        #[from]
+        #[source]
+        error: CacheSeedingError,
+    },
+
+    #[error("failed to initialize search")]
+    FailedToInitializeSearch {
+        #[from]
+        #[source]
+        error: SearchInitializationError,
+    },
+
     #[error("unable to connect to database")]
     UnableToConnectToDatabase {
         #[from]
         #[source]
         error: DatabaseConnectionConnectError,
+    },
+
+    #[error("unable to establish first database connection")]
+    UnableToObtainInitialDatabaseConnection {
+        #[from]
+        #[source]
+        error: DatabaseConnectionAcquireError,
     },
 }
 
@@ -220,18 +248,26 @@ pub struct ApplicationStateInner {
 
     /// Authentication token manager (JSON Web Token).
     jwt_manager: JsonWebTokenManager,
-    // TODO
-    // pub search: KolomoniSearch,
+
+    cache: Arc<RwLock<EntityCache>>,
+
+    search: SearchEngine,
 }
 
 impl ApplicationStateInner {
-    pub async fn new(configuration: Configuration) -> Result<Self, ApplicationStateError> {
+    #[allow(clippy::await_holding_lock)]
+    pub async fn new(
+        configuration: Configuration,
+        cancellation_token: CancellationToken,
+    ) -> Result<Self, ApplicationStateError> {
         let hasher = ArgonHasher::new(&configuration.secrets.hash_salt)?;
 
 
+        info!("Parsing database connection options.");
         let database_connection_options =
             database_connection_options_from_configuration(&configuration);
 
+        info!("Connecting to database.");
         let database_pool = DatabaseConnectionPool::connect(
             database_connection_options,
             DatabaseConnectionPoolOptions::default(),
@@ -241,23 +277,50 @@ impl ApplicationStateInner {
 
         let jwt_manager = JsonWebTokenManager::new(&configuration.json_web_token.secret);
 
-        /*
-        let search = {
-            let engine = KolomoniSearchEngine::new(&configuration).await?;
-            let sender = engine.change_event_sender();
+        info!("Initializing empty cache.");
+        let cache = Arc::new(RwLock::new(EntityCache::new_empty()));
 
-            KolomoniSearch {
-                engine,
-                change_sender: sender,
-            }
-        }; */
+        info!("Initializing search engine.");
+        let (search, search_management_event_sender) = SearchEngine::new(
+            &configuration.search.search_index_directory_path,
+            cache.clone(),
+            cancellation_token,
+        )
+        .await?;
+
+        info!("Seeding cache from database (which will trigger a reindex).");
+        {
+            let mut database_connection = database_pool.acquire_connection().await?;
+
+            // This non-async-aware lock is held over an await point below.
+            // This is okay in our situation because, at this point, we are the only ones that could have locked the cache.
+            let mut write_locked_cache = cache.write();
+
+            write_locked_cache.set_search_engine_event_sender(search_management_event_sender);
+
+            write_locked_cache
+                .clear_and_reseed_cache_from_database(&mut database_connection)
+                .await?;
+
+            // // DEBUGONLY
+            // // FIXME
+            // println!(
+            //     "cache reseed result: {:?}",
+            //     write_locked_cache
+            //         .clear_and_reseed_cache_from_database(&mut database_connection)
+            //         .await
+            // );
+        }
+        info!("Finished initial cache seeding.");
+
 
         Ok(Self {
             configuration,
             hasher,
             database_pool,
             jwt_manager,
-            // search,
+            cache,
+            search,
         })
     }
 
@@ -278,6 +341,18 @@ impl ApplicationStateInner {
 
     pub fn jwt_manager(&self) -> &JsonWebTokenManager {
         &self.jwt_manager
+    }
+
+    pub fn cache_read(&self) -> ArcRwLockReadGuard<parking_lot::RawRwLock, EntityCache> {
+        self.cache.read_arc()
+    }
+
+    pub fn cache_write(&self) -> ArcRwLockWriteGuard<parking_lot::RawRwLock, EntityCache> {
+        self.cache.write_arc()
+    }
+
+    pub fn search_engine(&self) -> &SearchEngine {
+        &self.search
     }
 }
 

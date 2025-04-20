@@ -5,6 +5,7 @@ use std::path::Path;
 use miette::Result;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
+    fmt::format::FmtSpan,
     prelude::__tracing_subscriber_SubscriberExt,
     util::SubscriberInitExt,
     EnvFilter,
@@ -41,13 +42,18 @@ where
             .with_level(true);
 
         let console_layer = tracing_subscriber::fmt::layer()
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
             .log_internal_errors(true)
             .event_format(console_tracing_format);
 
         let level_filter = if std::env::var("RUST_LOG").is_err() {
             // If RUST_LOG is unset, use the configuration default.
+            println!("Using console logging level from configuration file.");
+
             console_level_filter
         } else {
+            println!("RUST_LOG is set, which will override the console logging lvel from the configuration file.");
+
             EnvFilter::from_default_env()
         };
 
@@ -66,6 +72,7 @@ where
         ));
 
         let file_subscriber = tracing_subscriber::fmt::layer()
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
             .with_writer(appender)
             .log_internal_errors(true)
             .event_format(file_tracing_format);

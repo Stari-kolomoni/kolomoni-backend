@@ -20,6 +20,7 @@ members = [
     "kolomoni_migrations_macros",
     "kolomoni_openapi",
     "kolomoni_seeder",
+    "kolomoni_search_core",
     "kolomoni_search",
     "kolomoni_test",
     "kolomoni_test_util",
@@ -28,21 +29,21 @@ members = [
 
 
 [workspace.dependencies]
-clap = { version = "^4.5.17", features = ["derive"] }
+clap = { version = "^4.5.31", features = ["derive"] }
 
-tokio = { version = "^1.40.0", features = ["full"] }
+tokio = { version = "^1.44.0", features = ["full"] }
 
-serde = { version = "^1.0.210", features = ["derive"] }
-serde_with = { version = "^3.9.0", features = ["chrono_0_4"] }
-serde_json = "^1.0.128"
-toml = "^0.8.19"
+serde = { version = "^1.0.218", features = ["derive"] }
+serde_with = { version = "^3.12.0", features = ["chrono_0_4"] }
+serde_json = "^1.0.140"
+toml = "^0.8.20"
 
-miette = "^7.2.0"
-thiserror = "^1.0.63"
-tracing = "^0.1.40"
-tracing-subscriber = { version = "^0.3.18", features = ["env-filter"] }
+miette = "^7.5.0"
+thiserror = "^2.0.12"
+tracing = "^0.1.41"
+tracing-subscriber = { version = "^0.3.19", features = ["env-filter"] }
 tracing-appender = "^0.2.3"
-tracing-actix-web = "^0.7.12"
+tracing-actix-web = "^0.7.16"
 dunce = "^1.0.5"
 
 actix-web = "^4.9.0"
@@ -52,10 +53,10 @@ actix-cors = "^0.7.0"
 actix-service = "^2.0.2"
 
 
-syn = "^2.0.77"
-quote = "^1.0.37"
+syn = "^2.0.99"
+quote = "^1.0.39"
 proc-macro-error2 = "^2.0.1"
-proc-macro2 = "^1.0.86"
+proc-macro2 = "^1.0.94"
 paste = "^1.0.15"
 
 
@@ -65,49 +66,58 @@ paste = "^1.0.15"
 utoipa = { git = "https://github.com/simongoricar/utoipa.git", rev = "fce3e3a1f1c6dede38eab8965ddf074a47196752", features = ["actix_extras", "chrono", "uuid", "preserve_order"] }
 utoipa-rapidoc = { git = "https://github.com/simongoricar/utoipa.git", rev = "fce3e3a1f1c6dede38eab8965ddf074a47196752", features = ["actix-web"] }
 
-itertools = "^0.13.0"
+itertools = "^0.14.0"
 
 argon2 = "^0.5.3"
 sha2 = "^0.10.8"
 
-jsonwebtoken = "^9.3.0"
-chrono = "^0.4.38"
+jsonwebtoken = "^9.3.1"
+chrono = "^0.4.40"
 
 # TODO We'll have to bump this at some point, I think the blocker was with actix-web using this version of `http`.
 http = "^0.2.12"
-url = "^2.5.2"
+url = "^2.5.4"
 
 mime = "^0.3.17"
-uuid = { version = "^1.8.0", features = ["v7", "serde"] }
+uuid = { version = "^1.15.1", features = ["v7", "serde"] }
 httpdate = "^1.0.3"
-bytes = "^1.7.1"
+bytes = "^1.10.1"
 dotenvy = "^0.15.7"
-csv = "1.3.0"
+csv = "1.3.1"
 assert_matches = "1.5.0"
 
-reqwest = "^0.12.7"
-tantivy = "^0.22.0"
+reqwest = "^0.12.12"
+
+# The patched version contains the PR for scoring fuzzy results according to Levenshtein distance.
+# (see <https://github.com/paradedb/tantivy/pull/1>)
+# tantivy = "^0.24.0"
+tantivy = { git = "https://github.com/Stari-kolomoni/tantivy.git", rev = "e97f5e17fd8d2aa93a011adbea547ba2e3dec8ce" }
+
 slotmap = "^1.0.7"
 
-fastrand = "^2.2.0"
+fastrand = "^2.3.0"
 
-pathdiff = "^0.2.1"
+ctrlc = "^3.4.0"
+
+pathdiff = "^0.2.3"
 path-slash = "^0.2.1"
 
-parking_lot = "^0.12.3"
+parking_lot = { version = "^0.12.3", features = ["arc_lock"] }
 
 fs-more = "^0.8.0"
 
 maplit = "^1.0.2"
 
-futures-core = "^0.3.30"
-futures-util = "^0.3.30"
-pin-project-lite = "^0.2.14"
+futures-core = "^0.3.31"
+futures-util = "^0.3.31"
+pin-project-lite = "^0.2.16"
+
+crossbeam-channel = "^0.5.14"
 
 
 
 [workspace.dependencies.sqlx]
-version = "^0.8.2"	
+version = "^0.8.3"	
 features = [
     "runtime-tokio",
     "tls-native-tls",
@@ -133,7 +143,8 @@ kolomoni_core = { path = "./kolomoni_core" }
 kolomoni_migrations = { path = "./kolomoni_migrations" }
 kolomoni_configuration = { path = "./kolomoni_configuration" }
 kolomoni_database = { path = "./kolomoni_database" }
-# kolomoni_search = { path = "./kolomoni_search" }
+kolomoni_cache = { path = "./kolomoni_cache" }
+kolomoni_search = { path = "./kolomoni_search" }
 
 clap = { workspace = true }
 
@@ -150,6 +161,8 @@ serde_json = { workspace = true }
 
 tokio = { workspace = true }
 
+ctrlc = { workspace = true }
+
 actix-web = { workspace = true }
 actix-http = { workspace = true }
 actix-utils = { workspace = true }
@@ -164,6 +177,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 
 itertools = { workspace = true }
+parking_lot = { workspace = true }
 mime = { workspace = true }
 httpdate = { workspace = true }
 futures-util = { workspace = true }

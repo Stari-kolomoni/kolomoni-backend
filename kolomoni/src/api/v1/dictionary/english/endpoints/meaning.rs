@@ -170,6 +170,10 @@ declare_openapi_error_reason_response!(
             body = NewEnglishWordMeaningCreatedResponse
         ),
         (
+            status = 404,
+            response = inline(AsErrorReason<EnglishWordNotFound>)
+        ),
+        (
             status = 409,
             response = inline(AsErrorReason<EnglishWordMeaningAlreadyExists>)
         ),
@@ -197,6 +201,15 @@ pub async fn create_english_word_meaning(
 
 
     let target_english_word_id = parse_uuid::<EnglishWordId>(parameters.into_inner().0)?;
+
+
+    let target_word_exists =
+        EnglishWordQuery::exists_by_id(&mut transaction, target_english_word_id).await?;
+    if !target_word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
 
     let new_word_meaning_data = request_data.into_inner();
 
@@ -626,7 +639,7 @@ pub async fn link_category_to_english_word_meaning(
         WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
             target_english_word_id.to_word_id(),
-            target_english_word_meaning_id.to_word_meaning_id(),
+            target_english_word_meaning_id.to_word_meaning_id_unchecked(),
             target_category_id,
         )
         .await?;
@@ -640,7 +653,7 @@ pub async fn link_category_to_english_word_meaning(
 
     WordMeaningCategoryMutation::link_category_with_word_meaning(
         &mut transaction,
-        target_english_word_meaning_id.to_word_meaning_id(),
+        target_english_word_meaning_id.to_word_meaning_id_unchecked(),
         target_category_id,
     )
     .await?;
@@ -768,7 +781,7 @@ pub async fn unlink_category_from_english_word_meaning(
         WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
             target_english_word_id.to_word_id(),
-            target_english_word_meaning_id.to_word_meaning_id(),
+            target_english_word_meaning_id.to_word_meaning_id_unchecked(),
             target_category_id,
         )
         .await?;
@@ -782,7 +795,7 @@ pub async fn unlink_category_from_english_word_meaning(
 
     let unlinked_successfully = WordMeaningCategoryMutation::unlink_category_from_word_meaning(
         &mut transaction,
-        target_english_word_meaning_id.to_word_meaning_id(),
+        target_english_word_meaning_id.to_word_meaning_id_unchecked(),
         target_category_id,
     )
     .await?;

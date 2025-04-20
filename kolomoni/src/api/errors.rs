@@ -227,7 +227,8 @@ impl ResponseError for EndpointError {
     }
 
     fn error_response(&self) -> HttpResponse<BoxBody> {
-        // TODO Find a way to log certain types of these errors (maybe via tracing?)
+        // TODO Find a way to log certain types of these errors properly (maybe via tracing?)
+        tracing::error!("endpoint errored: {}", self);
 
         let fallibly_built_response = match self {
             Self::MissingJsonBody => EndpointResponseBuilder::bad_request()

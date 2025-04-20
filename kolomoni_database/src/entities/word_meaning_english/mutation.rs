@@ -110,6 +110,8 @@ impl EnglishWordMeaningMutation {
         .await?;
 
 
+        // TODO hmm, okay we might not need parent word details here...
+        // but in that case, the cache will not have EnglishWordMeaningModel, but something else that explicitly has that parent english word context
         let complete_internal_meaning_model = InternalEnglishWordMeaningModel {
             word_id: new_word_meaning.word_id.into_uuid(),
             word_meaning_id: new_word_meaning.word_meaning_id.into_uuid(),

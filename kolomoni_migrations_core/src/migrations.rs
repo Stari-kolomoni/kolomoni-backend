@@ -112,7 +112,7 @@ pub struct IntegrityVerdict<'a, 'm> {
     pub mismatched_down_migration_hashes: Vec<&'a ConsolidatedMigration<'m>>,
 }
 
-impl<'a, 'm> IntegrityVerdict<'a, 'm> {
+impl IntegrityVerdict<'_, '_> {
     #[inline]
     pub fn has_full_integrity(&self) -> bool {
         self.mismatched_up_migration_hashes.is_empty()
@@ -130,7 +130,7 @@ impl<'a, 'm> IntegrityVerdict<'a, 'm> {
     }
 }
 
-impl<'a, 'm> Debug for IntegrityVerdict<'a, 'm> {
+impl Debug for IntegrityVerdict<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let formatted_mismatched_up_identifiers = self
             .mismatched_up_migration_hashes

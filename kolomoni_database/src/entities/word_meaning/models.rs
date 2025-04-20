@@ -29,6 +29,7 @@ pub(crate) mod internal {
         pub(crate) created_at: DateTime<Utc>,
 
         pub(crate) last_modified_at: DateTime<Utc>,
+        // TODO wait, are we missing a lemma here?
     }
 }
 
@@ -56,6 +57,7 @@ mod external {
     /// [`word_meaning_slovene`]: crate::entities::word_meaning_slovene
     /// [`EnglishWordMeaningModel`]: crate::entities::EnglishWordMeaningModel
     /// [`SloveneWordMeaningModel`]: crate::entities::SloveneWordMeaningModel
+    #[derive(Clone)]
     pub struct WordMeaningModel {
         pub word_id: WordId,
 

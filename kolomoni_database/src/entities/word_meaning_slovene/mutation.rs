@@ -78,7 +78,6 @@ fn build_slovene_word_meaning_update_query(
 pub struct SloveneWordMeaningMutation;
 
 impl SloveneWordMeaningMutation {
-    // TODO continue and finish this last module
     pub async fn create(
         database_connection: &mut PgConnection,
         slovene_word_id: SloveneWordId,
@@ -107,14 +106,13 @@ impl SloveneWordMeaningMutation {
                     ($1, $2, $3, $4) \
                 RETURNING \
                     word_meaning_id, disambiguation, abbreviation, description",
-            new_word_meaning.word_id.into_uuid(),
+            new_word_meaning.word_meaning_id.into_uuid(),
             meaning_to_create.disambiguation,
             meaning_to_create.abbreviation,
             meaning_to_create.description,
         )
         .fetch_one(database_connection)
         .await?;
-
 
         let complete_internal_model = InternalSloveneWordMeaningModel {
             word_id: new_word_meaning.word_id.into_uuid(),

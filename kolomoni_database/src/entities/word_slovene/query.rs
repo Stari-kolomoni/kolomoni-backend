@@ -21,6 +21,14 @@ pub struct SloveneWordsQueryOptions {
     pub only_words_modified_after: Option<DateTime<Utc>>,
 }
 
+impl SloveneWordsQueryOptions {
+    pub const fn new_without_filters() -> Self {
+        Self {
+            only_words_modified_after: None,
+        }
+    }
+}
+
 
 
 type RawSloveneWordWithMeaningsStream<'c> =

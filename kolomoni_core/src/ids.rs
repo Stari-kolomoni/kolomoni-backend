@@ -59,7 +59,7 @@ macro_rules! create_uuid_newtype {
 
         impl std::fmt::Display for $struct_name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                uuid::fmt::Simple::from_uuid(self.0).fmt(f)
+                uuid::fmt::Hyphenated::from_uuid(self.0).fmt(f)
             }
         }
 
@@ -92,7 +92,7 @@ impl WordId {
     /// precisely because of increased type safety, so if you find yourself having to
     /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
     /// think very carefully about whether this conversion is semantically valid.**
-    pub fn to_english_word_id(self) -> EnglishWordId {
+    pub fn to_english_word_id_unchecked(self) -> EnglishWordId {
         EnglishWordId::new(self.0)
     }
 
@@ -103,7 +103,7 @@ impl WordId {
     /// precisely because of increased type safety, so if you find yourself having to
     /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
     /// think very carefully about whether this conversion is semantically valid.**
-    pub fn to_slovene_word_id(self) -> SloveneWordId {
+    pub fn to_slovene_word_id_unchecked(self) -> SloveneWordId {
         SloveneWordId::new(self.0)
     }
 }
@@ -119,7 +119,7 @@ impl WordMeaningId {
     /// precisely because of increased type safety, so if you find yourself having to
     /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
     /// think very carefully about whether this conversion is semantically valid.**
-    pub fn to_english_word_meaning_id(self) -> EnglishWordMeaningId {
+    pub fn to_english_word_meaning_id_unchecked(self) -> EnglishWordMeaningId {
         EnglishWordMeaningId::new(self.0)
     }
 
@@ -130,7 +130,7 @@ impl WordMeaningId {
     /// precisely because of increased type safety, so if you find yourself having to
     /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
     /// think very carefully about whether this conversion is semantically valid.**
-    pub fn to_slovene_word_meaning_id(self) -> SloveneWordMeaningId {
+    pub fn to_slovene_word_meaning_id_unchecked(self) -> SloveneWordMeaningId {
         SloveneWordMeaningId::new(self.0)
     }
 }
@@ -166,7 +166,7 @@ impl EnglishWordMeaningId {
     /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
     /// think very carefully about whether this conversion is semantically valid.**
     #[inline]
-    pub fn to_word_meaning_id(self) -> WordMeaningId {
+    pub fn to_word_meaning_id_unchecked(self) -> WordMeaningId {
         WordMeaningId::new(self.0)
     }
 }

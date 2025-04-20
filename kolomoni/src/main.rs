@@ -63,12 +63,16 @@
 //! ```
 //!
 
+use std::time::Duration;
+
 use actix_web::error::JsonPayloadError;
 use actix_web::{web, HttpServer};
 use clap::Parser;
 use kolomoni_configuration::Configuration;
 use kolomoni_core::api_models::InvalidJsonBodyReason;
+use kolomoni_core::cancellation::CancellationToken;
 use miette::{Context, IntoDiagnostic, Result};
+use tokio::runtime::{self, Runtime};
 use tracing::info;
 
 pub mod api;
@@ -88,8 +92,7 @@ use crate::state::ApplicationStateInner;
 
 
 
-#[tokio::main]
-async fn main() -> Result<()> {
+async fn async_main(cancellation_token: CancellationToken) -> Result<()> {
     #[cfg(feature = "e2e-testing")]
     {
         println!("-------------------------------------");
@@ -158,9 +161,14 @@ async fn main() -> Result<()> {
 
     let http_server_configuration = configuration.http.clone();
 
-    let state_inner = ApplicationStateInner::new(configuration)
+
+    // TODO add ctrlc handler to set the background task cancellation task?
+    //      then test if the program stops correctly
+    let state_inner = ApplicationStateInner::new(configuration, cancellation_token)
         .await
-        .into_diagnostic()?;
+        .into_diagnostic()
+        .wrap_err("failed to initialize application state")?;
+
 
     /* TODO pending rewrite
     state_inner
@@ -168,7 +176,6 @@ async fn main() -> Result<()> {
         .engine
         .initialize_with_fresh_entries()
         .await?; */
-
 
     let state = web::Data::new(state_inner);
 
@@ -273,4 +280,33 @@ async fn main() -> Result<()> {
     drop(logging_guard);
 
     Ok(())
+}
+
+
+
+fn main() -> Result<()> {
+    println!("Initializing tokio async runtime.");
+
+    let cancellation_token = CancellationToken::new();
+
+    let async_runtime = runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .into_diagnostic()
+        .wrap_err("failed to initialize async runtime")?;
+
+    println!("Executing async entry point.");
+
+    let entry_point_result = async_runtime.block_on(async_main(cancellation_token.clone()));
+
+    println!(
+        "Async entry point has returned (is_err={}); setting cancellation token and waiting 500 ms.",
+        entry_point_result.is_err()
+    );
+
+    cancellation_token.cancel();
+
+    std::thread::sleep(Duration::from_millis(500));
+
+    entry_point_result
 }

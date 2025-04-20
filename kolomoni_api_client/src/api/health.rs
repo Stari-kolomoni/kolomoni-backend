@@ -48,7 +48,7 @@ where
     }
 }
 
-impl<'c, C> SharedHealthEndpoints for HealthUnauthenticatedApi<'c, C>
+impl<C> SharedHealthEndpoints for HealthUnauthenticatedApi<'_, C>
 where
     C: Client + UnauthenticatedHttpClient,
 {
@@ -76,7 +76,7 @@ where
 }
 
 
-impl<'c, C> SharedHealthEndpoints for HealthAuthenticatedApi<'c, C>
+impl<C> SharedHealthEndpoints for HealthAuthenticatedApi<'_, C>
 where
     C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
 {

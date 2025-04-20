@@ -1,66 +1,15 @@
 use actix_web::{post, web, Scope};
-use kolomoni_search::SearchResult;
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use kolomoni_core::api_models::{SearchRequest, SearchResponse, SearchedWordMeaning};
+use kolomoni_search::WordMeaningSearchResult;
 
-use super::{english_word::EnglishWordWithMeanings, slovene_word::SloveneWord};
 use crate::{
     api::{
-        errors::{APIError, EndpointResult},
-        macros::ContextlessResponder,
+        errors::{EndpointError, EndpointResponseBuilder, EndpointResult},
         openapi,
+        traits::IntoApiModel,
     },
-    impl_json_response_builder,
     state::ApplicationState,
 };
-
-
-
-#[derive(Deserialize, Clone, PartialEq, Eq, ToSchema)]
-#[cfg_attr(feature = "e2e-testing", derive(Serialize))]
-#[schema(
-    example = json!({
-        "search_query": "hit points"
-    })
-)]
-pub struct SearchRequest {
-    /// Search query.
-    pub search_query: String,
-}
-
-
-#[derive(Serialize, Clone, PartialEq, Eq, ToSchema)]
-#[cfg_attr(feature = "e2e-testing", derive(Deserialize))]
-pub struct SearchResults {
-    english_results: Vec<EnglishWordWithMeanings>,
-    slovene_results: Vec<SloveneWord>,
-}
-
-#[derive(Serialize, Clone, PartialEq, Eq, ToSchema)]
-#[cfg_attr(feature = "e2e-testing", derive(Deserialize))]
-#[schema(
-    example = json!({
-        "search_results": {
-            "english_results": [],
-            "slovene_results": [
-                {
-                    "id": "018def26-7a7a-73d5-9885-cfbaee7ce955",
-                    "lemma": "terna",
-                    "disambiguation": null,
-                    "description": "Živjo svet!",
-                    "created_at": "2024-02-28T09:58:12.858681Z",
-                    "last_modified_at": "2024-02-28T09:58:12.863905Z",
-                    "categories": []
-                }
-            ]
-        }
-    })
-)]
-pub struct SearchResponse {
-    search_results: SearchResults,
-}
-
-impl_json_response_builder!(SearchResponse);
 
 
 /// Search the dictionary
@@ -83,8 +32,8 @@ impl_json_response_builder!(SearchResponse);
             description = "Search results.",
             body = SearchResponse
         ),
-        openapi::MissingOrInvalidJsonRequestBodyResponse,
-        openapi::InternalServerErrorResponse
+        openapi::response::RequiredJsonBodyErrors,
+        openapi::response::InternalServerError,
     )
 )]
 #[post("")]
@@ -93,44 +42,57 @@ pub async fn perform_search(
     request_body: web::Json<SearchRequest>,
 ) -> EndpointResult {
     // TODO Maybe create a new word.search permission and grant it to everyone?
-
-    // TODO We'll probbaly need rate limiting, especially this endpoint.
+    // TODO We'll probably need some rate limiting, especially this endpoint.
 
     let search_query = request_body.into_inner().search_query;
 
     let search_results = state
-        .search
+        .search_engine()
         .search(&search_query)
-        .await
-        .map_err(APIError::InternalGenericError)?;
+        .map_err(EndpointError::internal_error)?;
 
 
-    let mut english_results: Vec<EnglishWordWithMeanings> = Vec::new();
-    let mut slovene_results: Vec<SloveneWord> = Vec::new();
 
-    for search_result in search_results.words {
+    let mut api_search_results = Vec::new();
+
+    for search_result in search_results.word_meanings {
         match search_result {
-            SearchResult::English(english_result) => {
-                english_results.push(EnglishWordWithMeanings::from_expanded_word_info(
-                    english_result,
-                ));
+            WordMeaningSearchResult::English {
+                search_score,
+                word,
+                word_meaning,
+            } => {
+                let english_word = word.into_api_model();
+                let english_word_meaning = word_meaning.into_api_model();
+
+                api_search_results.push(SearchedWordMeaning::English {
+                    search_score,
+                    word: english_word,
+                    word_meaning: english_word_meaning,
+                });
             }
-            SearchResult::Slovene(slovene_result) => {
-                slovene_results.push(SloveneWord::from_expanded_word_info(
-                    slovene_result,
-                ));
+            WordMeaningSearchResult::Slovene {
+                search_score,
+                word,
+                word_meaning,
+            } => {
+                let slovene_word = word.into_api_model();
+                let slovene_word_meaning = word_meaning.into_api_model();
+
+                api_search_results.push(SearchedWordMeaning::Slovene {
+                    search_score,
+                    word: slovene_word,
+                    word_meaning: slovene_word_meaning,
+                });
             }
         }
     }
 
-
-    Ok(SearchResponse {
-        search_results: SearchResults {
-            english_results,
-            slovene_results,
-        },
-    }
-    .into_response())
+    EndpointResponseBuilder::ok()
+        .with_json_body(SearchResponse {
+            word_meanings: api_search_results,
+        })
+        .build()
 }
 
 

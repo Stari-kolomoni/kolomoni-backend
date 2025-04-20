@@ -63,7 +63,7 @@ impl IntoApiModel<SloveneWord> for entities::word_slovene::SloveneWordModel {
 
 impl IntoApiModel<SloveneWordMeaning> for entities::word_meaning_slovene::SloveneWordMeaningModel {
     fn into_api_model(self) -> SloveneWordMeaning {
-        let slovene_word_meaning_id = self.word_meaning_id();
+        let slovene_word_meaning_id = self.id();
         let (word_meaning, slovene_word_meaning) = self.into_inner();
 
         SloveneWordMeaning {
@@ -82,7 +82,7 @@ impl IntoApiModel<SloveneWordMeaningWithShallowDetails>
     for entities::word_meaning_slovene::SloveneWordMeaningModelWithShallowDetails
 {
     fn into_api_model(self) -> SloveneWordMeaningWithShallowDetails {
-        let slovene_word_meaning_id = self.word_meaning_id();
+        let slovene_word_meaning_id = self.id();
         let (word_meaning, slovene_word_meaning, categories) = self.into_inner();
 
         SloveneWordMeaningWithShallowDetails {
@@ -102,7 +102,7 @@ impl IntoApiModel<SloveneWordMeaningWithDetails>
     for entities::word_meaning_slovene::SloveneWordMeaningModelWithDetails
 {
     fn into_api_model(self) -> SloveneWordMeaningWithDetails {
-        let slovene_word_meaning_id = self.word_meaning_id();
+        let slovene_word_meaning_id = self.id();
         let (word_meaning, slovene_word_meaning, categories, translations) = self.into_inner();
 
         let translations = translations

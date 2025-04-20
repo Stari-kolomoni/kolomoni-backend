@@ -307,10 +307,10 @@ pub(crate) async fn apply_sql_migration(
 
 
 
-async fn execute_up_script_and_update_migrations_table<'c>(
+async fn execute_up_script_and_update_migrations_table(
     database_connection: &mut PgConnection,
     migration_identifier: &MigrationIdentifier,
-    up_fn: &BoxedMigrationFn<'c, MigrationApplyError>,
+    up_fn: &BoxedMigrationFn<'_, MigrationApplyError>,
     up_fn_sha256_hash: &Sha256Hash,
     down: Option<DownScriptDetails<'_>>,
 ) -> Result<(), MigrationApplyError> {
@@ -338,11 +338,11 @@ async fn execute_up_script_and_update_migrations_table<'c>(
 }
 
 
-pub(crate) async fn apply_rust_migration<'c>(
+pub(crate) async fn apply_rust_migration(
     database_connection: &mut PgConnection,
     run_in_transaction: bool,
     migration_identifier: &MigrationIdentifier,
-    up_fn: &BoxedMigrationFn<'c, MigrationApplyError>,
+    up_fn: &BoxedMigrationFn<'_, MigrationApplyError>,
     up_fn_sha256_hash: &Sha256Hash,
     down: Option<DownScriptDetails<'_>>,
 ) -> Result<(), MigrationApplyError> {
@@ -467,11 +467,11 @@ async fn execute_down_script_and_update_migrations_table<'c>(
     Ok(())
 }
 
-pub(crate) async fn rollback_rust_migration<'c>(
+pub(crate) async fn rollback_rust_migration(
     database_connection: &mut PgConnection,
     run_in_transaction: bool,
     migration_identifier: &MigrationIdentifier,
-    down_fn: &BoxedMigrationFn<'c, MigrationRollbackError>,
+    down_fn: &BoxedMigrationFn<'_, MigrationRollbackError>,
 ) -> Result<(), MigrationRollbackError> {
     if run_in_transaction {
         let mut transaction = database_connection

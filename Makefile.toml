@@ -60,6 +60,13 @@ command = "cargo"
 args = ["run", "--release"]
 cwd = "."
 
+[tasks."backend:run:debug"]
+clear = true
+workspace = false
+command = "cargo"
+args = ["run"]
+cwd = "."
+
 [tasks."backend:openapi:run"]
 clear = true
 workspace = false

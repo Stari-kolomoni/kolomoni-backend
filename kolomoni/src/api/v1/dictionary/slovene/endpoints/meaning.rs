@@ -170,6 +170,10 @@ declare_openapi_error_reason_response!(
             body = NewSloveneWordMeaningCreatedResponse
         ),
         (
+            status = 404,
+            response = inline(AsErrorReason<SloveneWordNotFound>)
+        ),
+        (
             status = 409,
             response = inline(AsErrorReason<SloveneWordMeaningAlreadyExists>)
         ),
@@ -198,8 +202,16 @@ pub async fn create_slovene_word_meaning(
 
     let target_slovene_word_id = parse_uuid::<SloveneWordId>(parameters.into_inner().0)?;
 
-    let new_word_meaning_data = request_data.into_inner();
+    let target_word_exists =
+        SloveneWordQuery::exists_by_id(&mut transaction, target_slovene_word_id).await?;
+    if !target_word_exists {
+        return EndpointResponseBuilder::not_found()
+            .with_error_reason(WordErrorReason::word_not_found())
+            .build();
+    }
 
+
+    let new_word_meaning_data = request_data.into_inner();
 
     let identical_meaning_already_exists = SloveneWordMeaningQuery::exists_by_distinguishing_fields(
         &mut transaction,
@@ -218,7 +230,6 @@ pub async fn create_slovene_word_meaning(
     }
 
 
-
     let newly_created_meaning = SloveneWordMeaningMutation::create(
         &mut transaction,
         target_slovene_word_id,
@@ -230,9 +241,7 @@ pub async fn create_slovene_word_meaning(
     )
     .await?;
 
-
     transaction.commit().await?;
-
 
     EndpointResponseBuilder::ok()
         .with_json_body(NewSloveneWordMeaningCreatedResponse {

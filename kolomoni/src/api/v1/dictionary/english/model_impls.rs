@@ -56,7 +56,7 @@ impl IntoApiModel<EnglishWordWithMeanings> for entities::word_english::EnglishWo
 
 impl IntoApiModel<EnglishWordMeaning> for entities::word_meaning_english::EnglishWordMeaningModel {
     fn into_api_model(self) -> EnglishWordMeaning {
-        let english_word_meaning_id = self.word_meaning_id();
+        let english_word_meaning_id = self.id();
         let (word_meaning, english_word_meaning) = self.into_inner();
 
         EnglishWordMeaning {
@@ -75,7 +75,7 @@ impl IntoApiModel<EnglishWordMeaningWithShallowDetails>
     for entities::word_meaning_english::EnglishWordMeaningModelWithShallowDetails
 {
     fn into_api_model(self) -> EnglishWordMeaningWithShallowDetails {
-        let english_word_meaning_id = self.word_meaning_id();
+        let english_word_meaning_id = self.id();
         let (word_meaning, english_word_meaning, categories) = self.into_inner();
 
         EnglishWordMeaningWithShallowDetails {
@@ -94,7 +94,7 @@ impl IntoApiModel<EnglishWordMeaningWithDetails>
     for entities::word_meaning_english::EnglishWordMeaningModelWithDetails
 {
     fn into_api_model(self) -> EnglishWordMeaningWithDetails {
-        let english_word_meaning_id = self.word_meaning_id();
+        let english_word_meaning_id = self.id();
         let (word_meaning, english_word_meaning, categories, translations) = self.into_inner();
 
         let translations = translations

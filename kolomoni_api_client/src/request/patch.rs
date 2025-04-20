@@ -26,7 +26,7 @@ where
     request_additional_headers: HeaderMap,
 }
 
-impl<'c, C> PreparedPatchRequest<'c, C>
+impl<C> PreparedPatchRequest<'_, C>
 where
     C: Client + UnauthenticatedHttpClient,
 {
@@ -41,7 +41,7 @@ where
     }
 }
 
-impl<'c, C> PreparedPatchRequest<'c, C>
+impl<C> PreparedPatchRequest<'_, C>
 where
     C: Client + AuthenticatedHttpClient,
 {
@@ -157,7 +157,7 @@ where
 }
 
 
-impl<'c, HC> PatchRequestBuilder<'c, HC, true>
+impl<HC> PatchRequestBuilder<'_, HC, true>
 where
     HC: Client + UnauthenticatedHttpClient,
 {
@@ -166,7 +166,7 @@ where
     }
 }
 
-impl<'c, HC> PatchRequestBuilder<'c, HC, true>
+impl<HC> PatchRequestBuilder<'_, HC, true>
 where
     HC: Client + AuthenticatedHttpClient,
 {

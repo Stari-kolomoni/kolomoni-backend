@@ -7,6 +7,7 @@ use crate::{
         word::{WordLanguage, WordModel},
         word_meaning_english::internal::InternalEnglishWordMeaningModelWithDetails,
     },
+    macros::deserialize_json_from_value,
     IntoExternalModel,
     TryIntoStronglyTypedInternalModel,
 };
@@ -197,7 +198,7 @@ mod external {
     /// Notably, this phrasing *does not* imply that this type is exposed in the sense of the REST API
     /// that the Stari Kolomoni backend server exposes. For those REST API models, see the [`kolomoni_core`] crate.
     pub struct EnglishWordWithMeaningsModel {
-        word: WordModel,
+        base_word: WordModel,
 
         bare_english_word: BareEnglishWordModel,
 
@@ -207,27 +208,27 @@ mod external {
     impl EnglishWordWithMeaningsModel {
         #[inline]
         pub(crate) fn new_with_lemma_and_meanings(
-            bare_word: WordModel,
+            base_word: WordModel,
             lemma: String,
             meanings: Vec<EnglishWordMeaningModelWithDetails>,
         ) -> Self {
             Self {
-                word: bare_word,
+                base_word,
                 bare_english_word: BareEnglishWordModel { lemma },
                 meanings,
             }
         }
 
         pub fn id(&self) -> EnglishWordId {
-            EnglishWordId::new(self.word.id.into_uuid())
+            EnglishWordId::new(self.base_word.id.into_uuid())
         }
 
         pub fn created_at(&self) -> &DateTime<Utc> {
-            &self.word.created_at
+            &self.base_word.created_at
         }
 
         pub fn last_modified_at(&self) -> &DateTime<Utc> {
-            &self.word.last_modified_at
+            &self.base_word.last_modified_at
         }
 
         pub fn lemma(&self) -> &str {
@@ -236,6 +237,21 @@ mod external {
 
         pub fn meanings(&self) -> &[EnglishWordMeaningModelWithDetails] {
             &self.meanings
+        }
+
+        pub fn into_less_detailed_model_and_meanings(
+            self,
+        ) -> (
+            EnglishWordModel,
+            Vec<EnglishWordMeaningModelWithDetails>,
+        ) {
+            (
+                EnglishWordModel {
+                    base_word: self.base_word,
+                    bare_english_word: self.bare_english_word,
+                },
+                self.meanings,
+            )
         }
 
         /// Consumes `self` and returns a tuple containing the bare models that make up
@@ -250,7 +266,11 @@ mod external {
             BareEnglishWordModel,
             Vec<EnglishWordMeaningModelWithDetails>,
         ) {
-            (self.word, self.bare_english_word, self.meanings)
+            (
+                self.base_word,
+                self.bare_english_word,
+                self.meanings,
+            )
         }
     }
 
@@ -262,7 +282,7 @@ mod external {
 
     impl AsRef<WordModel> for EnglishWordWithMeaningsModel {
         fn as_ref(&self) -> &WordModel {
-            &self.word
+            &self.base_word
         }
     }
 }
@@ -277,14 +297,17 @@ impl TryIntoStronglyTypedInternalModel for internal_weak::WeakInternalEnglishWor
     type Error = Cow<'static, str>;
 
     fn try_into_strongly_typed_internal_model(self) -> Result<Self::InternalModel, Self::Error> {
-        let meanings =
-            serde_json::from_value::<Vec<InternalEnglishWordMeaningModelWithDetails>>(self.meanings)
-                .map_err(|error| {
-                    Cow::from(format!(
-                        "failed to parse returned JSON as internal english word meaning model: {}",
-                        error
-                    ))
-                })?;
+        // TODO migrate other query JSON parsing to this macro
+        let meanings = deserialize_json_from_value!(
+            self.meanings => Vec<InternalEnglishWordMeaningModelWithDetails>;
+            with message: |error| {
+                format!(
+                    "failed to parse query-returned JSON as internal english word meaning model (english_word_id={}): {}",
+                    self.word_id,
+                    error
+                )
+            }
+        )?;
 
 
         Ok(Self::InternalModel {

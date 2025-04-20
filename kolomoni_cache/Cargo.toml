@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 kolomoni_core = { path = "../kolomoni_core" }
+kolomoni_search_core = { path = "../kolomoni_search_core" }
 kolomoni_database = { path = "../kolomoni_database" }
 
 sqlx = { workspace = true }
@@ -12,5 +13,10 @@ sqlx = { workspace = true }
 thiserror = { workspace = true }
 miette = { workspace = true }
 
-slotmap = { workspace = true }
+tracing = { workspace = true }
+
 chrono = { workspace = true }
+
+futures-util = { workspace = true }
+
+crossbeam-channel = { workspace = true }

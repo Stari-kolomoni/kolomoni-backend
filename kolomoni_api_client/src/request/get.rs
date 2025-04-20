@@ -25,7 +25,7 @@ where
     additional_headers: HeaderMap,
 }
 
-impl<'c, C> PreparedGetRequest<'c, C>
+impl<C> PreparedGetRequest<'_, C>
 where
     C: Client + UnauthenticatedHttpClient,
 {
@@ -39,7 +39,7 @@ where
     }
 }
 
-impl<'c, C> PreparedGetRequest<'c, C>
+impl<C> PreparedGetRequest<'_, C>
 where
     C: Client + AuthenticatedHttpClient,
 {
@@ -156,7 +156,7 @@ where
 }
 
 
-impl<'c, HC> GetRequestBuilder<'c, HC, true>
+impl<HC> GetRequestBuilder<'_, HC, true>
 where
     HC: Client + UnauthenticatedHttpClient,
 {
@@ -165,7 +165,7 @@ where
     }
 }
 
-impl<'c, HC> GetRequestBuilder<'c, HC, true>
+impl<HC> GetRequestBuilder<'_, HC, true>
 where
     HC: Client + AuthenticatedHttpClient,
 {

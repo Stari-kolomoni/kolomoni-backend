@@ -168,7 +168,7 @@ async fn cli_down_inner(arguments: DownCommandArguments) -> Result<()> {
         .into_diagnostic()
         .wrap_err("failed to read user terminal input")?;
 
-    if user_response.trim_end().to_ascii_lowercase() != "y" {
+    if !user_response.trim_end().eq_ignore_ascii_case("y") {
         return Err(miette!("User aborted command."));
     }
 
