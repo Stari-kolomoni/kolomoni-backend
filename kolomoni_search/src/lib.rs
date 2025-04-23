@@ -9,8 +9,16 @@ use kolomoni_core::{
 use kolomoni_database::entities::{
     word::WordLanguage,
     word_english::EnglishWordModel,
-    word_meaning_english::EnglishWordMeaningModel,
-    word_meaning_slovene::SloveneWordMeaningModel,
+    word_meaning_english::{
+        EnglishWordMeaningModel,
+        EnglishWordMeaningModelWithDetails,
+        SloveneTranslationModel,
+    },
+    word_meaning_slovene::{
+        EnglishTranslationModel,
+        SloveneWordMeaningModel,
+        SloveneWordMeaningModelWithDetails,
+    },
     word_slovene::SloveneWordModel,
 };
 use kolomoni_search_core::SearchIndexModificationMessage;
@@ -68,14 +76,28 @@ pub enum SearchError {
     },
 
     /// This may happen in edge cases where an index hasn't been updated
-    /// after removing a word from the database in time for the search. This should be rare.
+    /// after removing a word from the database in time for the search.
+    /// This should be rare, if not impossible.
     #[error("unable to find matched word in cache: {}", .word_id)]
     MatchedWordNotFoundInCache { word_id: WordId },
 
     /// This may happen in edge cases where an index hasn't been updated
-    /// after removing a word meaning from the database in time for the search. This should be rare.
+    /// after removing a word meaning from the database in time for the search.
+    /// This should be rare, if not impossible.
     #[error("unable to find matched word meaning in cache: {}", .word_meaning_id)]
     MatchedWordMeaningNotFoundInCache { word_meaning_id: WordMeaningId },
+
+    /// This may happen in edge cases where an index hasn't been updated in time for the search.
+    /// This should be rare, if not impossible.
+    #[error(
+        "unable to find matched translation relationship in cache: {} with {}",
+        .english_word_meaning_id,
+        .slovene_word_meaning_id
+    )]
+    MatchedTranslationRelationshipNotFoundInCache {
+        english_word_meaning_id: EnglishWordMeaningId,
+        slovene_word_meaning_id: SloveneWordMeaningId,
+    },
 }
 
 
@@ -213,8 +235,6 @@ impl SearchIndexManagerTaskHandle {
         index_writer.commit()?;
 
         let locked_cache = cache.write();
-
-        // TODO fix this re-indexing indefinitely (went up to commit 2831 last time, looks like it's in a loop somewhere)
 
         for cached_english_word_meaning in locked_cache.english_word_meanings() {
             debug!(
@@ -561,22 +581,22 @@ pub enum SearchInitializationError {
 
 pub enum WordMeaningSearchResult {
     English {
-        search_score: f32,
+        result_score: f32,
         word: EnglishWordModel,
-        word_meaning: EnglishWordMeaningModel,
+        word_meaning: EnglishWordMeaningModelWithDetails,
     },
     Slovene {
-        search_score: f32,
+        result_score: f32,
         word: SloveneWordModel,
-        word_meaning: SloveneWordMeaningModel,
+        word_meaning: SloveneWordMeaningModelWithDetails,
     },
 }
 
 impl WordMeaningSearchResult {
-    pub fn score(&self) -> &f32 {
+    pub fn result_score(&self) -> &f32 {
         match self {
-            WordMeaningSearchResult::English { search_score, .. } => search_score,
-            WordMeaningSearchResult::Slovene { search_score, .. } => search_score,
+            WordMeaningSearchResult::English { result_score, .. } => result_score,
+            WordMeaningSearchResult::Slovene { result_score, .. } => result_score,
         }
     }
 }
@@ -595,10 +615,14 @@ pub struct SearchResults {
 pub fn rescore_search_result(search_query: &str, result: &mut WordMeaningSearchResult) {
     let (search_score, word_lemma) = match result {
         WordMeaningSearchResult::English {
-            search_score, word, ..
+            result_score: search_score,
+            word,
+            ..
         } => (search_score, word.lemma()),
         WordMeaningSearchResult::Slovene {
-            search_score, word, ..
+            result_score: search_score,
+            word,
+            ..
         } => (search_score, word.lemma()),
     };
 
@@ -800,11 +824,67 @@ impl SearchEngine {
                         });
                     };
 
+                    let category_ids = slovene_word_meaning
+                        .categories()
+                        .iter()
+                        .copied()
+                        .collect::<Vec<_>>();
+
+
+                    let mut translations =
+                        Vec::with_capacity(slovene_word_meaning.translations().len());
+
+                    for translation_id in slovene_word_meaning.translations() {
+                        let Some(english_translation_word_meaning) =
+                            locked_cache.english_word_meaning(translation_id)
+                        else {
+                            return Err(SearchError::MatchedWordMeaningNotFoundInCache {
+                                word_meaning_id: translation_id.to_word_meaning_id_unchecked(),
+                            });
+                        };
+
+                        let Some(english_translation_word) = locked_cache.english_word(
+                            english_translation_word_meaning
+                                .word_meaning()
+                                .parent_word_id(),
+                        ) else {
+                            return Err(SearchError::MatchedWordNotFoundInCache {
+                                word_id: english_translation_word_meaning
+                                    .word_meaning()
+                                    .parent_word_id()
+                                    .to_word_id(),
+                            });
+                        };
+
+                        let Some(translation_relationship) =
+                            locked_cache.translation_by_id(*translation_id, slovene_word_meaning_id)
+                        else {
+                            return Err(
+                                SearchError::MatchedTranslationRelationshipNotFoundInCache {
+                                    english_word_meaning_id: *translation_id,
+                                    slovene_word_meaning_id,
+                                },
+                            );
+                        };
+
+
+                        translations.push(EnglishTranslationModel {
+                            word: english_translation_word.word().to_owned(),
+                            word_meaning: english_translation_word_meaning.word_meaning().to_owned(),
+                            translated_at: translation_relationship.translated_at().to_owned(),
+                            translated_by: translation_relationship.translated_by().copied(),
+                        });
+                    }
+
 
                     let mut search_result = WordMeaningSearchResult::Slovene {
-                        search_score: score,
+                        result_score: score,
                         word: slovene_word.word().to_owned(),
-                        word_meaning: slovene_word_meaning.word_meaning().to_owned(),
+                        word_meaning: SloveneWordMeaningModelWithDetails::new_from_less_detailed(
+                            slovene_word_meaning.word_meaning().to_owned(),
+                            category_ids,
+                            translations,
+                        ),
                     };
 
                     rescore_search_result(query, &mut search_result);
@@ -832,10 +912,66 @@ impl SearchEngine {
                     };
 
 
+                    let category_ids = english_word_meaning
+                        .categories()
+                        .iter()
+                        .copied()
+                        .collect::<Vec<_>>();
+
+
+                    let mut translations =
+                        Vec::with_capacity(english_word_meaning.translations().len());
+
+                    for translation_id in english_word_meaning.translations() {
+                        let Some(slovene_translation_word_meaning) =
+                            locked_cache.slovene_word_meaning(translation_id)
+                        else {
+                            return Err(SearchError::MatchedWordMeaningNotFoundInCache {
+                                word_meaning_id: translation_id.to_word_meaning_id(),
+                            });
+                        };
+
+                        let Some(slovene_translation_word) = locked_cache.slovene_word(
+                            slovene_translation_word_meaning
+                                .word_meaning()
+                                .parent_word_id(),
+                        ) else {
+                            return Err(SearchError::MatchedWordNotFoundInCache {
+                                word_id: slovene_translation_word_meaning
+                                    .word_meaning()
+                                    .parent_word_id()
+                                    .to_word_id(),
+                            });
+                        };
+
+                        let Some(translation_relationship) =
+                            locked_cache.translation_by_id(english_word_meaning_id, *translation_id)
+                        else {
+                            return Err(
+                                SearchError::MatchedTranslationRelationshipNotFoundInCache {
+                                    english_word_meaning_id,
+                                    slovene_word_meaning_id: *translation_id,
+                                },
+                            );
+                        };
+
+                        translations.push(SloveneTranslationModel {
+                            word: slovene_translation_word.word().to_owned(),
+                            word_meaning: slovene_translation_word_meaning.word_meaning().to_owned(),
+                            translated_at: translation_relationship.translated_at().to_owned(),
+                            translated_by: translation_relationship.translated_by().copied(),
+                        });
+                    }
+
+
                     let mut search_result = WordMeaningSearchResult::English {
-                        search_score: score,
+                        result_score: score,
                         word: english_word.word().to_owned(),
-                        word_meaning: english_word_meaning.word_meaning().to_owned(),
+                        word_meaning: EnglishWordMeaningModelWithDetails::new_from_less_detailed(
+                            english_word_meaning.word_meaning().to_owned(),
+                            category_ids,
+                            translations,
+                        ),
                     };
 
                     rescore_search_result(query, &mut search_result);
@@ -847,8 +983,8 @@ impl SearchEngine {
 
 
         search_results.sort_unstable_by(|first, second| {
-            let first_score = first.score();
-            let second_score = second.score();
+            let first_score = first.result_score();
+            let second_score = second.result_score();
 
             first_score.total_cmp(second_score).reverse()
         });

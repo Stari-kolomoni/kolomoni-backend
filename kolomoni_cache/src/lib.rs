@@ -1,5 +1,6 @@
 use std::{borrow::Cow, collections::HashSet};
 
+use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
 use entities::{
     CachedCategory,
@@ -7,6 +8,7 @@ use entities::{
     CachedEnglishWordMeaning,
     CachedSloveneWord,
     CachedSloveneWordMeaning,
+    CachedTranslationRelationship,
 };
 use futures_util::stream::StreamExt;
 use kolomoni_core::ids::{
@@ -15,6 +17,7 @@ use kolomoni_core::ids::{
     EnglishWordMeaningId,
     SloveneWordId,
     SloveneWordMeaningId,
+    UserId,
 };
 use kolomoni_database::{
     entities::{
@@ -28,7 +31,7 @@ use kolomoni_database::{
     QueryError,
 };
 use kolomoni_search_core::SearchIndexModificationMessage;
-use store::{EntityStore, EntityStoreEntry};
+use store::{EntityStore, EntityStoreEntry, EntityStoreInsertionAction};
 use thiserror::Error;
 use tracing::{debug, error, info};
 
@@ -145,6 +148,11 @@ pub struct EntityCache {
 
     categories: EntityStore<CategoryId, CachedCategory>,
 
+    // TODO make sure this is updated in the related functions
+    // TODO make sure this is cached when doing the initial seeding
+    translation_relationships:
+        EntityStore<(EnglishWordMeaningId, SloveneWordMeaningId), CachedTranslationRelationship>,
+
     search_engine_event_sender: Option<Sender<SearchIndexModificationMessage>>,
 }
 
@@ -156,6 +164,7 @@ impl EntityCache {
             slovene_words: EntityStore::new(),
             slovene_word_meanings: EntityStore::new(),
             categories: EntityStore::new(),
+            translation_relationships: EntityStore::new(),
             search_engine_event_sender: None,
         }
     }
@@ -284,6 +293,16 @@ impl EntityCache {
                 for translation in translations {
                     pending_translation_relationships
                         .insert((translation.word_meaning.id(), meaning_id));
+
+                    self.translation_relationships.insert_or_replace(
+                        (meaning_id, translation.word_meaning.id()),
+                        CachedTranslationRelationship {
+                            english_word_meaning_id: meaning_id,
+                            slovene_word_meaning_id: translation.word_meaning.id(),
+                            translated_at: translation.translated_at,
+                            translated_by: translation.translated_by,
+                        },
+                    );
                 }
 
 
@@ -298,12 +317,6 @@ impl EntityCache {
                 .insert_or_replace(english_word_id, cached_english_word);
         }
 
-
-        // DEBUGONLY
-        println!(
-            "Finished caching {} english words and {} english word meanings.",
-            num_english_words_cached, num_english_word_meanings_cached
-        );
         info!(
             "Finished caching {} english words and {} english word meanings.",
             num_english_words_cached, num_english_word_meanings_cached
@@ -371,6 +384,10 @@ impl EntityCache {
                 for translation in translations {
                     assert!(pending_translation_relationships
                         .contains(&(meaning_id, translation.word_meaning.id())));
+
+                    assert!(self
+                        .translation_relationships
+                        .contains(&(translation.word_meaning.id(), meaning_id)));
                 }
 
 
@@ -1115,14 +1132,16 @@ impl EntityCache {
 
     /// Establishes a translation relationship between the given slovene and english word meaning.
     ///
-    /// If either (or both) if the IDs provided (`slovene_word_meaning_id` and `english_word_meaning_id`) refer
+    /// If either of the IDs provided (`slovene_word_meaning_id` and `english_word_meaning_id`) refer
     /// to meanings that aren't present in cache, this method will return an error.
     ///
-    /// If the translation relationship is already present, this call will have no effect, and `Ok(())` will be returned.
+    /// If the translation relationship is already present, this call will update the `translated_at` and `translated_by` properties.
     pub fn link_slovene_and_english_word_meanings_as_translations(
         &mut self,
         slovene_word_meaning_id: SloveneWordMeaningId,
         english_word_meaning_id: EnglishWordMeaningId,
+        translated_at: DateTime<Utc>,
+        translated_by: Option<UserId>,
     ) -> Result<(), EntityReadError> {
         let optional_slovene_word_meaning =
             self.slovene_word_meanings.get_mut(&slovene_word_meaning_id);
@@ -1141,6 +1160,17 @@ impl EntityCache {
             _ => {
                 return Err(EntityReadError::EntityNotFound);
             }
+        };
+
+
+        if let Some(existing_translation_relationship) = self
+            .translation_relationships
+            .get_mut(&(english_word_meaning_id, slovene_word_meaning_id))
+        {
+            existing_translation_relationship.translated_at = translated_at;
+            existing_translation_relationship.translated_by = translated_by;
+
+            return Ok(());
         };
 
 
@@ -1168,7 +1198,92 @@ impl EntityCache {
         );
 
 
+        let relationship_insertion_result = self.translation_relationships.insert_or_replace(
+            (english_word_meaning_id, slovene_word_meaning_id),
+            CachedTranslationRelationship {
+                english_word_meaning_id,
+                slovene_word_meaning_id,
+                translated_at,
+                translated_by,
+            },
+        );
+
+        // PANIC SAFETY: If the relationship existed before, the `translation_relationships.get_mut` call above would
+        // be entered and return early. This is just a sanity check that things are proceeding as expected.
+        assert!(matches!(
+            relationship_insertion_result,
+            EntityStoreInsertionAction::Inserted
+        ));
+
+
         Ok(())
+    }
+
+    pub fn translations_for_english_word_meaning<'a>(
+        &'a self,
+        english_word_meaning_id: EnglishWordMeaningId,
+    ) -> Option<Vec<&'a CachedTranslationRelationship>> {
+        let cached_english_word_meaning = self.english_word_meaning(&english_word_meaning_id)?;
+
+        let mut translation_relationships: Vec<&'a CachedTranslationRelationship> =
+            Vec::with_capacity(cached_english_word_meaning.translation_ids.len());
+
+        for slovene_word_meaning_id in &cached_english_word_meaning.translation_ids {
+            let Some(translation_relationship) = self
+                .translation_relationships
+                .get(&(english_word_meaning_id, *slovene_word_meaning_id))
+            else {
+                error!(
+                    "Failed to look up translation relationship with {} for english word meaning {}.",
+                    slovene_word_meaning_id,
+                    english_word_meaning_id
+                );
+
+                continue;
+            };
+
+            translation_relationships.push(translation_relationship);
+        }
+
+        Some(translation_relationships)
+    }
+
+    pub fn translations_for_slovene_word_meaning<'a>(
+        &'a self,
+        slovene_word_meaning_id: SloveneWordMeaningId,
+    ) -> Option<Vec<&'a CachedTranslationRelationship>> {
+        let cached_slovene_word_meaning = self.slovene_word_meaning(&slovene_word_meaning_id)?;
+
+        let mut translation_relationships: Vec<&'a CachedTranslationRelationship> =
+            Vec::with_capacity(cached_slovene_word_meaning.translation_ids.len());
+
+        for english_word_meaning_id in &cached_slovene_word_meaning.translation_ids {
+            let Some(translation_relationship) = self
+                .translation_relationships
+                .get(&(*english_word_meaning_id, slovene_word_meaning_id))
+            else {
+                error!(
+                    "Failed to look up translation relationship with {} for slovene word meaning {}.",
+                    english_word_meaning_id,
+                    slovene_word_meaning_id
+                );
+
+                continue;
+            };
+
+            translation_relationships.push(translation_relationship);
+        }
+
+        Some(translation_relationships)
+    }
+
+    pub fn translation_by_id(
+        &self,
+        english_word_meaning_id: EnglishWordMeaningId,
+        slovene_word_meaning_id: SloveneWordMeaningId,
+    ) -> Option<&CachedTranslationRelationship> {
+        self.translation_relationships
+            .get(&(english_word_meaning_id, slovene_word_meaning_id))
     }
 
     /// Removes a translation relationship between the given slovene and english word meaning.
@@ -1199,6 +1314,14 @@ impl EntityCache {
             _ => {
                 return Err(EntityReadError::EntityNotFound);
             }
+        };
+
+
+        let Some(_) = self
+            .translation_relationships
+            .remove(&(english_word_meaning_id, slovene_word_meaning_id))
+        else {
+            return Err(EntityReadError::EntityNotFound);
         };
 
 

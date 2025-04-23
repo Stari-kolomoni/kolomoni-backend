@@ -1,11 +1,13 @@
 use std::collections::HashSet;
 
+use chrono::{DateTime, Utc};
 use kolomoni_core::ids::{
     CategoryId,
     EnglishWordId,
     EnglishWordMeaningId,
     SloveneWordId,
     SloveneWordMeaningId,
+    UserId,
 };
 use kolomoni_database::entities::{
     category::CategoryModel,
@@ -93,6 +95,10 @@ impl CachedEnglishWordMeaning {
         &self.word_meaning
     }
 
+    pub fn translations(&self) -> &HashSet<SloveneWordMeaningId> {
+        &self.translation_ids
+    }
+
     /// Updates the cached english word meaning, leaving categories
     /// and translations as-is.
     ///
@@ -117,6 +123,10 @@ impl CachedEnglishWordMeaning {
 
     pub(crate) fn remove_category(&mut self, category_id: &CategoryId) -> bool {
         self.category_ids.remove(category_id)
+    }
+
+    pub fn categories(&self) -> &HashSet<CategoryId> {
+        &self.category_ids
     }
 
     pub(crate) fn add_translation(&mut self, translation_id: SloveneWordMeaningId) -> bool {
@@ -229,12 +239,20 @@ impl CachedSloveneWordMeaning {
         self.category_ids.remove(category_id)
     }
 
+    pub fn categories(&self) -> &HashSet<CategoryId> {
+        &self.category_ids
+    }
+
     pub(crate) fn add_translation(&mut self, translation_id: EnglishWordMeaningId) -> bool {
         self.translation_ids.insert(translation_id)
     }
 
     pub(crate) fn remove_translation(&mut self, translation_id: &EnglishWordMeaningId) -> bool {
         self.translation_ids.remove(translation_id)
+    }
+
+    pub fn translations(&self) -> &HashSet<EnglishWordMeaningId> {
+        &self.translation_ids
     }
 }
 
@@ -295,5 +313,29 @@ impl CachedCategory {
     ) -> bool {
         self.present_on_slovene_word_meaning_ids
             .remove(slovene_word_meaning_id)
+    }
+}
+
+
+#[derive(Clone)]
+pub struct CachedTranslationRelationship {
+    #[allow(dead_code)]
+    pub(crate) english_word_meaning_id: EnglishWordMeaningId,
+
+    #[allow(dead_code)]
+    pub(crate) slovene_word_meaning_id: SloveneWordMeaningId,
+
+    pub(crate) translated_at: DateTime<Utc>,
+
+    pub(crate) translated_by: Option<UserId>,
+}
+
+impl CachedTranslationRelationship {
+    pub fn translated_at(&self) -> &DateTime<Utc> {
+        &self.translated_at
+    }
+
+    pub fn translated_by(&self) -> Option<&UserId> {
+        self.translated_by.as_ref()
     }
 }

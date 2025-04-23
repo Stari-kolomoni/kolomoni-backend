@@ -241,6 +241,7 @@ mod external {
 
     impl SloveneWordMeaningModelWithShallowDetails {
         #[inline]
+        #[allow(dead_code)]
         pub(crate) fn new(
             word_meaning: WordMeaningModel,
             slovene_word_meaning: BareSloveneWordMeaningModel,
@@ -310,7 +311,7 @@ mod external {
 
     impl SloveneWordMeaningModelWithDetails {
         #[inline]
-        pub(crate) fn new(
+        pub fn new(
             word_meaning: WordMeaningModel,
             bare_slovene_word_meaning: BareSloveneWordMeaningModel,
             categories: Vec<CategoryId>,
@@ -319,6 +320,20 @@ mod external {
             Self {
                 word_meaning,
                 bare_slovene_word_meaning,
+                categories,
+                translations,
+            }
+        }
+
+        #[inline]
+        pub fn new_from_less_detailed(
+            slovene_word_meaning: SloveneWordMeaningModel,
+            categories: Vec<CategoryId>,
+            translations: Vec<EnglishTranslationModel>,
+        ) -> Self {
+            Self {
+                word_meaning: slovene_word_meaning.word_meaning,
+                bare_slovene_word_meaning: slovene_word_meaning.bare_slovene_word_meaning,
                 categories,
                 translations,
             }

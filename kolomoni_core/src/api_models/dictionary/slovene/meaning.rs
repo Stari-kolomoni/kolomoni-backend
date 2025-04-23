@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::{
-    api_models::{EnglishWord, EnglishWordMeaning, EnglishWordMeaningWithShallowDetails},
+    api_models::{EnglishWord, EnglishWordMeaning},
     ids::{CategoryId, SloveneWordMeaningId, UserId},
 };
 

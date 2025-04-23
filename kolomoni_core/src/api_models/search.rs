@@ -1,7 +1,12 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{EnglishWord, EnglishWordMeaning, SloveneWord, SloveneWordMeaning};
+use super::{
+    EnglishWord,
+    EnglishWordMeaningWithDetails,
+    SloveneWord,
+    SloveneWordMeaningWithDetails,
+};
 
 
 
@@ -29,16 +34,16 @@ pub struct SearchRequest {
 pub enum SearchedWordMeaning {
     #[serde(rename = "english")]
     English {
-        search_score: f32,
+        result_score: f32,
         word: EnglishWord,
-        word_meaning: EnglishWordMeaning,
+        word_meaning: EnglishWordMeaningWithDetails,
     },
 
     #[serde(rename = "slovene")]
     Slovene {
-        search_score: f32,
+        result_score: f32,
         word: SloveneWord,
-        word_meaning: SloveneWordMeaning,
+        word_meaning: SloveneWordMeaningWithDetails,
     },
 }
 

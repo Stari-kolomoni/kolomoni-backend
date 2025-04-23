@@ -101,9 +101,8 @@ use utoipa_rapidoc::RapiDoc;
         dictionary::categories::delete_specific_category,
 
 
-        // `dictionary/search.rs`
-        // TODO
-        // dictionary::search::perform_search,
+        // `kolomoni::api::v1::dictionary::search`
+        dictionary::search::perform_search
     ),
     components(
         schemas(
@@ -219,6 +218,16 @@ use utoipa_rapidoc::RapiDoc;
             api_models::NewEnglishWordMeaningCreatedResponse,
             api_models::EnglishWordMeaningUpdateRequest,
             api_models::EnglishWordMeaningUpdatedResponse,
+
+
+            // `kolomoni_core::api_models::search`
+            api_models::SearchRequest,
+            api_models::SearchResponse,
+            api_models::SearchedWordMeaning,
+            
+            
+            // Misc
+            api_models::ResponseWithErrorReason
         ),
     ),
     info(

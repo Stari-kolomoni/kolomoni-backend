@@ -368,6 +368,21 @@ mod external {
             }
         }
 
+        #[inline]
+        pub fn new_from_less_detailed(
+            english_word_meaning: EnglishWordMeaningModel,
+            categories: Vec<CategoryId>,
+            translations: Vec<SloveneTranslationModel>,
+        ) -> Self {
+            Self {
+                word_meaning: english_word_meaning.word_meaning,
+                bare_english_word_meaning: english_word_meaning.bare_english_word_meaning,
+                categories,
+                translations,
+            }
+        }
+
+
         pub fn id(&self) -> EnglishWordMeaningId {
             self.word_meaning
                 .word_meaning_id

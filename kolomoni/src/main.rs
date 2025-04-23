@@ -72,7 +72,7 @@ use kolomoni_configuration::Configuration;
 use kolomoni_core::api_models::InvalidJsonBodyReason;
 use kolomoni_core::cancellation::CancellationToken;
 use miette::{Context, IntoDiagnostic, Result};
-use tokio::runtime::{self, Runtime};
+use tokio::runtime;
 use tracing::info;
 
 pub mod api;
@@ -168,14 +168,6 @@ async fn async_main(cancellation_token: CancellationToken) -> Result<()> {
         .await
         .into_diagnostic()
         .wrap_err("failed to initialize application state")?;
-
-
-    /* TODO pending rewrite
-    state_inner
-        .search
-        .engine
-        .initialize_with_fresh_entries()
-        .await?; */
 
     let state = web::Data::new(state_inner);
 

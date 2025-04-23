@@ -58,7 +58,7 @@ pub async fn perform_search(
     for search_result in search_results.word_meanings {
         match search_result {
             WordMeaningSearchResult::English {
-                search_score,
+                result_score,
                 word,
                 word_meaning,
             } => {
@@ -66,13 +66,13 @@ pub async fn perform_search(
                 let english_word_meaning = word_meaning.into_api_model();
 
                 api_search_results.push(SearchedWordMeaning::English {
-                    search_score,
+                    result_score,
                     word: english_word,
                     word_meaning: english_word_meaning,
                 });
             }
             WordMeaningSearchResult::Slovene {
-                search_score,
+                result_score,
                 word,
                 word_meaning,
             } => {
@@ -80,7 +80,7 @@ pub async fn perform_search(
                 let slovene_word_meaning = word_meaning.into_api_model();
 
                 api_search_results.push(SearchedWordMeaning::Slovene {
-                    search_score,
+                    result_score,
                     word: slovene_word,
                     word_meaning: slovene_word_meaning,
                 });
