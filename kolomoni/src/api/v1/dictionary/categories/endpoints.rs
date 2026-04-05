@@ -57,7 +57,7 @@ declare_openapi_error_reason_response!(
 
 /// Create a new category
 ///
-/// This endpoint will create a new word category.
+/// This endpoint will create a new word meaning category.
 ///
 /// # Authentication
 /// This endpoint requires authentication and the `category:create` permission.
@@ -161,9 +161,9 @@ pub async fn create_category(
 
 
 
-/// List all word categories
+/// List all word meaning categories
 ///
-/// This endpoint will list all word categories.
+/// This endpoint will list all word meaning categories.
 ///
 /// # Authentication
 /// This endpoint does not require authentication.

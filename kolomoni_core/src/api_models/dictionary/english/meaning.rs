@@ -66,6 +66,25 @@ pub struct EnglishWordMeaningWithDetails {
     pub translations: Vec<SloveneTranslation>,
 }
 
+impl EnglishWordMeaningWithDetails {
+    pub fn from_english_word_meaning_and_details(
+        english_word_meaning: EnglishWordMeaning,
+        categories: Vec<CategoryId>,
+        translations: Vec<SloveneTranslation>,
+    ) -> Self {
+        Self {
+            word_meaning_id: english_word_meaning.word_meaning_id,
+            created_at: english_word_meaning.created_at,
+            last_modified_at: english_word_meaning.last_modified_at,
+            disambiguation: english_word_meaning.disambiguation,
+            abbreviation: english_word_meaning.abbreviation,
+            description: english_word_meaning.description,
+            categories,
+            translations,
+        }
+    }
+}
+
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 pub struct SloveneTranslation {

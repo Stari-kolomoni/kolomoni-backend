@@ -106,6 +106,10 @@ impl EnglishWordMutation {
         // This is the only required SQL query, because the associated
         // english word table (and by proxy, associated meanings), will be
         // automatically deleted due to `ON DELETE CASCADE`.
-        WordMutation::delete(database_connection, english_word_id.to_word_id()).await
+        WordMutation::delete(
+            database_connection,
+            english_word_id.upcast_to_word_id(),
+        )
+        .await
     }
 }

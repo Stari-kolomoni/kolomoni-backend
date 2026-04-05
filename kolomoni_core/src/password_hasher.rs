@@ -33,7 +33,10 @@ impl ArgonHasher {
         })
     }
 
-    pub fn hash_password(&self, password: &str) -> Result<PasswordHash, ArgonHasherError> {
+    pub fn hash_password<'a>(
+        &'a self,
+        password: &str,
+    ) -> Result<PasswordHash<'a>, ArgonHasherError> {
         self.argon_hasher
             .hash_password(password.as_bytes(), &self.salt_string)
             .map_err(|error| ArgonHasherError::Argon2Error { error })

@@ -90,7 +90,7 @@ impl SloveneWordMeaningMutation {
         let new_word_meaning = WordMeaningMutation::create(
             database_connection,
             NewWordMeaning {
-                word_id: slovene_word_id.to_word_id(),
+                word_id: slovene_word_id.upcast_to_word_id(),
                 created_at: new_meaning_created_at,
                 last_modified_at: new_meaning_last_modified_at,
             },

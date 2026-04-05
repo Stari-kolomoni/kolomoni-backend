@@ -192,7 +192,7 @@ mod external {
         pub fn id(&self) -> SloveneWordMeaningId {
             self.word_meaning
                 .word_meaning_id
-                .to_slovene_word_meaning_id_unchecked()
+                .downcast_to_slovene_word_meaning_id_unchecked()
         }
 
         pub fn parent_word_id(&self) -> SloveneWordId {
@@ -257,7 +257,7 @@ mod external {
         pub fn id(&self) -> SloveneWordMeaningId {
             self.word_meaning
                 .word_meaning_id
-                .to_slovene_word_meaning_id_unchecked()
+                .downcast_to_slovene_word_meaning_id_unchecked()
         }
 
         pub fn word_id(&self) -> SloveneWordId {
@@ -342,11 +342,13 @@ mod external {
         pub fn id(&self) -> SloveneWordMeaningId {
             self.word_meaning
                 .word_meaning_id
-                .to_slovene_word_meaning_id_unchecked()
+                .downcast_to_slovene_word_meaning_id_unchecked()
         }
 
         pub fn parent_word_id(&self) -> SloveneWordId {
-            self.word_meaning.word_id.to_slovene_word_id_unchecked()
+            self.word_meaning
+                .word_id
+                .downcast_to_slovene_word_id_unchecked()
         }
 
         pub fn description(&self) -> Option<&str> {

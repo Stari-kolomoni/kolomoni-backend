@@ -29,9 +29,8 @@ impl UserRoleMutation {
             .map(|role| role.id())
             .collect::<Vec<_>>();
 
-        let user_ids_nested = std::iter::repeat(user_id.into_uuid())
-            .take(role_ids_nested.len())
-            .collect::<Vec<_>>();
+        let user_ids_nested =
+            std::iter::repeat_n(user_id.into_uuid(), role_ids_nested.len()).collect::<Vec<_>>();
 
         let updated_full_user_role_set = sqlx::query_as!(
             SelectedRoleId,

@@ -19,7 +19,6 @@ use kolomoni_database::entities::{
 
 
 
-
 #[derive(Clone)]
 pub struct CachedEnglishWord {
     /// English word.

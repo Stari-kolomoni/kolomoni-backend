@@ -231,7 +231,7 @@ mod external {
         pub fn id(&self) -> EnglishWordMeaningId {
             self.word_meaning
                 .word_meaning_id
-                .to_english_word_meaning_id_unchecked()
+                .downcast_to_english_word_meaning_id_unchecked()
         }
 
         pub fn parent_word_id(&self) -> EnglishWordId {
@@ -294,7 +294,7 @@ mod external {
         pub fn id(&self) -> EnglishWordMeaningId {
             self.word_meaning
                 .word_meaning_id
-                .to_english_word_meaning_id_unchecked()
+                .downcast_to_english_word_meaning_id_unchecked()
         }
 
         pub fn word_id(&self) -> EnglishWordId {
@@ -386,11 +386,13 @@ mod external {
         pub fn id(&self) -> EnglishWordMeaningId {
             self.word_meaning
                 .word_meaning_id
-                .to_english_word_meaning_id_unchecked()
+                .downcast_to_english_word_meaning_id_unchecked()
         }
 
         pub fn parent_word_id(&self) -> EnglishWordId {
-            self.word_meaning.word_id.to_english_word_id_unchecked()
+            self.word_meaning
+                .word_id
+                .downcast_to_english_word_id_unchecked()
         }
 
         pub fn description(&self) -> Option<&str> {

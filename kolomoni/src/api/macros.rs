@@ -275,7 +275,7 @@ macro_rules! require_permission_with_optional_authentication {
 /// # Usage
 /// The macro expects two comma-separated parameters:
 /// - A [`PermissionSet`] representing permissions to check against
-///     (e.g. permissiona the user has, etc.).
+///   (e.g. permissions the user has, etc.).
 /// - One or more [`Permission`]s to require to be in that set, specified as an array
 ///   (e.g. `[Permission::WordRead, Permission::WordUpdate]`).
 ///   If you require only one permission, you need not use the square brackets.

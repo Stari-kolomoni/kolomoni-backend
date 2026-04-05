@@ -222,8 +222,10 @@ use utoipa_rapidoc::RapiDoc;
 
             // `kolomoni_core::api_models::search`
             api_models::SearchRequest,
+            api_models::ScoredEnglishWordMeaningWithDetails,
+            api_models::ScoredSloveneWordMeaningWithDetails,
+            api_models::WordSearchResult,
             api_models::SearchResponse,
-            api_models::SearchedWordMeaning,
             
             
             // Misc

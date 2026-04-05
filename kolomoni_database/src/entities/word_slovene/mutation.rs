@@ -110,6 +110,6 @@ impl SloveneWordMutation {
         database_connection: &mut PgConnection,
         slovene_word_id: SloveneWordId,
     ) -> QueryResult<bool> {
-        WordMutation::delete(database_connection, slovene_word_id.to_word_id()).await
+        WordMutation::delete(database_connection, slovene_word_id.upcast_to_word_id()).await
     }
 }

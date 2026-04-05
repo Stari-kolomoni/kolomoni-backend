@@ -132,8 +132,8 @@ impl SloveneWordMeaningQuery {
     ) -> QueryResult<bool> {
         WordMeaningQuery::exists_by_word_and_meaning_id(
             database_connection,
-            slovene_word_id.to_word_id(),
-            slovene_word_meaning_id.to_word_meaning_id(),
+            slovene_word_id.upcast_to_word_id(),
+            slovene_word_meaning_id.upcast_to_word_meaning_id(),
         )
         .await
     }

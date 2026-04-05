@@ -85,25 +85,27 @@ create_uuid_newtype!(UserId);
 create_uuid_newtype!(WordId);
 
 impl WordId {
-    /// "Downcasts" a [`WordId`] into an [`EnglishWordId`].
+    /// "Downcasts" a [`WordId`] into an [`EnglishWordId`],
+    /// forcefully assigning the English language to this word.
     ///
     /// **It is up to the caller to ensure this is — semantically — a valid conversion.
     /// Newtypes, such as [`WordId`], are exposed through the public API of the sub-crates
     /// precisely because of increased type safety, so if you find yourself having to
     /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
     /// think very carefully about whether this conversion is semantically valid.**
-    pub fn to_english_word_id_unchecked(self) -> EnglishWordId {
+    pub fn downcast_to_english_word_id_unchecked(self) -> EnglishWordId {
         EnglishWordId::new(self.0)
     }
 
-    /// "Downcasts" a [`WordId`] into a [`SloveneWordId`].
+    /// "Downcasts" a [`WordId`] into a [`SloveneWordId`],
+    /// forcefully assigning the Slovene language to this word.
     ///
     /// **It is up to the caller to ensure this is — semantically — a valid conversion.
     /// Newtypes, such as [`WordId`], are exposed through the public API of the sub-crates
     /// precisely because of increased type safety, so if you find yourself having to
     /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
     /// think very carefully about whether this conversion is semantically valid.**
-    pub fn to_slovene_word_id_unchecked(self) -> SloveneWordId {
+    pub fn downcast_to_slovene_word_id_unchecked(self) -> SloveneWordId {
         SloveneWordId::new(self.0)
     }
 }
@@ -112,25 +114,27 @@ impl WordId {
 create_uuid_newtype!(WordMeaningId);
 
 impl WordMeaningId {
-    /// "Downcasts" a [`WordMeaningId`] into an [`EnglishWordMeaningId`].
+    /// "Downcasts" a [`WordMeaningId`] into an [`EnglishWordMeaningId`],
+    /// forcefully assigning the English language to this word meaning.
     ///
     /// **It is up to the caller to ensure this is — semantically — a valid conversion.
     /// Newtypes, such as [`WordMeaningId`], are exposed through the public API of the sub-crates
     /// precisely because of increased type safety, so if you find yourself having to
     /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
     /// think very carefully about whether this conversion is semantically valid.**
-    pub fn to_english_word_meaning_id_unchecked(self) -> EnglishWordMeaningId {
+    pub fn downcast_to_english_word_meaning_id_unchecked(self) -> EnglishWordMeaningId {
         EnglishWordMeaningId::new(self.0)
     }
 
-    /// "Downcasts" a [`WordMeaningId`] into an [`SloveneWordMeaningId`].
+    /// "Downcasts" a [`WordMeaningId`] into an [`SloveneWordMeaningId`],
+    /// forcefully assigning the Slovene language to this word meaning.
     ///
     /// **It is up to the caller to ensure this is — semantically — a valid conversion.
     /// Newtypes, such as [`WordMeaningId`], are exposed through the public API of the sub-crates
     /// precisely because of increased type safety, so if you find yourself having to
     /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
     /// think very carefully about whether this conversion is semantically valid.**
-    pub fn to_slovene_word_meaning_id_unchecked(self) -> SloveneWordMeaningId {
+    pub fn downcast_to_slovene_word_meaning_id_unchecked(self) -> SloveneWordMeaningId {
         SloveneWordMeaningId::new(self.0)
     }
 }
@@ -140,15 +144,11 @@ impl WordMeaningId {
 create_uuid_newtype!(EnglishWordId);
 
 impl EnglishWordId {
-    /// "Upcasts" an [`EnglishWordId`] into a [`WordId`].
-    ///
-    /// **It is up to the caller to ensure this is — semantically — a valid conversion.
-    /// Newtypes, such as [`EnglishWordId`], are exposed through the public API of the sub-crates
-    /// precisely because of increased type safety, so if you find yourself having to
-    /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
-    /// think very carefully about whether this conversion is semantically valid.**
+    /// "Upcasts" an [`EnglishWordId`] into a [`WordId`],
+    /// removing the language information.
+    /// This is a lossy operation by definition!
     #[inline]
-    pub fn to_word_id(self) -> WordId {
+    pub fn upcast_to_word_id(self) -> WordId {
         WordId::new(self.0)
     }
 }
@@ -158,15 +158,11 @@ impl EnglishWordId {
 create_uuid_newtype!(EnglishWordMeaningId);
 
 impl EnglishWordMeaningId {
-    /// "Upcast" an [`EnglishWordMeaningId`] into a [`WordMeaningId`].
-    ///
-    /// **It is up to the caller to ensure this is — semantically — a valid conversion.
-    /// Newtypes, such as [`EnglishWordMeaningId`], are exposed through the public API of the sub-crates
-    /// precisely because of increased type safety, so if you find yourself having to
-    /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
-    /// think very carefully about whether this conversion is semantically valid.**
+    /// "Upcasts" an [`EnglishWordMeaningId`] into a [`WordMeaningId`],
+    /// removing the language information.
+    /// This is a lossy operation by definition!
     #[inline]
-    pub fn to_word_meaning_id_unchecked(self) -> WordMeaningId {
+    pub fn upcast_to_word_meaning_id(self) -> WordMeaningId {
         WordMeaningId::new(self.0)
     }
 }
@@ -176,15 +172,11 @@ impl EnglishWordMeaningId {
 create_uuid_newtype!(SloveneWordId);
 
 impl SloveneWordId {
-    /// "Upcast" an [`SloveneWordId`] into a [`WordId`].
-    ///
-    /// **It is up to the caller to ensure this is — semantically — a valid conversion.
-    /// Newtypes, such as [`SloveneWordId`], are exposed through the public API of the sub-crates
-    /// precisely because of increased type safety, so if you find yourself having to
-    /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
-    /// think very carefully about whether this conversion is semantically valid.**
+    /// "Upcast" an [`SloveneWordId`] into a [`WordId`],
+    /// removing the language information.
+    /// This is a lossy operation by definition!
     #[inline]
-    pub fn to_word_id(self) -> WordId {
+    pub fn upcast_to_word_id(self) -> WordId {
         WordId::new(self.0)
     }
 }
@@ -194,15 +186,11 @@ impl SloveneWordId {
 create_uuid_newtype!(SloveneWordMeaningId);
 
 impl SloveneWordMeaningId {
-    /// "Upcast" an [`SloveneWordMeaningId`] into a [`WordMeaningId`].
-    ///
-    /// **It is up to the caller to ensure this is — semantically — a valid conversion.
-    /// Newtypes, such as [`SloveneWordMeaningId`], are exposed through the public API of the sub-crates
-    /// precisely because of increased type safety, so if you find yourself having to
-    /// call this function outside of the e.g. [`kolomoni_core`] or [`kolomoni_database`] crates,
-    /// think very carefully about whether this conversion is semantically valid.**
+    /// "Upcast" an [`SloveneWordMeaningId`] into a [`WordMeaningId`],
+    /// removing the language information.
+    /// This is a lossy operation by definition!
     #[inline]
-    pub fn to_word_meaning_id(self) -> WordMeaningId {
+    pub fn upcast_to_word_meaning_id(self) -> WordMeaningId {
         WordMeaningId::new(self.0)
     }
 }

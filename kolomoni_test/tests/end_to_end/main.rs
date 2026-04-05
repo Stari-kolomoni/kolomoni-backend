@@ -1,7 +1,7 @@
 mod general;
 
 // TODO
-// mod user;
+mod user;
 
 // TODO
 // mod words;

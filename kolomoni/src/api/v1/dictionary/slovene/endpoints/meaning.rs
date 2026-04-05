@@ -629,8 +629,8 @@ pub async fn link_category_to_slovene_word_meaning(
     let category_relationship_already_exists =
         WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
-            target_slovene_word_id.to_word_id(),
-            target_slovene_word_meaning_id.to_word_meaning_id(),
+            target_slovene_word_id.upcast_to_word_id(),
+            target_slovene_word_meaning_id.upcast_to_word_meaning_id(),
             target_category_id,
         )
         .await?;
@@ -644,7 +644,7 @@ pub async fn link_category_to_slovene_word_meaning(
 
     WordMeaningCategoryMutation::link_category_with_word_meaning(
         &mut transaction,
-        target_slovene_word_meaning_id.to_word_meaning_id(),
+        target_slovene_word_meaning_id.upcast_to_word_meaning_id(),
         target_category_id,
     )
     .await?;
@@ -771,8 +771,8 @@ pub async fn unlink_category_from_slovene_word_meaning(
     let category_relationship_exists =
         WordMeaningCategoryQuery::exists_by_word_meaning_and_category_id(
             &mut transaction,
-            target_slovene_word_id.to_word_id(),
-            target_slovene_word_meaning_id.to_word_meaning_id(),
+            target_slovene_word_id.upcast_to_word_id(),
+            target_slovene_word_meaning_id.upcast_to_word_meaning_id(),
             target_category_id,
         )
         .await?;
@@ -786,7 +786,7 @@ pub async fn unlink_category_from_slovene_word_meaning(
 
     let unlinked_successfully = WordMeaningCategoryMutation::unlink_category_from_word_meaning(
         &mut transaction,
-        target_slovene_word_meaning_id.to_word_meaning_id(),
+        target_slovene_word_meaning_id.upcast_to_word_meaning_id(),
         target_category_id,
     )
     .await?;

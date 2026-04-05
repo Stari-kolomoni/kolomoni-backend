@@ -4,21 +4,20 @@ use crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender};
 use kolomoni_cache::EntityCache;
 use kolomoni_core::{
     cancellation::CancellationToken,
-    ids::{EnglishWordMeaningId, SloveneWordMeaningId, WordId, WordMeaningId},
+    ids::{
+        EnglishWordId,
+        EnglishWordMeaningId,
+        SloveneWordId,
+        SloveneWordMeaningId,
+        WordId,
+        WordMeaningId,
+    },
 };
 use kolomoni_database::entities::{
     word::WordLanguage,
     word_english::EnglishWordModel,
-    word_meaning_english::{
-        EnglishWordMeaningModel,
-        EnglishWordMeaningModelWithDetails,
-        SloveneTranslationModel,
-    },
-    word_meaning_slovene::{
-        EnglishTranslationModel,
-        SloveneWordMeaningModel,
-        SloveneWordMeaningModelWithDetails,
-    },
+    word_meaning_english::EnglishWordMeaningModel,
+    word_meaning_slovene::SloveneWordMeaningModel,
     word_slovene::SloveneWordModel,
 };
 use kolomoni_search_core::SearchIndexModificationMessage;
@@ -47,7 +46,7 @@ use tantivy::{
 };
 use thiserror::Error;
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 use uuid::Uuid;
 
 
@@ -237,7 +236,7 @@ impl SearchIndexManagerTaskHandle {
         let locked_cache = cache.write();
 
         for cached_english_word_meaning in locked_cache.english_word_meanings() {
-            debug!(
+            trace!(
                 "Re-indexing english word meaning: {}",
                 cached_english_word_meaning.word_meaning().id()
             );
@@ -248,7 +247,7 @@ impl SearchIndexManagerTaskHandle {
                 return Err(SearchIndexModificationError::InconsistentCacheError {
                     reason: Cow::Owned(
                         format!(
-                            "unable to re-index english word meaning {}, as it's parent english word {} is not present in cache",
+                            "unable to re-index english word meaning {}, as its parent english word {} is not present in cache",
                             cached_english_word_meaning.word_meaning().id(),
                             cached_english_word_meaning.word_meaning().parent_word_id()
                         )
@@ -271,7 +270,7 @@ impl SearchIndexManagerTaskHandle {
 
 
         for cached_slovene_word_meaning in locked_cache.slovene_word_meanings() {
-            debug!(
+            trace!(
                 "Re-indexing slovene word meaning: {}",
                 cached_slovene_word_meaning.word_meaning().id()
             );
@@ -282,7 +281,7 @@ impl SearchIndexManagerTaskHandle {
                 return Err(SearchIndexModificationError::InconsistentCacheError {
                     reason: Cow::Owned(
                         format!(
-                            "unable to re-index slovene word meaning {}, as it's parent slovene word {} is not present in cache",
+                            "unable to re-index slovene word meaning {}, as its parent slovene word {} is not present in cache",
                             cached_slovene_word_meaning.word_meaning().id(),
                             cached_slovene_word_meaning.word_meaning().parent_word_id()
                         )
@@ -518,7 +517,9 @@ fn build_indexing_schema() -> (Schema, SearchIndexSchemaFields) {
         .set_tokenizer("en_stem")
         .set_fieldnorms(true);
 
-    let indexed_text_field_options = TextOptions::default().set_indexing_options(indexing_options);
+    let indexed_text_field_options = TextOptions::default()
+        .set_stored()
+        .set_indexing_options(indexing_options);
 
 
     let word_meaning_lemma_field =
@@ -579,16 +580,23 @@ pub enum SearchInitializationError {
 
 
 
+/// A single shallow search result. The data here is
+/// shallow in the sense that only the result score,
+/// word language, word ID and word meaning ID are stored.
+///
+/// To turn these results into a more structured and full
+/// representation that can be used to return search results
+/// through the API, see [`generate_detailed_search_results`].
 pub enum WordMeaningSearchResult {
     English {
         result_score: f32,
-        word: EnglishWordModel,
-        word_meaning: EnglishWordMeaningModelWithDetails,
+        word_id: EnglishWordId,
+        word_meaning_id: EnglishWordMeaningId,
     },
     Slovene {
         result_score: f32,
-        word: SloveneWordModel,
-        word_meaning: SloveneWordMeaningModelWithDetails,
+        word_id: SloveneWordId,
+        word_meaning_id: SloveneWordMeaningId,
     },
 }
 
@@ -602,38 +610,97 @@ impl WordMeaningSearchResult {
 }
 
 
+enum IntermediateWordMeaningSearchResult {
+    English {
+        result_score: f32,
+        word_id: EnglishWordId,
+        word_lemma: String,
+        word_meaning_id: EnglishWordMeaningId,
+    },
+    Slovene {
+        result_score: f32,
+        word_id: SloveneWordId,
+        word_lemma: String,
+        word_meaning_id: SloveneWordMeaningId,
+    },
+}
+
+impl IntermediateWordMeaningSearchResult {
+    fn lemma(&self) -> &str {
+        match self {
+            Self::English { word_lemma, .. } => word_lemma,
+            Self::Slovene { word_lemma, .. } => word_lemma,
+        }
+    }
+
+    fn score(&self) -> &f32 {
+        match self {
+            Self::English { result_score, .. } => result_score,
+            Self::Slovene { result_score, .. } => result_score,
+        }
+    }
+
+    fn score_mut(&mut self) -> &mut f32 {
+        match self {
+            Self::English { result_score, .. } => result_score,
+            Self::Slovene { result_score, .. } => result_score,
+        }
+    }
+
+    fn into_public_enum(self) -> WordMeaningSearchResult {
+        match self {
+            Self::English {
+                result_score,
+                word_id,
+                word_meaning_id,
+                ..
+            } => WordMeaningSearchResult::English {
+                result_score,
+                word_id,
+                word_meaning_id,
+            },
+            Self::Slovene {
+                result_score,
+                word_id,
+                word_meaning_id,
+                ..
+            } => WordMeaningSearchResult::Slovene {
+                result_score,
+                word_id,
+                word_meaning_id,
+            },
+        }
+    }
+}
+
+
 pub struct SearchResults {
     pub word_meanings: Vec<WordMeaningSearchResult>,
 }
 
 
-/// Given mutable access to a [`WordMeaningSearchResult`], this function applies a modification to its `search_score`
+/// Given mutable access to a [`IntermediateWordMeaningSearchResult`], this function applies a modification to its `search_score`
 /// field based on the accuracy of the match.
 ///
 /// For example, this will boost a search result's score if the match is exactly perfect,
 /// and partially boost it if the query is a substring of the lemma (based on the ratio of the match).
-pub fn rescore_search_result(search_query: &str, result: &mut WordMeaningSearchResult) {
-    let (search_score, word_lemma) = match result {
-        WordMeaningSearchResult::English {
-            result_score: search_score,
-            word,
-            ..
-        } => (search_score, word.lemma()),
-        WordMeaningSearchResult::Slovene {
-            result_score: search_score,
-            word,
-            ..
-        } => (search_score, word.lemma()),
-    };
+fn rescore_search_result(search_query: &str, result: &mut IntermediateWordMeaningSearchResult) {
+    const EXACT_LEMMA_MATCH_MULTIPLIER: f32 = 1.4;
 
-    if search_query == word_lemma {
-        *search_score *= 1.4;
-    } else if word_lemma.contains(search_query) {
-        // In range of `[0, 1]`.
-        let match_ratio_of_entire_lemma = (search_query.len() as f32) / (word_lemma.len() as f32);
+    // This means the maximum multiplication for a partial match is `1.25`
+    // (and the minimum multiplication is just above `1.0`).
+    const PARTIAL_LEMMA_MATCH_RATIO_DIVISOR: f32 = 4.0;
 
-        // This means the maximum multiplication is `1.25`, and the minimum is just above `1.0`.
-        *search_score *= 1.0 + (match_ratio_of_entire_lemma / 4.0);
+    let result_lemma = result.lemma();
+
+    if search_query == result_lemma {
+        *result.score_mut() *= EXACT_LEMMA_MATCH_MULTIPLIER;
+    } else if result_lemma.contains(search_query) {
+        // Always in range `[0, 1]`.
+        let match_ratio_of_entire_lemma = (search_query.len() as f32) / (result_lemma.len() as f32);
+
+        *result.score_mut() *=
+            1.0 + (match_ratio_of_entire_lemma / PARTIAL_LEMMA_MATCH_RATIO_DIVISOR);
     }
 }
 
@@ -642,8 +709,6 @@ pub fn rescore_search_result(search_query: &str, result: &mut WordMeaningSearchR
 pub struct SearchEngine {
     #[allow(dead_code)]
     background_task_handle: SearchIndexManagerTaskHandle,
-
-    cache: Arc<RwLock<EntityCache>>,
 
     index_reader: IndexReader,
     index_fields: SearchIndexSchemaFields,
@@ -713,7 +778,6 @@ impl SearchEngine {
         Ok((
             Self {
                 background_task_handle,
-                cache,
                 index_reader: primary_index_reader,
                 index_fields: schema_fields,
                 index_query_parser: query_parser,
@@ -723,16 +787,20 @@ impl SearchEngine {
     }
 
     pub fn search(&self, query: &str) -> Result<SearchResults, SearchError> {
+        const SEARCH_RESULTS_LIMIT: usize = 8;
+
         let searcher = self.index_reader.searcher();
 
 
         let (parsed_query, _query_parse_errors) = self.index_query_parser.parse_query_lenient(query);
 
-        let (_document_count, top_documents) =
-            searcher.search(&parsed_query, &(Count, TopDocs::with_limit(6)))?;
+        let (_document_count, top_documents) = searcher.search(
+            &parsed_query,
+            &(Count, TopDocs::with_limit(SEARCH_RESULTS_LIMIT)),
+        )?;
 
 
-        let mut search_results = Vec::with_capacity(6);
+        let mut search_results = Vec::with_capacity(SEARCH_RESULTS_LIMIT);
 
         for (score, document_address) in top_documents {
             let document: TantivyDocument = searcher.doc(document_address)?;
@@ -802,196 +870,55 @@ impl SearchEngine {
                 WordMeaningId::new(*raw_word_meaning_uuid)
             };
 
+            let word_lemma = {
+                let Some(lemma_value) = document.get_first(self.index_fields.lemma) else {
+                    panic!("invalid indexed result: missing lemma field");
+                };
 
-            match word_language {
-                WordLanguage::Slovene => {
-                    let slovene_word_id = word_id.to_slovene_word_id_unchecked();
-                    let slovene_word_meaning_id =
-                        word_meaning_id.to_slovene_word_meaning_id_unchecked();
+                let Some(lemma_str) = lemma_value.as_str() else {
+                    panic!("invalid indexed result: expected lemma field to be a string");
+                };
 
-
-                    let locked_cache = self.cache.read();
-
-                    let Some(slovene_word) = locked_cache.slovene_word(slovene_word_id) else {
-                        return Err(SearchError::MatchedWordNotFoundInCache { word_id });
-                    };
-
-                    let Some(slovene_word_meaning) =
-                        locked_cache.slovene_word_meaning(&slovene_word_meaning_id)
-                    else {
-                        return Err(SearchError::MatchedWordMeaningNotFoundInCache {
-                            word_meaning_id,
-                        });
-                    };
-
-                    let category_ids = slovene_word_meaning
-                        .categories()
-                        .iter()
-                        .copied()
-                        .collect::<Vec<_>>();
+                lemma_str.to_owned()
+            };
 
 
-                    let mut translations =
-                        Vec::with_capacity(slovene_word_meaning.translations().len());
+            let mut search_result = match word_language {
+                WordLanguage::Slovene => IntermediateWordMeaningSearchResult::Slovene {
+                    result_score: score,
+                    word_id: word_id.downcast_to_slovene_word_id_unchecked(),
+                    word_meaning_id: word_meaning_id.downcast_to_slovene_word_meaning_id_unchecked(),
+                    word_lemma,
+                },
+                WordLanguage::English => IntermediateWordMeaningSearchResult::English {
+                    result_score: score,
+                    word_id: word_id.downcast_to_english_word_id_unchecked(),
+                    word_meaning_id: word_meaning_id.downcast_to_english_word_meaning_id_unchecked(),
+                    word_lemma,
+                },
+            };
 
-                    for translation_id in slovene_word_meaning.translations() {
-                        let Some(english_translation_word_meaning) =
-                            locked_cache.english_word_meaning(translation_id)
-                        else {
-                            return Err(SearchError::MatchedWordMeaningNotFoundInCache {
-                                word_meaning_id: translation_id.to_word_meaning_id_unchecked(),
-                            });
-                        };
+            rescore_search_result(query, &mut search_result);
 
-                        let Some(english_translation_word) = locked_cache.english_word(
-                            english_translation_word_meaning
-                                .word_meaning()
-                                .parent_word_id(),
-                        ) else {
-                            return Err(SearchError::MatchedWordNotFoundInCache {
-                                word_id: english_translation_word_meaning
-                                    .word_meaning()
-                                    .parent_word_id()
-                                    .to_word_id(),
-                            });
-                        };
-
-                        let Some(translation_relationship) =
-                            locked_cache.translation_by_id(*translation_id, slovene_word_meaning_id)
-                        else {
-                            return Err(
-                                SearchError::MatchedTranslationRelationshipNotFoundInCache {
-                                    english_word_meaning_id: *translation_id,
-                                    slovene_word_meaning_id,
-                                },
-                            );
-                        };
-
-
-                        translations.push(EnglishTranslationModel {
-                            word: english_translation_word.word().to_owned(),
-                            word_meaning: english_translation_word_meaning.word_meaning().to_owned(),
-                            translated_at: translation_relationship.translated_at().to_owned(),
-                            translated_by: translation_relationship.translated_by().copied(),
-                        });
-                    }
-
-
-                    let mut search_result = WordMeaningSearchResult::Slovene {
-                        result_score: score,
-                        word: slovene_word.word().to_owned(),
-                        word_meaning: SloveneWordMeaningModelWithDetails::new_from_less_detailed(
-                            slovene_word_meaning.word_meaning().to_owned(),
-                            category_ids,
-                            translations,
-                        ),
-                    };
-
-                    rescore_search_result(query, &mut search_result);
-
-                    search_results.push(search_result);
-                }
-                WordLanguage::English => {
-                    let english_word_id = word_id.to_english_word_id_unchecked();
-                    let english_word_meaning_id =
-                        word_meaning_id.to_english_word_meaning_id_unchecked();
-
-
-                    let locked_cache = self.cache.read();
-
-                    let Some(english_word) = locked_cache.english_word(english_word_id) else {
-                        return Err(SearchError::MatchedWordNotFoundInCache { word_id });
-                    };
-
-                    let Some(english_word_meaning) =
-                        locked_cache.english_word_meaning(&english_word_meaning_id)
-                    else {
-                        return Err(SearchError::MatchedWordMeaningNotFoundInCache {
-                            word_meaning_id,
-                        });
-                    };
-
-
-                    let category_ids = english_word_meaning
-                        .categories()
-                        .iter()
-                        .copied()
-                        .collect::<Vec<_>>();
-
-
-                    let mut translations =
-                        Vec::with_capacity(english_word_meaning.translations().len());
-
-                    for translation_id in english_word_meaning.translations() {
-                        let Some(slovene_translation_word_meaning) =
-                            locked_cache.slovene_word_meaning(translation_id)
-                        else {
-                            return Err(SearchError::MatchedWordMeaningNotFoundInCache {
-                                word_meaning_id: translation_id.to_word_meaning_id(),
-                            });
-                        };
-
-                        let Some(slovene_translation_word) = locked_cache.slovene_word(
-                            slovene_translation_word_meaning
-                                .word_meaning()
-                                .parent_word_id(),
-                        ) else {
-                            return Err(SearchError::MatchedWordNotFoundInCache {
-                                word_id: slovene_translation_word_meaning
-                                    .word_meaning()
-                                    .parent_word_id()
-                                    .to_word_id(),
-                            });
-                        };
-
-                        let Some(translation_relationship) =
-                            locked_cache.translation_by_id(english_word_meaning_id, *translation_id)
-                        else {
-                            return Err(
-                                SearchError::MatchedTranslationRelationshipNotFoundInCache {
-                                    english_word_meaning_id,
-                                    slovene_word_meaning_id: *translation_id,
-                                },
-                            );
-                        };
-
-                        translations.push(SloveneTranslationModel {
-                            word: slovene_translation_word.word().to_owned(),
-                            word_meaning: slovene_translation_word_meaning.word_meaning().to_owned(),
-                            translated_at: translation_relationship.translated_at().to_owned(),
-                            translated_by: translation_relationship.translated_by().copied(),
-                        });
-                    }
-
-
-                    let mut search_result = WordMeaningSearchResult::English {
-                        result_score: score,
-                        word: english_word.word().to_owned(),
-                        word_meaning: EnglishWordMeaningModelWithDetails::new_from_less_detailed(
-                            english_word_meaning.word_meaning().to_owned(),
-                            category_ids,
-                            translations,
-                        ),
-                    };
-
-                    rescore_search_result(query, &mut search_result);
-
-                    search_results.push(search_result);
-                }
-            }
+            search_results.push(search_result);
         }
 
 
         search_results.sort_unstable_by(|first, second| {
-            let first_score = first.result_score();
-            let second_score = second.result_score();
+            let first_score = first.score();
+            let second_score = second.score();
 
             first_score.total_cmp(second_score).reverse()
         });
 
 
+        let transformed_search_results = search_results
+            .into_iter()
+            .map(|internal_result| internal_result.into_public_enum())
+            .collect();
+
         Ok(SearchResults {
-            word_meanings: search_results,
+            word_meanings: transformed_search_results,
         })
     }
 }

@@ -128,8 +128,8 @@ impl EnglishWordMeaningQuery {
     ) -> QueryResult<bool> {
         WordMeaningQuery::exists_by_word_and_meaning_id(
             database_connection,
-            english_word_id.to_word_id(),
-            english_word_meaning_id.to_word_meaning_id_unchecked(),
+            english_word_id.upcast_to_word_id(),
+            english_word_meaning_id.upcast_to_word_meaning_id(),
         )
         .await
     }

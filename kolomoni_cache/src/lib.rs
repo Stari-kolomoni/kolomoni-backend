@@ -136,6 +136,14 @@ impl InvalidCacheError {
 }
 
 
+#[derive(Debug, Error)]
+pub enum EnglishWordMeaningsLookupError {
+    #[error("linked word meaning not founc in cache")]
+    WordMeaningNotFoundInCache {
+        word_meaning_id: EnglishWordMeaningId,
+    },
+}
+
 
 pub struct EntityCache {
     english_words: EntityStore<EnglishWordId, CachedEnglishWord>,
@@ -804,6 +812,30 @@ impl EntityCache {
             .iter()
             .map(|(_key, value)| value)
             .collect()
+    }
+
+    pub fn meanings_of_english_word(
+        &self,
+        english_word_id: EnglishWordId,
+    ) -> Result<Option<Vec<&CachedEnglishWordMeaning>>, EnglishWordMeaningsLookupError> {
+        let Some(english_word) = self.english_word(english_word_id) else {
+            return Ok(None);
+        };
+
+        let mut meanings = Vec::with_capacity(english_word.meaning_ids.len());
+        for meaning_id in &english_word.meaning_ids {
+            let Some(meaning) = self.english_word_meaning(meaning_id) else {
+                return Err(
+                    EnglishWordMeaningsLookupError::WordMeaningNotFoundInCache {
+                        word_meaning_id: *meaning_id,
+                    },
+                );
+            };
+
+            meanings.push(meaning);
+        }
+
+        Ok(Some(meanings))
     }
 
     /// Removes the english word meaning from the cache, including

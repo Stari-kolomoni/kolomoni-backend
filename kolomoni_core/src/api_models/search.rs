@@ -26,25 +26,78 @@ pub struct SearchRequest {
 
 
 #[derive(Debug, Serialize, ToSchema)]
+#[cfg_attr(
+    feature = "serde_impls_for_client_on_models",
+    derive(serde::Deserialize)
+)]
+pub struct ScoredEnglishWordMeaningWithDetails {
+    pub score: f32,
+
+    #[serde(flatten)]
+    pub english_word_meaning: EnglishWordMeaningWithDetails,
+}
+
+
+#[derive(Debug, Serialize, ToSchema)]
+#[cfg_attr(
+    feature = "serde_impls_for_client_on_models",
+    derive(serde::Deserialize)
+)]
+pub struct ScoredSloveneWordMeaningWithDetails {
+    pub score: f32,
+
+    #[serde(flatten)]
+    pub slovene_word_meaning: SloveneWordMeaningWithDetails,
+}
+
+
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(tag = "type")]
 #[cfg_attr(
     feature = "serde_impls_for_client_on_models",
     derive(serde::Deserialize)
 )]
-pub enum SearchedWordMeaning {
+pub enum WordSearchResult {
     #[serde(rename = "english")]
     English {
-        result_score: f32,
+        /// Cumulative word match score considering all the matched
+        /// word meanings of this word.
+        cumulative_score: f32,
+
         word: EnglishWord,
-        word_meaning: EnglishWordMeaningWithDetails,
+
+        /// Note that this array won't always contain all the meanings
+        /// associated with the given word, because some meanings might
+        /// just not match for a given search term.
+        word_meanings: Vec<ScoredEnglishWordMeaningWithDetails>,
     },
 
     #[serde(rename = "slovene")]
     Slovene {
-        result_score: f32,
+        /// Cumulative word match score considering all the matched
+        /// word meanings of this word.
+        cumulative_score: f32,
+
         word: SloveneWord,
-        word_meaning: SloveneWordMeaningWithDetails,
+
+        /// Note that this array won't always contain all the meanings
+        /// associated with the given word, because some meanings might
+        /// just not match for a given search term.
+        word_meanings: Vec<ScoredSloveneWordMeaningWithDetails>,
     },
+}
+
+impl WordSearchResult {
+    pub fn cumulative_score(&self) -> f32 {
+        match self {
+            Self::English {
+                cumulative_score, ..
+            } => *cumulative_score,
+            Self::Slovene {
+                cumulative_score, ..
+            } => *cumulative_score,
+        }
+    }
 }
 
 
@@ -55,5 +108,5 @@ pub enum SearchedWordMeaning {
     derive(serde::Deserialize)
 )]
 pub struct SearchResponse {
-    pub word_meanings: Vec<SearchedWordMeaning>,
+    pub search_results: Vec<WordSearchResult>,
 }

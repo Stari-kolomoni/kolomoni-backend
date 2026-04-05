@@ -339,14 +339,18 @@ impl ApplicationStateInner {
         &self.hasher
     }
 
+    /// Returns a reference to the [`JsonWebTokenManager`] in use.
+    /// Used for managing and validating authentication tokens.
     pub fn jwt_manager(&self) -> &JsonWebTokenManager {
         &self.jwt_manager
     }
 
+    /// Read-locks the entity cache and returns an immutable handle to it.
     pub fn cache_read(&self) -> ArcRwLockReadGuard<parking_lot::RawRwLock, EntityCache> {
         self.cache.read_arc()
     }
 
+    /// Write-locks the entity cache and returns a mutable handle to it.
     pub fn cache_write(&self) -> ArcRwLockWriteGuard<parking_lot::RawRwLock, EntityCache> {
         self.cache.write_arc()
     }

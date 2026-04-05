@@ -16,7 +16,6 @@ use kolomoni_database::entities::user::UserQueryError;
 use kolomoni_database::{DatabaseConnectionAcquireError, QueryError};
 use serde::Serialize;
 use thiserror::Error;
-use tracing::error;
 
 use super::macros::construct_last_modified_header_value;
 use crate::authentication::AuthenticatedUserError;
