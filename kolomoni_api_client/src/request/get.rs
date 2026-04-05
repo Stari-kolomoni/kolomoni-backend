@@ -88,8 +88,8 @@ where
         }
     }
 
-    /// Same as [`Self::endpoint_url`], but does not prepend the server's base URL (`/api/v1`)
-    /// to `relative_endpoint_url`.
+    /// Same as [`Self::endpoint_url`], but does not prepend the server's base URL
+    /// (e.g. `/api/v1`) to `relative_endpoint_url`.
     pub fn endpoint_url_without_base_path<U>(
         self,
         relative_endpoint_path: U,

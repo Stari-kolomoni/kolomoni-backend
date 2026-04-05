@@ -7,7 +7,10 @@ use kolomoni_core::{
 
 use crate::TryIntoExternalModel;
 
+// TODO The edit history tracking feature will not land on the first release,
+// but we should revisit adding this in the future.
 
+#[allow(dead_code)]
 pub(crate) mod internal {
     use chrono::{DateTime, Utc};
     use uuid::Uuid;
