@@ -175,7 +175,7 @@ impl<'de> Deserialize<'de> for Edit {
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str(
-                    "map containing two entries with keys: \"schema_version\" and \"data\"",
+                    "a map containing two entries with keys: \"schema_version\" and \"data\"",
                 )
             }
 
@@ -184,7 +184,7 @@ impl<'de> Deserialize<'de> for Edit {
                 A: serde::de::MapAccess<'de>,
             {
                 let mut schema_version: Option<SchemaVersionField> = None;
-                let mut data: Option<serde::__private::de::Content> = None;
+                let mut data: Option<VersionOneEdit> = None;
 
                 while let Some(next_key) = map.next_key::<SchemaVersionOrDataField>()? {
                     match next_key {
@@ -195,14 +195,14 @@ impl<'de> Deserialize<'de> for Edit {
                                 ));
                             }
 
-                            schema_version = Some(map.next_value()?);
+                            schema_version = Some(map.next_value::<SchemaVersionField>()?);
                         }
                         SchemaVersionOrDataField::Data => {
                             if data.is_some() {
                                 return Err(serde::de::Error::duplicate_field("data"));
                             }
 
-                            data = Some(map.next_value()?);
+                            data = Some(map.next_value::<VersionOneEdit>()?);
                         }
                     }
                 }
@@ -216,13 +216,8 @@ impl<'de> Deserialize<'de> for Edit {
                     return Err(serde::de::Error::missing_field("data"));
                 };
 
-                let content_deserializer =
-                    serde::__private::de::ContentDeserializer::<A::Error>::new(data);
-
                 match schema_version {
-                    SchemaVersionField::VersionOne => Ok(Edit::VersionOne(
-                        VersionOneEdit::deserialize(content_deserializer)?,
-                    )),
+                    SchemaVersionField::VersionOne => Ok(Edit::VersionOne(data)),
                 }
             }
         }

@@ -1,5 +1,21 @@
 use chrono::Utc;
-use kolomoni_api_client::{api::dictionary::{english::{EnglishWordMeaningToCreate, EnglishWordToCreate}, slovene::{SloveneWordMeaningToCreate, SloveneWordToCreate}}, AuthenticatedKolomoniClient, SharedApiClientEndpointGroups};
+use kolomoni_api_client::{
+    api::dictionary::{
+        english::{
+            EnglishDictionaryAuthenticatedEndpoints,
+            EnglishDictionaryUnauthenticatedEndpoints,
+            EnglishWordMeaningToCreate,
+            EnglishWordToCreate,
+        },
+        slovene::{
+            SloveneDictionaryAuthenticatedEndpoints,
+            SloveneDictionaryUnauthenticatedEndpoints,
+            SloveneWordMeaningToCreate,
+            SloveneWordToCreate,
+        },
+    },
+    client::AuthenticatedKolomoniClient,
+};
 use kolomoni_core::api_models::{EnglishWordWithMeanings, SloveneWordWithMeanings};
 
 
@@ -46,31 +62,33 @@ impl SampleEnglishWord {
     #[rustfmt::skip]
     pub fn description(&self) -> Option<&'static str> {
         match self {
-            SampleEnglishWord::Ability => 
+            SampleEnglishWord::Ability =>
                 Some("A creature's assets as well as weaknesses."),
-            SampleEnglishWord::Charisma => 
+            SampleEnglishWord::Charisma =>
                 Some("A measuring force of Personality."),
-            SampleEnglishWord::Attack => 
+            SampleEnglishWord::Attack =>
                 None,
-            SampleEnglishWord::CriticalHit => 
+            SampleEnglishWord::CriticalHit =>
                 Some("When a player rolls a natural 20 on a check, save, or attack roll."),
-            SampleEnglishWord::HitPoints => 
+            SampleEnglishWord::HitPoints =>
                 Some(
                     "A character's hit points define how tough your character is \
                     in combat and other dangerous situations."
                 ),
         }
     }
-    
-    pub async fn create(
-        &self,
-        client: &AuthenticatedKolomoniClient,
-    ) -> EnglishWordWithMeanings {
+
+    pub async fn create(&self, client: &AuthenticatedKolomoniClient) -> EnglishWordWithMeanings {
         let before_word_creation = Utc::now();
 
-        let new_word = client.english_dictionary().create_english_word(EnglishWordToCreate {
-            lemma: self.lemma().to_owned()
-        }).await.expect("failed to create sample english word");
+        let new_word = client
+            .english_dictionary()
+            .create_english_word(EnglishWordToCreate {
+                lemma: self.lemma().to_owned(),
+            })
+            .send()
+            .await
+            .expect("failed to create sample english word");
 
         assert_eq!(self.lemma(), new_word.lemma);
         assert!(new_word.meanings.is_empty());
@@ -80,37 +98,75 @@ impl SampleEnglishWord {
 
         let before_word_meaning_creation = Utc::now();
 
-        let new_word_meaning = client.english_dictionary().create_english_word_meaning(
-            new_word.id,
-            EnglishWordMeaningToCreate {
-                abbreviation: self.abbreviation().map(ToOwned::to_owned),
-                disambiguation: self.disambiguation().map(ToOwned::to_owned),
-                description: self.description().map(ToOwned::to_owned)
-            }
-        ).await.expect("failed to create sample english word meaning");
+        let new_word_meaning = client
+            .english_dictionary()
+            .create_english_word_meaning(
+                new_word.id,
+                EnglishWordMeaningToCreate {
+                    abbreviation: self.abbreviation().map(ToOwned::to_owned),
+                    disambiguation: self.disambiguation().map(ToOwned::to_owned),
+                    description: self.description().map(ToOwned::to_owned),
+                },
+            )
+            .send()
+            .await
+            .expect("failed to create sample english word meaning");
 
         assert!(new_word_meaning.created_at >= before_word_meaning_creation);
-        assert_eq!(new_word_meaning.created_at, new_word_meaning.last_modified_at);
-        assert_eq!(self.abbreviation(), new_word_meaning.abbreviation.as_deref());
-        assert_eq!(self.disambiguation(), new_word_meaning.disambiguation.as_deref());
-        assert_eq!(self.description(), new_word_meaning.description.as_deref());
-        
-        
-        let new_word_including_meanings = client.english_dictionary().english_word_by_id(
-            new_word.id
-        ).await.expect("failed to re-fetch full sample english word with meanings");
+        assert_eq!(
+            new_word_meaning.created_at,
+            new_word_meaning.last_modified_at
+        );
+        assert_eq!(
+            self.abbreviation(),
+            new_word_meaning.abbreviation.as_deref()
+        );
+        assert_eq!(
+            self.disambiguation(),
+            new_word_meaning.disambiguation.as_deref()
+        );
+        assert_eq!(
+            self.description(),
+            new_word_meaning.description.as_deref()
+        );
+
+
+        let new_word_including_meanings = client
+            .english_dictionary()
+            .english_word_by_id(new_word.id)
+            .send()
+            .await
+            .expect("failed to re-fetch full sample english word with meanings");
 
 
         assert!(new_word_including_meanings.meanings.len() == 1);
 
         let first_meaning = &new_word_including_meanings.meanings[0];
 
-        assert_eq!(first_meaning.word_meaning_id, new_word_meaning.word_meaning_id);
-        assert_eq!(first_meaning.disambiguation, new_word_meaning.disambiguation);
-        assert_eq!(first_meaning.abbreviation, new_word_meaning.abbreviation);
-        assert_eq!(first_meaning.description, new_word_meaning.description);
-        assert_eq!(first_meaning.created_at, new_word_meaning.created_at);
-        assert_eq!(first_meaning.last_modified_at, new_word_meaning.last_modified_at);
+        assert_eq!(
+            first_meaning.word_meaning_id,
+            new_word_meaning.word_meaning_id
+        );
+        assert_eq!(
+            first_meaning.disambiguation,
+            new_word_meaning.disambiguation
+        );
+        assert_eq!(
+            first_meaning.abbreviation,
+            new_word_meaning.abbreviation
+        );
+        assert_eq!(
+            first_meaning.description,
+            new_word_meaning.description
+        );
+        assert_eq!(
+            first_meaning.created_at,
+            new_word_meaning.created_at
+        );
+        assert_eq!(
+            first_meaning.last_modified_at,
+            new_word_meaning.last_modified_at
+        );
 
         assert!(first_meaning.categories.is_empty());
         assert!(first_meaning.translations.is_empty());
@@ -177,7 +233,7 @@ impl SampleSloveneWord {
     pub fn description(&self) -> Option<&'static str> {
         match self {
             SampleSloveneWord::Sposobnost => None,
-            SampleSloveneWord::Karizma => 
+            SampleSloveneWord::Karizma =>
                 Some("Moč osebnosti, sposobnost za vodenje drugih."),
             SampleSloveneWord::Napad => None,
             SampleSloveneWord::Terna => None,
@@ -188,17 +244,17 @@ impl SampleSloveneWord {
         }
     }
 
-    pub async fn create(
-        &self,
-        client: &AuthenticatedKolomoniClient,
-    ) -> SloveneWordWithMeanings {
+    pub async fn create(&self, client: &AuthenticatedKolomoniClient) -> SloveneWordWithMeanings {
         let before_word_creation = Utc::now();
 
-        let new_word = client.slovene_dictionary().create_slovene_word(
-            SloveneWordToCreate {
-                lemma: self.lemma().to_owned()
-            }
-        ).await.expect("failed to create sample slovene word");
+        let new_word = client
+            .slovene_dictionary()
+            .create_slovene_word(SloveneWordToCreate {
+                lemma: self.lemma().to_owned(),
+            })
+            .send()
+            .await
+            .expect("failed to create sample slovene word");
 
         assert_eq!(self.lemma(), new_word.lemma);
         assert!(new_word.meanings.is_empty());
@@ -208,37 +264,75 @@ impl SampleSloveneWord {
 
         let before_word_meaning_creation = Utc::now();
 
-        let new_word_meaning = client.slovene_dictionary().create_slovene_word_meaning(
-            new_word.id,
-            SloveneWordMeaningToCreate {
-                abbreviation: self.abbreviation().map(ToOwned::to_owned),
-                description: self.description().map(ToOwned::to_owned),
-                disambiguation: self.disambiguation().map(ToOwned::to_owned)
-            }
-        ).await.expect("failed to create sample slovene word meaning");
+        let new_word_meaning = client
+            .slovene_dictionary()
+            .create_slovene_word_meaning(
+                new_word.id,
+                SloveneWordMeaningToCreate {
+                    abbreviation: self.abbreviation().map(ToOwned::to_owned),
+                    description: self.description().map(ToOwned::to_owned),
+                    disambiguation: self.disambiguation().map(ToOwned::to_owned),
+                },
+            )
+            .send()
+            .await
+            .expect("failed to create sample slovene word meaning");
 
         assert!(new_word_meaning.created_at >= before_word_meaning_creation);
-        assert_eq!(new_word_meaning.created_at, new_word_meaning.last_modified_at);
-        assert_eq!(self.abbreviation(), new_word_meaning.abbreviation.as_deref());
-        assert_eq!(self.disambiguation(), new_word_meaning.disambiguation.as_deref());
-        assert_eq!(self.description(), new_word_meaning.description.as_deref());
+        assert_eq!(
+            new_word_meaning.created_at,
+            new_word_meaning.last_modified_at
+        );
+        assert_eq!(
+            self.abbreviation(),
+            new_word_meaning.abbreviation.as_deref()
+        );
+        assert_eq!(
+            self.disambiguation(),
+            new_word_meaning.disambiguation.as_deref()
+        );
+        assert_eq!(
+            self.description(),
+            new_word_meaning.description.as_deref()
+        );
 
 
-        let new_word_including_meanings = client.slovene_dictionary().slovene_word_by_id(
-            new_word.id
-        ).await.expect("failed to re-fetch full sample slovene word with meanings");
+        let new_word_including_meanings = client
+            .slovene_dictionary()
+            .slovene_word_by_id(new_word.id)
+            .send()
+            .await
+            .expect("failed to re-fetch full sample slovene word with meanings");
 
 
         assert!(new_word_including_meanings.meanings.len() == 1);
 
         let first_meaning = &new_word_including_meanings.meanings[0];
 
-        assert_eq!(first_meaning.word_meaning_id, new_word_meaning.word_meaning_id);
-        assert_eq!(first_meaning.disambiguation, new_word_meaning.disambiguation);
-        assert_eq!(first_meaning.abbreviation, new_word_meaning.abbreviation);
-        assert_eq!(first_meaning.description, new_word_meaning.description);
-        assert_eq!(first_meaning.created_at, new_word_meaning.created_at);
-        assert_eq!(first_meaning.last_modified_at, new_word_meaning.last_modified_at);
+        assert_eq!(
+            first_meaning.word_meaning_id,
+            new_word_meaning.word_meaning_id
+        );
+        assert_eq!(
+            first_meaning.disambiguation,
+            new_word_meaning.disambiguation
+        );
+        assert_eq!(
+            first_meaning.abbreviation,
+            new_word_meaning.abbreviation
+        );
+        assert_eq!(
+            first_meaning.description,
+            new_word_meaning.description
+        );
+        assert_eq!(
+            first_meaning.created_at,
+            new_word_meaning.created_at
+        );
+        assert_eq!(
+            first_meaning.last_modified_at,
+            new_word_meaning.last_modified_at
+        );
 
         assert!(first_meaning.categories.is_empty());
         assert!(first_meaning.translations.is_empty());

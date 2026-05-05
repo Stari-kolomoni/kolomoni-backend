@@ -1,9 +1,8 @@
 use chrono::Utc;
 use kolomoni_api_client::{
-    api::auth::{UserLoginInfo, UserRegistrationInfo},
-    authentication::ServerTokenSet,
-    SharedApiClientEndpointGroups,
-    UnauthenticatedKolomoniClient,
+    api::auth::{AuthenticationApiAnonymousEndpoints, UserLoginCredentials, UserRegistration},
+    authentication::ClientAuthentication,
+    client::UnauthenticatedKolomoniClient,
 };
 use kolomoni_core::api_models::UserInfo;
 
@@ -48,11 +47,12 @@ impl SampleUser {
 
         let newly_registered_user = client
             .authentication()
-            .register_user(UserRegistrationInfo {
+            .register_user(UserRegistration {
                 username: self.username().to_owned(),
                 display_name: self.display_name().to_owned(),
                 password: self.password().to_owned(),
             })
+            .send()
             .await
             .expect("failed to create sample user account");
 
@@ -83,19 +83,20 @@ impl SampleUser {
         newly_registered_user.user
     }
 
-    /// Logins the user and returns the access and refres token as [`ServerTokenSet`]
+    /// Logs the user in and returns the access and refres token as [`ServerTokenSet`]
     /// (which can be turned into [`ServerAuthentication`], which can, in turn, be used to upgrade
     /// an unauthenticated client into an authenticated one).
-    pub async fn login(&self, client: &UnauthenticatedKolomoniClient) -> ServerTokenSet {
+    pub async fn login(&self, client: &UnauthenticatedKolomoniClient) -> ClientAuthentication {
         let tokens = client
             .authentication()
-            .login_user(UserLoginInfo {
+            .login_user(UserLoginCredentials {
                 username: self.username().to_owned(),
                 password: self.password().to_owned(),
             })
+            .send()
             .await
             .expect("failed to perform sample user login");
 
-        ServerTokenSet::new(tokens.access_token, tokens.refresh_token)
+        ClientAuthentication::new(tokens.access_token, tokens.refresh_token)
     }
 }

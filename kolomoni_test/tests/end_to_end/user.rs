@@ -1,14 +1,19 @@
 use chrono::Utc;
 use kolomoni_api_client::{
-    api::auth::{UserRegistrationError, UserRegistrationInfo},
-    authentication::ServerAuthentication,
-    SharedApiClientEndpointGroups,
+    api::{
+        auth::{AuthenticationApiAnonymousEndpoints, UserRegistration, UserRegistrationError},
+        users::{
+            current::CurrentUserEndpoints,
+            SpecificUserAuthenticatedEndpoints,
+            SpecificUserUnauthenticatedEndpoints,
+        },
+    },
+    authentication::ClientAuthentication,
 };
 use kolomoni_test_util::{
-    ensure_request_is_ok,
     initialize_fresh_test_server,
     macros::assert_matches,
-    prelude::{SampleUser, TestServerClient},
+    prelude::SampleUser,
 };
 
 
@@ -16,18 +21,23 @@ use kolomoni_test_util::{
 async fn user_registration_and_listing_works() {
     let client = initialize_fresh_test_server().await;
 
+
     // Register a new user, then manually fetch the user and ensure they are the same.
     let time_before_registration = Utc::now();
     let new_user = SampleUser::Janez.register(&client).await;
     let time_after_registration = Utc::now();
 
-    let new_fetched_user = ensure_request_is_ok!(
-        client
-            .users()
-            .get_user_information_by_user_id(new_user.id)
-            .await,
-        "failed to obtain user information of the just-registered sample user"
-    );
+    let new_fetched_user = client
+        .users()
+        .get_user_information_by_user_id(new_user.id)
+        .send()
+        .await
+        .unwrap_or_else(|error| {
+            panic!(
+                "failed to obtain user information of the just-registered sample user: {}",
+                error
+            )
+        });
 
     assert_eq!(new_user, new_fetched_user);
 
@@ -50,17 +60,18 @@ async fn user_registration_and_listing_works() {
         .give_user_administrator_role(new_user.id)
         .await;
 
-    let server_authentication =
-        ServerAuthentication::new_from_token_set(SampleUser::Janez.login(&client).await);
-    let auhenticated_client = client.with_authentication(server_authentication);
+    let authentication = SampleUser::Janez.login(&client).await;
+    let auhenticated_client = client.with_authentication(authentication);
 
 
     // Ensure the registered user appears in the full user list.
     {
-        let all_registered_users = ensure_request_is_ok!(
-            auhenticated_client.users().get_all_registered_users().await,
-            "failed to fetch all registered users"
-        );
+        let all_registered_users = auhenticated_client
+            .users()
+            .get_all_registered_users()
+            .send()
+            .await
+            .unwrap_or_else(|error| panic!("failed to fetch all registered users: {}", error));
 
         assert!(all_registered_users.len() == 1);
 
@@ -88,10 +99,17 @@ async fn user_registration_and_listing_works() {
     {
         SampleUser::Kira.register(&client).await;
 
-        let all_registered_users = ensure_request_is_ok!(
-            auhenticated_client.users().get_all_registered_users().await,
-            "failed to fetch all registered user again"
-        );
+        let all_registered_users = auhenticated_client
+            .users()
+            .get_all_registered_users()
+            .send()
+            .await
+            .unwrap_or_else(|error| {
+                panic!(
+                    "failed to fetch all registered user again: {}",
+                    error
+                )
+            });
 
         assert!(all_registered_users.len() == 2);
     }
@@ -100,11 +118,12 @@ async fn user_registration_and_listing_works() {
     // Registering with an existing username should fail.
     let re_registration_error = client
         .authentication()
-        .register_user(UserRegistrationInfo {
+        .register_user(UserRegistration {
             username: SampleUser::Janez.username().to_owned(),
             display_name: "SAMPLE".to_owned(),
             password: SampleUser::Janez.password().to_owned(),
         })
+        .send()
         .await
         .unwrap_err();
 
@@ -117,11 +136,12 @@ async fn user_registration_and_listing_works() {
     // Registering with an existing display name should fail.
     let re_registration_error = client
         .authentication()
-        .register_user(UserRegistrationInfo {
+        .register_user(UserRegistration {
             username: "SAMPLE".to_owned(),
             display_name: SampleUser::Janez.display_name().to_owned(),
             password: SampleUser::Janez.password().to_owned(),
         })
+        .send()
         .await
         .unwrap_err();
 
@@ -133,6 +153,7 @@ async fn user_registration_and_listing_works() {
 
 
 
+/* TODO continue from here
 #[tokio::test]
 async fn listing_user_permissions_and_roles_works() {
     let client = initialize_fresh_test_server().await;
@@ -141,20 +162,19 @@ async fn listing_user_permissions_and_roles_works() {
     SampleUser::Janez.register(&client).await;
     SampleUser::Meta.register(&client).await;
 
-    let server_authentication =
-        ServerAuthentication::new_from_token_set(SampleUser::Janez.login(&client).await);
+    let server_authentication = SampleUser::Janez.login(&client).await;
     let authenticated_client = client.with_authentication(server_authentication);
 
 
-    let janez_roles = ensure_request_is_ok!(
-        authenticated_client
-            .current_user()
-            .get_current_user_roles()
-            .await,
-        "failed to get current user roles"
-    );
+    let janez_roles = authenticated_client
+        .current_user()
+        .get_current_user_roles()
+        .send()
+        .await
+        .unwrap_or_else(|error| panic!("failed to get current user roles: {}", error));
 
     // TODO continue from here (we need to test 403 responses for secured endpoints as well, think about that)
 
     todo!();
 }
+ */

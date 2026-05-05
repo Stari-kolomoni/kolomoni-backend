@@ -15,17 +15,26 @@ use clap::Parser;
 use cli::{CliArguments, CliCommand, SeedFromSpreadsheetCommandArguments};
 use kolomoni_api_client::{
     api::dictionary::{
-        categories::{CategoryFieldsToUpdate, CategoryToCreate},
-        english::{EnglishWordMeaningToCreate, EnglishWordToCreate},
-        slovene::{SloveneWordMeaningToCreate, SloveneWordToCreate},
-        translation::TranslationRelationshipToCreate,
+        categories::{
+            CategoryFieldsToUpdate,
+            CategoryToCreate,
+            DictionaryCategoriesAuthenticatedEndpoints,
+        },
+        english::{
+            EnglishDictionaryAuthenticatedEndpoints,
+            EnglishWordMeaningToCreate,
+            EnglishWordToCreate,
+        },
+        slovene::{
+            SloveneDictionaryAuthenticatedEndpoints,
+            SloveneWordMeaningToCreate,
+            SloveneWordToCreate,
+        },
+        translation::{TranslationAuthenticatedEndpoints, TranslationRelationshipToCreate},
     },
-    authentication::{ServerAuthentication, ServerTokenSet},
-    ApiServer,
-    ApiServerOptions,
-    AuthenticatedKolomoniClient,
-    ServerHost,
-    SharedApiClientEndpointGroups,
+    authentication::ClientAuthentication,
+    client::{AuthenticatedKolomoniClient, UnauthenticatedKolomoniClient},
+    server::{ApiServerOptions, KolomoniApiServer, ServerHost},
 };
 use kolomoni_core::ids::{
     CategoryId,
@@ -49,7 +58,7 @@ fn build_api_client(
     access_token: &str,
 ) -> miette::Result<AuthenticatedKolomoniClient> {
     let api_server = Arc::new(
-        ApiServer::new_from_server_url(
+        KolomoniApiServer::new_from_server_url(
             ServerHost::DomainName(format!("{}:{}", server_host_or_ip, server_port)),
             ApiServerOptions { use_https: false },
         )
@@ -57,15 +66,12 @@ fn build_api_client(
         .wrap_err("failed to construct API server URL")?,
     );
 
-    let client = kolomoni_api_client::UnauthenticatedKolomoniClient::new(api_server)
+    let client = UnauthenticatedKolomoniClient::new(api_server)
         .into_diagnostic()
         .wrap_err("failed to initialize API client")?;
 
 
-    let api_authentication = ServerAuthentication::new_from_token_set(ServerTokenSet::new(
-        access_token.to_owned(),
-        "DUMMY".to_owned(),
-    ));
+    let api_authentication = ClientAuthentication::new(access_token.to_owned(), "DUMMY".to_owned());
 
     Ok(client.with_authentication(api_authentication))
 }
@@ -121,6 +127,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
                 // Will be set in another pass.
                 parent_category_id: None,
             })
+            .send()
             .await
             .into_diagnostic()
             .wrap_err("failed to create category on the server")?;
@@ -179,6 +186,9 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
                     new_parent_category_id: Some(Some(*associated_real_parent_category_id)),
                 },
             )
+            .into_diagnostic()
+            .wrap_err("failed to set parent category, no changes")?
+            .send()
             .await
             .into_diagnostic()
             .wrap_err("failed to set parent category on the server")?;
@@ -215,6 +225,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
             .create_slovene_word(SloveneWordToCreate {
                 lemma: slovene_word.lemma.clone(),
             })
+            .send()
             .await
             .into_diagnostic()
             .wrap_err_with(|| {
@@ -270,6 +281,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
                     description: slovene_word_meaning.description.clone(),
                 },
             )
+            .send()
             .await
             .into_diagnostic()
             .wrap_err("failed to create new slovene word meaning")?;
@@ -318,6 +330,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
                     new_slovene_word_meaning.word_meaning_id,
                     *target_category_id,
                 )
+                .send()
                 .await
                 .into_diagnostic()
                 .wrap_err_with(|| {
@@ -360,6 +373,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
             .create_english_word(EnglishWordToCreate {
                 lemma: english_word.lemma.clone(),
             })
+            .send()
             .await
             .into_diagnostic()
             .wrap_err("failed to create new english word")?;
@@ -410,6 +424,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
                     disambiguation: english_word_meaning.disambiguation.clone(),
                 },
             )
+            .send()
             .await
             .into_diagnostic()
             .wrap_err("failed to create new english word meaning")?;
@@ -458,6 +473,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
                     new_english_word_meaning.word_meaning_id,
                     *target_category_id,
                 )
+                .send()
                 .await
                 .into_diagnostic()
                 .wrap_err("failed to link english word meaning with a category")?;
@@ -506,6 +522,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
                 slovene_word_meaning: *associated_slovene_word_meaning_id,
                 english_word_meaning: *associated_english_word_meaning_id,
             })
+            .send()
             .await
             .into_diagnostic()
             .wrap_err("failed to create translation relationship")?;

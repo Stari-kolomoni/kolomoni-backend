@@ -12,25 +12,28 @@ use kolomoni_core::api_models::{
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::errors::{ClientError, ClientResult};
-use crate::macros::{handle_uncaught_status_code, handle_unexpected_error_reason};
-use crate::request::ApiClientRequestBuild;
-use crate::{Client, UnauthenticatedHttpClient};
-
+use crate::{
+    api::EndpointGroup,
+    client::{errors::RequestError, KolomoniHttpClient},
+    parsing::{unexpected_error_reason, unexpected_response},
+    request::{
+        typed::{BoundTypedRequest, IntoBoundTypedRequest},
+        ToRequestBuilder,
+    },
+    response::{raw::RawResponse, ResponseValueError},
+};
 
 #[derive(Debug)]
-pub struct UserRegistrationInfo {
+pub struct UserRegistration {
     pub username: String,
     pub display_name: String,
     pub password: String,
 }
 
-
 #[derive(Debug)]
-pub struct NewUserInfo {
+pub struct NewUser {
     pub user: UserInfo,
 }
-
 
 #[derive(Debug, Error)]
 pub enum UserRegistrationError {
@@ -41,177 +44,77 @@ pub enum UserRegistrationError {
     DisplayNameAlreadyExists,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
 
-
-/*
-pub trait EndpointBuilder {
-    type Context;
-    type Prepared;
-
-    fn prepare<C>(client: &C, context: Self::Context) -> Self::Prepared
-    where
-        C: ApiClientRequestBuild;
-} */
-
-/*pub trait UnauthenticatedPreparedRequestExecutor {
-    type Output;
-
-    fn execute_unauthenticated<C>(prepared_) -> impl Future<Output = Self::Output> + Send;
-}*/
-
-/*
-pub trait AuthenticatedPreparedRequestExecutor {
-    type Output;
-
-    fn execute_authenticated(self) -> impl Future<Output = Self::Output> + Send;
-}
-
-pub trait EndpointResponseProcessor {
-    type Output;
-
-    fn process(endpoint_response: ServerResponse) -> impl Future<Output = Self::Output> + Send;
-}
-
-
-mod register_user_v2 {
-    use kolomoni_core::api_models::{
-        UserRegistrationRequest,
-        UserRegistrationResponse,
-        UsersErrorReason,
-    };
-    use reqwest::StatusCode;
-
-    use super::{
-        EndpointResponseProcessor,
-        NewUserInfo,
-        UserRegistrationError,
-        UserRegistrationInfo,
-    };
-    use crate::{
-        errors::ClientResult,
-        macros::{handle_uncaught_status_code, handle_unexpected_error_reason},
-        request::{post::PreparedPostRequest, ApiClientRequestBuild},
-        response::ServerResponse,
-    };
-
-
-    pub struct RegisterUserEndpoint;
-
-    impl RegisterUserEndpoint {
-        async fn prepare<'c, C>(
-            client: &'c C,
-            user_registration_info: UserRegistrationInfo,
-        ) -> ClientResult<PreparedPostRequest<'c, C>>
-        where
-            C: ApiClientRequestBuild,
-        {
-            let prepared_request: PreparedPostRequest<'c, C> = client
-                .post_request_builder()
-                .endpoint_url("/users")
-                .json(&UserRegistrationRequest {
-                    username: user_registration_info.username,
-                    display_name: user_registration_info.display_name,
-                    password: user_registration_info.password,
-                })
-                .prepare()?;
-
-            Ok(prepared_request)
-        }
+impl ResponseValueError for UserRegistrationError {
+    fn from_request_error(client_error: RequestError) -> Self {
+        Self::RequestError(client_error)
     }
-
-    impl EndpointResponseProcessor for RegisterUserEndpoint {
-        type Output = ClientResult<NewUserInfo, UserRegistrationError>;
-
-        async fn process(response: crate::response::ServerResponse) -> Self::Output {
-            let response_status = response.status();
-
-            if response_status == StatusCode::OK {
-                let response_data = response.json::<UserRegistrationResponse>().await?;
-
-                Ok(NewUserInfo {
-                    user: response_data.user,
-                })
-            } else if response_status == StatusCode::CONFLICT {
-                let users_error_reason = response.users_error_reason().await?;
-
-                match users_error_reason {
-                    UsersErrorReason::UsernameAlreadyExists => {
-                        Err(UserRegistrationError::UsernameAlreadyExists)
-                    }
-                    UsersErrorReason::DisplayNameAlreadyExists => {
-                        Err(UserRegistrationError::DisplayNameAlreadyExists)
-                    }
-                    _ => handle_unexpected_error_reason!(users_error_reason, response_status),
-                }
-            } else {
-                handle_uncaught_status_code!(response_status);
-            }
-        }
-    }
-} */
+}
 
 
-async fn register_user<C>(
-    client: &C,
-    user_registration_info: UserRegistrationInfo,
-) -> ClientResult<NewUserInfo, UserRegistrationError>
+#[inline]
+fn register_user_request<'c, C>(
+    client: &'c C,
+    user_registration_info: UserRegistration,
+) -> BoundTypedRequest<'c, C, NewUser, UserRegistrationError>
 where
-    C: UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .post_request_builder()
-        .endpoint_url("/users")
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let registration_response = response
+                .into_json_body::<UserRegistrationResponse>()
+                .await?;
+
+            Ok(NewUser {
+                user: registration_response.user,
+            })
+        } else if status == StatusCode::CONFLICT {
+            let users_error_reason = response.users_error_reason().await?;
+
+            match users_error_reason {
+                UsersErrorReason::UsernameAlreadyExists => {
+                    Err(UserRegistrationError::UsernameAlreadyExists)
+                }
+                UsersErrorReason::DisplayNameAlreadyExists => {
+                    Err(UserRegistrationError::DisplayNameAlreadyExists)
+                }
+                _ => Err(unexpected_error_reason(
+                    status,
+                    users_error_reason,
+                )),
+            }
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .post()
+        .endpoint_url("/auth/register")
         .json(&UserRegistrationRequest {
             username: user_registration_info.username,
             display_name: user_registration_info.display_name,
             password: user_registration_info.password,
         })
-        .send_unauthenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let response_data = response.json::<UserRegistrationResponse>().await?;
-
-        Ok(NewUserInfo {
-            user: response_data.user,
-        })
-    } else if response_status == StatusCode::CONFLICT {
-        let users_error_reason = response.users_error_reason().await?;
-
-        match users_error_reason {
-            UsersErrorReason::UsernameAlreadyExists => {
-                Err(UserRegistrationError::UsernameAlreadyExists)
-            }
-            UsersErrorReason::DisplayNameAlreadyExists => {
-                Err(UserRegistrationError::DisplayNameAlreadyExists)
-            }
-            _ => handle_unexpected_error_reason!(users_error_reason, response_status),
-        }
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-
-pub struct UserLoginInfo {
+pub struct UserLoginCredentials {
     pub username: String,
     pub password: String,
 }
 
-pub struct AccessAndRefreshToken {
+pub struct UserAccessCredentials {
     pub access_token: String,
     pub refresh_token: String,
 }
-
 
 #[derive(Debug, Error)]
 pub enum UserLoginError {
@@ -219,59 +122,65 @@ pub enum UserLoginError {
     IncorrectCredentials,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
 
-
-async fn login_user<C>(
-    client: &C,
-    user_login_credentials: UserLoginInfo,
-) -> ClientResult<AccessAndRefreshToken, UserLoginError>
-where
-    C: UnauthenticatedHttpClient,
-{
-    let response = client
-        .post_request_builder()
-        .endpoint_url("/auth/login")
-        .json(&UserLoginRequest {
-            username: user_login_credentials.username,
-            password: user_login_credentials.password,
-        })
-        .send_unauthenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let login_response = response.json::<UserLoginResponse>().await?;
-
-        Ok(AccessAndRefreshToken {
-            access_token: login_response.access_token,
-            refresh_token: login_response.refresh_token,
-        })
-    } else if response_status == StatusCode::FORBIDDEN {
-        let login_error_reason = response.login_error_reason().await?;
-
-        match login_error_reason {
-            LoginErrorReason::InvalidLoginCredentials => Err(UserLoginError::IncorrectCredentials),
-            _ => handle_unexpected_error_reason!(login_error_reason, response_status),
-        }
-    } else {
-        handle_uncaught_status_code!(response_status);
+impl ResponseValueError for UserLoginError {
+    fn from_request_error(client_error: RequestError) -> Self {
+        Self::RequestError(client_error)
     }
 }
 
+fn login_user_request<'c, C>(
+    client: &'c C,
+    credentials: UserLoginCredentials,
+) -> BoundTypedRequest<'c, C, UserAccessCredentials, UserLoginError>
+where
+    C: KolomoniHttpClient,
+{
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
 
-pub struct UserLoginRefreshInfo {
+        if status == StatusCode::OK {
+            let login_response = response.into_json_body::<UserLoginResponse>().await?;
+
+            Ok(UserAccessCredentials {
+                access_token: login_response.access_token,
+                refresh_token: login_response.refresh_token,
+            })
+        } else if status == StatusCode::FORBIDDEN {
+            let login_error_reason = response.login_error_reason().await?;
+
+            match login_error_reason {
+                LoginErrorReason::InvalidLoginCredentials => {
+                    Err(UserLoginError::IncorrectCredentials)
+                }
+                _ => Err(unexpected_error_reason(
+                    status,
+                    login_error_reason,
+                )),
+            }
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .post()
+        .endpoint_url("/auth/login")
+        .json(&UserLoginRequest {
+            username: credentials.username,
+            password: credentials.password,
+        })
+        .build_request()
+        .into_bound_typed_request(response_parser)
+}
+
+pub struct UserRefreshToken {
     pub refresh_token: String,
 }
 
-
-pub struct RefreshedAccessToken {
+pub struct FreshAccessToken {
     pub access_token: String,
 }
 
@@ -288,93 +197,122 @@ pub enum UserLoginRefreshError {
     TokenIsNotARefreshToken,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
 
-
-async fn refresh_user_login<C>(
-    client: &C,
-    refresh_token_info: UserLoginRefreshInfo,
-) -> ClientResult<RefreshedAccessToken, UserLoginRefreshError>
-where
-    C: UnauthenticatedHttpClient,
-{
-    let response = client
-        .post_request_builder()
-        .endpoint_url("/auth/login/refresh")
-        .json(&UserLoginRefreshRequest {
-            refresh_token: refresh_token_info.refresh_token,
-        })
-        .send_unauthenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let newly_refreshed_token_info = response.json::<UserLoginRefreshResponse>().await?;
-
-        Ok(RefreshedAccessToken {
-            access_token: newly_refreshed_token_info.access_token,
-        })
-    } else if response_status == StatusCode::BAD_REQUEST {
-        let login_error_reason = response.login_error_reason().await?;
-
-        match login_error_reason {
-            LoginErrorReason::ExpiredRefreshToken => {
-                Err(UserLoginRefreshError::RefreshTokenHasExpired)
-            }
-            LoginErrorReason::InvalidRefreshJsonWebToken => {
-                Err(UserLoginRefreshError::RefreshTokenIsInvalid)
-            }
-            LoginErrorReason::NotARefreshToken => {
-                Err(UserLoginRefreshError::TokenIsNotARefreshToken)
-            }
-            _ => handle_unexpected_error_reason!(login_error_reason, response_status),
-        }
-    } else {
-        handle_uncaught_status_code!(response_status);
+impl ResponseValueError for UserLoginRefreshError {
+    fn from_request_error(client_error: RequestError) -> Self {
+        Self::RequestError(client_error)
     }
 }
 
 
+#[inline]
+fn refresh_login_request<'c, C>(
+    client: &'c C,
+    refresh_token: UserRefreshToken,
+) -> BoundTypedRequest<'c, C, FreshAccessToken, UserLoginRefreshError>
+where
+    C: KolomoniHttpClient,
+{
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let fresh_token = response
+                .into_json_body::<UserLoginRefreshResponse>()
+                .await?;
+
+            Ok(FreshAccessToken {
+                access_token: fresh_token.access_token,
+            })
+        } else if status == StatusCode::BAD_REQUEST {
+            let login_error_reason = response.login_error_reason().await?;
+
+            match login_error_reason {
+                LoginErrorReason::ExpiredRefreshToken => {
+                    Err(UserLoginRefreshError::RefreshTokenHasExpired)
+                }
+                LoginErrorReason::InvalidRefreshJsonWebToken => {
+                    Err(UserLoginRefreshError::RefreshTokenIsInvalid)
+                }
+                LoginErrorReason::NotARefreshToken => {
+                    Err(UserLoginRefreshError::TokenIsNotARefreshToken)
+                }
+                _ => Err(unexpected_error_reason(
+                    status,
+                    login_error_reason,
+                )),
+            }
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .post()
+        .endpoint_url("/auth/login/refresh")
+        .json(&UserLoginRefreshRequest {
+            refresh_token: refresh_token.refresh_token,
+        })
+        .build_request()
+        .into_bound_typed_request(response_parser)
+}
+
+
+pub trait AuthenticationApiAnonymousEndpoints<'c, C>: EndpointGroup<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    fn register_user(
+        &'c self,
+        user_registration_info: UserRegistration,
+    ) -> BoundTypedRequest<'c, C, NewUser, UserRegistrationError> {
+        register_user_request(self.client(), user_registration_info)
+    }
+
+    fn login_user(
+        &'c self,
+        credentials: UserLoginCredentials,
+    ) -> BoundTypedRequest<'c, C, UserAccessCredentials, UserLoginError> {
+        login_user_request(self.client(), credentials)
+    }
+
+    fn refresh_user_login(
+        &'c self,
+        refresh_token: UserRefreshToken,
+    ) -> BoundTypedRequest<'c, C, FreshAccessToken, UserLoginRefreshError> {
+        refresh_login_request(self.client(), refresh_token)
+    }
+}
+
 
 pub struct AuthenticationApi<'c, C>
 where
-    C: Client,
+    C: KolomoniHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> AuthenticationApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
+}
 
-    pub async fn register_user(
-        &self,
-        user_registration_info: UserRegistrationInfo,
-    ) -> ClientResult<NewUserInfo, UserRegistrationError> {
-        register_user(self.client, user_registration_info).await
+impl<'c, C> EndpointGroup<'c, C> for AuthenticationApi<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    fn client(&'c self) -> &'c C {
+        self.client
     }
+}
 
-    pub async fn login_user(
-        &self,
-        user_login_credentials: UserLoginInfo,
-    ) -> ClientResult<AccessAndRefreshToken, UserLoginError> {
-        login_user(self.client, user_login_credentials).await
-    }
-
-    pub async fn refresh_user_login(
-        &self,
-        refresh_token_info: UserLoginRefreshInfo,
-    ) -> ClientResult<RefreshedAccessToken, UserLoginRefreshError> {
-        refresh_user_login(self.client, refresh_token_info).await
-    }
+impl<'c, C> AuthenticationApiAnonymousEndpoints<'c, C> for AuthenticationApi<'c, C> where
+    C: KolomoniHttpClient
+{
 }

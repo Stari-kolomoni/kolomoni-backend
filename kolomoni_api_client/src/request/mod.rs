@@ -1,60 +1,43 @@
-use std::{borrow::Borrow, future::Future};
+use std::borrow::Borrow;
 
-use delete::DeleteRequestBuilder;
-use get::GetRequestBuilder;
-use patch::PatchRequestBuilder;
-use post::PostRequestBuilder;
 use url::Url;
 
-use crate::{errors::ClientResult, response::ServerResponse, server::ApiServer, Client};
+use crate::{
+    client::KolomoniHttpClient,
+    request::{
+        builder::{
+            DeleteRequestBuilder,
+            GetRequestBuilder,
+            PatchRequestBuilder,
+            PostRequestBuilder,
+        },
+        raw::BoundRawRequest,
+    },
+    server::KolomoniApiServer,
+};
 
-pub mod delete;
-pub mod get;
-pub mod patch;
-pub mod post;
-
-
-pub struct RequestBuilder;
-
-impl RequestBuilder {
-    pub(crate) fn get<'c, HC>(client: &'c HC) -> GetRequestBuilder<'c, HC, false>
-    where
-        HC: Client,
-    {
-        GetRequestBuilder::<'c, HC, false>::new(client)
-    }
-
-    pub(crate) fn post<'c, HC>(client: &'c HC) -> PostRequestBuilder<'c, HC, false>
-    where
-        HC: Client,
-    {
-        PostRequestBuilder::<'c, HC, false>::new(client)
-    }
-
-    pub(crate) fn patch<'c, HC>(client: &'c HC) -> PatchRequestBuilder<'c, HC, false>
-    where
-        HC: Client,
-    {
-        PatchRequestBuilder::<'c, HC, false>::new(client)
-    }
-
-    pub(crate) fn delete<'c, HC>(client: &'c HC) -> DeleteRequestBuilder<'c, HC, false>
-    where
-        HC: Client,
-    {
-        DeleteRequestBuilder::<'c, HC, false>::new(client)
-    }
-}
+pub mod builder;
+pub mod raw;
+pub mod typed;
 
 
+/// Indicates how the URL should be built:
+/// either the `/api/v1/` prefix (i.e. the "base API path")
+/// should be prefixed to the given endpoint, or not.
+///
+/// The latter is sometimes useful if you want to call arbitrary
+/// API endpoints, but most of the crate will use the
+/// automatic API V1 prefix.
 enum UrlBuildType {
     WithoutBaseApiPath,
     UnderBaseApiPath,
 }
 
 
+/// Returns a [`Url`] pointing to the required `endpoint` on the server,
+/// or [`url::ParseError`] if there was an error while constructing the URL.
 fn build_request_url(
-    server: &ApiServer,
+    server: &KolomoniApiServer,
     endpoint: &str,
     build_type: UrlBuildType,
 ) -> Result<Url, url::ParseError> {
@@ -68,8 +51,13 @@ fn build_request_url(
     url_to_build_on.join(endpoint_without_leading_slash)
 }
 
+
+/// Returns a [`Url`] pointing to the required `endpoint` on the server,
+/// or [`url::ParseError`] if there was an error while constructing the URL.
+///
+/// Allows adding URL `parameters`.
 fn build_request_url_with_parameters<P, K, V>(
-    server: &ApiServer,
+    server: &KolomoniApiServer,
     endpoint: &str,
     build_type: UrlBuildType,
     parameters: P,
@@ -106,63 +94,60 @@ where
 }
 
 
-pub trait ApiClientRequestBuild: Client {
-    fn get_request_builder(&self) -> GetRequestBuilder<'_, Self, false>
+/// All [`KolomoniHttpClient`]s implement this trait, allowing
+/// us to build HTTP requests elegantly (e.g. by just doing
+/// `client.get()` and getting back a builder),
+pub trait ToRequestBuilder: KolomoniHttpClient {
+    /// Constructs a HTTP GET request builder.
+    fn get<'c>(&'c self) -> GetRequestBuilder<'c, Self, false>
     where
         Self: Sized;
 
-    fn post_request_builder(&self) -> PostRequestBuilder<'_, Self, false>
+    /// Constructs a HTTP POST request builder.
+    fn post<'c>(&'c self) -> PostRequestBuilder<'c, Self, false>
     where
         Self: Sized;
 
-    fn patch_request_builder(&self) -> PatchRequestBuilder<'_, Self, false>
+    /// Constructs a HTTP PATCH request builder.
+    fn patch<'c>(&'c self) -> PatchRequestBuilder<'c, Self, false>
     where
         Self: Sized;
 
-    fn delete_request_builder(&self) -> DeleteRequestBuilder<'_, Self, false>
+    /// Constructs a HTTP DELETE request builder.
+    fn delete<'c>(&'c self) -> DeleteRequestBuilder<'c, Self, false>
     where
         Self: Sized;
 }
 
-impl<C> ApiClientRequestBuild for C
+impl<C> ToRequestBuilder for C
 where
-    C: Client,
+    C: KolomoniHttpClient,
 {
-    fn get_request_builder(&self) -> GetRequestBuilder<'_, Self, false>
+    fn get<'c>(&'c self) -> GetRequestBuilder<'c, Self, false>
     where
         Self: Sized,
     {
-        RequestBuilder::get(self)
+        GetRequestBuilder::<'c, Self, false>::new(self)
     }
 
-    fn post_request_builder(&self) -> PostRequestBuilder<'_, Self, false>
+    fn post<'c>(&'c self) -> PostRequestBuilder<'c, Self, false>
     where
         Self: Sized,
     {
-        RequestBuilder::post(self)
+        PostRequestBuilder::<'c, Self, false>::new(self)
     }
 
-    fn patch_request_builder(&self) -> PatchRequestBuilder<'_, Self, false>
+    fn patch<'c>(&'c self) -> PatchRequestBuilder<'c, Self, false>
     where
         Self: Sized,
     {
-        RequestBuilder::patch(self)
+        PatchRequestBuilder::<'c, Self, false>::new(self)
     }
 
-    fn delete_request_builder(&self) -> DeleteRequestBuilder<'_, Self, false>
+    fn delete<'c>(&'c self) -> DeleteRequestBuilder<'c, Self, false>
     where
         Self: Sized,
     {
-        RequestBuilder::delete(self)
+        DeleteRequestBuilder::<'c, Self, false>::new(self)
     }
-}
-
-
-
-pub trait PreparedUnauthenticatedRequest {
-    fn execute_unauthenticated(self) -> impl Future<Output = ClientResult<ServerResponse>> + Send;
-}
-
-pub trait PreparedAuthenticatedRequest {
-    fn execute_authenticated(self) -> impl Future<Output = ClientResult<ServerResponse>> + Send;
 }

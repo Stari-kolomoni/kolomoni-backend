@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO kolomoni.user_role (user_id, role_id) SELECT * FROM UNNEST($1::uuid[], $2::integer[]) ON CONFLICT (role_id, user_id) DO UPDATE SET user_id = excluded.user_id, role_id = excluded.role_id RETURNING\n                    (SELECT DISTINCT coalesce(jsonb_agg_strict(role_id), '[]'::jsonb)\n                    FROM kolomoni.user_role\n                    WHERE user_id = $3) as \"pre_update_roles_array!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pre_update_roles_array!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int4Array",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4fd6848ae6d9a92f40ec3a6b76c74f8bb135fcbd106d6c6d068da75025bbffc6"
+}

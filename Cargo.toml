@@ -86,7 +86,7 @@ dotenvy = "^0.15.7"
 csv = "1.3.1"
 assert_matches = "1.5.0"
 
-reqwest = "^0.12.12"
+reqwest = { version = "^0.13.2", default-features = false }
 
 # The patched version contains the PR for scoring fuzzy results according to Levenshtein distance.
 # (see <https://github.com/paradedb/tantivy/pull/1>)

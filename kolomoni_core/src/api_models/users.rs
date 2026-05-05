@@ -194,6 +194,7 @@ pub struct UserDisplayNameChangeRequest {
 #[derive(Serialize, PartialEq, Eq, Clone, Debug, ToSchema)]
 #[cfg_attr(feature = "serde_impls_for_client_on_models", derive(Deserialize))]
 pub struct UserDisplayNameChangeResponse {
+    // TODO rename this to updated_user
     pub user: UserInfo,
 }
 

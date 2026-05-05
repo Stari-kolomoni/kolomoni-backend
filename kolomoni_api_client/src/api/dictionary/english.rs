@@ -22,18 +22,16 @@ use reqwest::StatusCode;
 use thiserror::Error;
 
 use crate::{
-    errors::{ClientError, ClientResult},
-    macros::{
-        handle_error_reasons_or_catch_unexpected_status,
-        handle_uncaught_status_code,
-        handle_unexpected_error_reason,
-        handlers,
-    },
-    request::RequestBuilder,
-    AuthenticatedHttpClient,
-    Client,
+    api::EndpointGroup,
+    client::{errors::RequestError, KolomoniHttpClient},
+    parsing::err_if_invalid_uuid,
+    request::typed::{BoundTypedRequest, IntoBoundTypedRequest},
+    response::{raw::RawResponse, ResponseValueError},
 };
-use crate::{request::ApiClientRequestBuild, UnauthenticatedHttpClient};
+use crate::{
+    parsing::{err_if_missing_permissions, unexpected_error_reason, unexpected_response},
+    request::ToRequestBuilder,
+};
 
 
 
@@ -58,6 +56,18 @@ impl EnglishWordFieldsToUpdate {
 }
 
 
+#[derive(Debug, Error)]
+pub enum EnglishWordListFetchingError {
+    #[error(transparent)]
+    RequestError(#[from] RequestError),
+}
+
+impl ResponseValueError for EnglishWordListFetchingError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
+}
+
 
 #[derive(Debug, Error)]
 pub enum EnglishWordFetchingError {
@@ -65,11 +75,15 @@ pub enum EnglishWordFetchingError {
     NotFound,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
+
+impl ResponseValueError for EnglishWordFetchingError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
+}
+
 
 #[derive(Debug, Error)]
 pub enum EnglishWordCreationError {
@@ -77,30 +91,41 @@ pub enum EnglishWordCreationError {
     LemmaAlreadyExists,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
+}
+
+impl ResponseValueError for EnglishWordCreationError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
 }
 
 
+
 #[derive(Debug, Error)]
-pub enum EnglishWordUpdatingError {
+pub enum EnglishWordUpdatePreparationError {
+    #[error("there was nothing to update")]
+    NothingToUpdate,
+}
+
+#[derive(Debug, Error)]
+pub enum EnglishWordUpdateError {
     #[error("english word not found")]
     NotFound,
 
     #[error("an english word with this lemma already exists")]
     LemmaAlreadyExists,
 
-    #[error("there were no fields to update")]
-    NoFieldsToUpdate,
-
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
+
+impl ResponseValueError for EnglishWordUpdateError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
+}
+
 
 #[derive(Debug, Error)]
 pub enum EnglishWordDeletionError {
@@ -108,10 +133,13 @@ pub enum EnglishWordDeletionError {
     NotFound,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
+}
+
+impl ResponseValueError for EnglishWordDeletionError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
 }
 
 
@@ -120,15 +148,33 @@ pub enum EnglishWordDeletionError {
  */
 
 
-async fn get_english_words<C>(
-    client: &C,
+fn get_english_words_request<'c, C>(
+    client: &'c C,
     options: EnglishWordFetchingOptions,
-) -> ClientResult<Vec<EnglishWordWithMeanings>>
+) -> BoundTypedRequest<'c, C, Vec<EnglishWordWithMeanings>, EnglishWordListFetchingError>
 where
-    C: UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let request = if let Some(only_last_modified_after) = options.only_words_modified_after {
-        client.get_request_builder().endpoint_url_with_parameters(
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let words_response = response.into_json_body::<EnglishWordsResponse>().await?;
+
+            Ok(words_response.english_words)
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordListFetchingError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+
+    let request_builder = if let Some(only_last_modified_after) = options.only_words_modified_after {
+        client.get().endpoint_url_with_parameters(
             "/dictionary/english/words",
             [(
                 "last_modified_after",
@@ -136,160 +182,200 @@ where
             )],
         )
     } else {
-        client
-            .get_request_builder()
-            .endpoint_url("/dictionary/english")
+        client.get().endpoint_url("/dictionary/english")
     };
 
-    let response = request.send_unauthenticated().await?;
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let response_body = response.json::<EnglishWordsResponse>().await?;
-
-        Ok(response_body.english_words)
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+    request_builder
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-async fn get_english_word_by_id<C>(
-    client: &C,
+fn get_english_word_by_id_request<'c, C>(
+    client: &'c C,
     english_word_id: EnglishWordId,
-) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError>
+) -> BoundTypedRequest<'c, C, EnglishWordWithMeanings, EnglishWordFetchingError>
 where
-    C: UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .get_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let response_body = response.into_json_body::<EnglishWordInfoResponse>().await?;
+
+            Ok(response_body.word)
+        } else if status == StatusCode::NOT_FOUND {
+            let error_reason = response.word_error_reason().await?;
+
+            match error_reason {
+                WordErrorReason::WordNotFound => Err(EnglishWordFetchingError::NotFound),
+                _ => Err(unexpected_error_reason(status, error_reason)),
+            }
+        } else if status == StatusCode::BAD_REQUEST {
+            let error_reason = response.error_reason().await?;
+
+            err_if_invalid_uuid::<EnglishWordFetchingError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .get()
         .endpoint_url(format!(
             "/dictionary/english/words/{}",
             english_word_id.into_uuid()
         ))
-        .send_unauthenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let response_body = response.json::<EnglishWordInfoResponse>().await?;
-
-        Ok(response_body.word)
-    } else if response_status == StatusCode::NOT_FOUND {
-        let error_reason = response.word_error_reason().await?;
-
-        match error_reason {
-            WordErrorReason::WordNotFound => Err(EnglishWordFetchingError::NotFound),
-            _ => handle_unexpected_error_reason!(error_reason, response_status),
-        }
-    } else if response_status == StatusCode::BAD_REQUEST {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::InvalidUuidFormat]);
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-async fn get_english_word_by_lemma<C>(
-    client: &C,
+fn get_english_word_by_lemma_request<'c, C>(
+    client: &'c C,
     english_word_lemma: &str,
-) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError>
+) -> BoundTypedRequest<'c, C, EnglishWordWithMeanings, EnglishWordFetchingError>
 where
-    C: UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .get_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let response_body = response.into_json_body::<EnglishWordInfoResponse>().await?;
+
+            Ok(response_body.word)
+        } else if status == StatusCode::NOT_FOUND {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordNotFound => Err(EnglishWordFetchingError::NotFound),
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::BAD_REQUEST {
+            let error_reason = response.error_reason().await?;
+
+            err_if_invalid_uuid::<EnglishWordFetchingError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordFetchingError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .get()
         .endpoint_url(format!(
             "/dictionary/english/words/by-lemma/{}",
             english_word_lemma
         ))
-        .send_unauthenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let response_body = response.json::<EnglishWordInfoResponse>().await?;
-
-        Ok(response_body.word)
-    } else if response_status == StatusCode::NOT_FOUND {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::WordNotFound => Err(EnglishWordFetchingError::NotFound),
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::BAD_REQUEST {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::InvalidUuidFormat]);
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-async fn create_english_word<C>(
-    client: &C,
-    word_to_create: EnglishWordToCreate,
-) -> ClientResult<EnglishWordWithMeanings, EnglishWordCreationError>
+fn create_english_word_request<'c, C>(
+    client: &'c C,
+    new_word: EnglishWordToCreate,
+) -> BoundTypedRequest<'c, C, EnglishWordWithMeanings, EnglishWordCreationError>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .post_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let response_body = response
+                .into_json_body::<EnglishWordCreationResponse>()
+                .await?;
+
+            Ok(response_body.word)
+        } else if status == StatusCode::CONFLICT {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordWithThisLemmaAlreadyExists => {
+                    Err(EnglishWordCreationError::LemmaAlreadyExists)
+                }
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordCreationError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .post()
         .endpoint_url("/dictionary/english/words")
         .json(&EnglishWordCreationRequest {
-            lemma: word_to_create.lemma,
+            lemma: new_word.lemma,
         })
-        .send_authenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let response_body = response.json::<EnglishWordCreationResponse>().await?;
-
-        Ok(response_body.word)
-    } else if response_status == StatusCode::CONFLICT {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::WordWithThisLemmaAlreadyExists => {
-                Err(EnglishWordCreationError::LemmaAlreadyExists)
-            }
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-async fn update_english_word<C>(
-    client: &C,
+fn update_english_word_request<'c, C>(
+    client: &'c C,
     english_word_id: EnglishWordId,
     fields_to_update: EnglishWordFieldsToUpdate,
-) -> ClientResult<EnglishWordWithMeanings, EnglishWordUpdatingError>
+) -> Result<
+    BoundTypedRequest<'c, C, EnglishWordWithMeanings, EnglishWordUpdateError>,
+    EnglishWordUpdatePreparationError,
+>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     if fields_to_update.has_no_fields_to_update() {
-        return Err(EnglishWordUpdatingError::NoFieldsToUpdate);
+        return Err(EnglishWordUpdatePreparationError::NothingToUpdate);
     }
 
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
 
-    let response = client
-        .patch_request_builder()
+        if status == StatusCode::OK {
+            let response_body = response.into_json_body::<EnglishWordInfoResponse>().await?;
+
+            Ok(response_body.word)
+        } else if status == StatusCode::NOT_FOUND {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordNotFound => Err(EnglishWordUpdateError::NotFound),
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::CONFLICT {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordWithThisLemmaAlreadyExists => {
+                    Err(EnglishWordUpdateError::LemmaAlreadyExists)
+                }
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordUpdateError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    Ok(client
+        .patch()
         .endpoint_url(format!(
             "/dictionary/english/words/{}",
             english_word_id
@@ -297,73 +383,53 @@ where
         .json(&EnglishWordUpdateRequest {
             lemma: fields_to_update.new_lemma,
         })
-        .send_authenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let response_body = response.json::<EnglishWordInfoResponse>().await?;
-
-        Ok(response_body.word)
-    } else if response_status == StatusCode::NOT_FOUND {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::WordNotFound => Err(EnglishWordUpdatingError::NotFound),
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::CONFLICT {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::WordWithThisLemmaAlreadyExists => {
-                Err(EnglishWordUpdatingError::LemmaAlreadyExists)
-            }
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser))
 }
 
 
-async fn delete_english_word<C>(
-    client: &C,
+fn delete_english_word_request<'c, C>(
+    client: &'c C,
     english_word_id: EnglishWordId,
-) -> ClientResult<(), EnglishWordDeletionError>
+) -> BoundTypedRequest<'c, C, (), EnglishWordDeletionError>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .delete_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            Ok(())
+        } else if status == StatusCode::NOT_FOUND {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordNotFound => Err(EnglishWordDeletionError::NotFound),
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::BAD_REQUEST {
+            let error_reason = response.error_reason().await?;
+
+            err_if_invalid_uuid::<EnglishWordDeletionError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordDeletionError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .delete()
         .endpoint_url(format!(
             "/dictionary/english/words/{}",
             english_word_id
         ))
-        .send_authenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        Ok(())
-    } else if response_status == StatusCode::NOT_FOUND {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::WordNotFound => Err(EnglishWordDeletionError::NotFound),
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::BAD_REQUEST {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::InvalidUuidFormat]);
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
@@ -402,10 +468,13 @@ pub enum EnglishWordMeaningsFetchingError {
     WordNotFound,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
+}
+
+impl ResponseValueError for EnglishWordMeaningsFetchingError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
 }
 
 
@@ -418,29 +487,38 @@ pub enum EnglishWordMeaningCreationError {
     IdenticalWordMeaningAlreadyExists,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
+}
+
+impl ResponseValueError for EnglishWordMeaningCreationError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
 }
 
 
 #[derive(Debug, Error)]
-pub enum EnglishWordMeaningUpdatingError {
+pub enum EnglishWordMeaningUpdatePreparationError {
+    #[error("there were no fields to update")]
+    NothingToUpdate,
+}
+
+#[derive(Debug, Error)]
+pub enum EnglishWordMeaningUpdateError {
     #[error("english word does not exist")]
     WordNotFound,
 
     #[error("english word meaning does not exist")]
     WordMeaningNotFound,
 
-    #[error("there were no fields to update")]
-    NoFieldsToUpdate,
-
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
+}
+
+impl ResponseValueError for EnglishWordMeaningUpdateError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
 }
 
 
@@ -453,11 +531,15 @@ pub enum EnglishWordMeaningDeletionError {
     WordMeaningNotFound,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
+
+impl ResponseValueError for EnglishWordMeaningDeletionError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
+}
+
 
 #[derive(Debug, Error)]
 pub enum EnglishWordMeaningCategoryLinkingError {
@@ -471,10 +553,13 @@ pub enum EnglishWordMeaningCategoryLinkingError {
     CategoryRelationshipAlreadyExists,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
+}
+
+impl ResponseValueError for EnglishWordMeaningCategoryLinkingError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
 }
 
 #[derive(Debug, Error)]
@@ -489,115 +574,164 @@ pub enum EnglishWordMeaningCategoryUnlinkingError {
     CategoryRelationshipNotFound,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
 
-
-
-async fn get_english_word_meanings<C>(
-    client: &C,
-    english_word_id: EnglishWordId,
-) -> ClientResult<Vec<EnglishWordMeaningWithDetails>, EnglishWordMeaningsFetchingError>
-where
-    C: UnauthenticatedHttpClient,
-{
-    let response = RequestBuilder::get(client)
-        .endpoint_url(format!(
-            "/dictionary/english/words/{}/meanings",
-            english_word_id
-        ))
-        .send_unauthenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let response_body = response.json::<EnglishWordMeaningsResponse>().await?;
-
-        Ok(response_body.meanings)
-    } else if response_status == StatusCode::NOT_FOUND {
-        let word_error_response = response.word_error_reason().await?;
-
-        match word_error_response {
-            WordErrorReason::WordNotFound => Err(EnglishWordMeaningsFetchingError::WordNotFound),
-            _ => handle_unexpected_error_reason!(word_error_response, response_status),
-        }
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
+impl ResponseValueError for EnglishWordMeaningCategoryUnlinkingError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
     }
 }
 
 
-async fn create_english_word_meaning<C>(
-    client: &C,
+
+fn get_english_word_meanings_request<'c, C>(
+    client: &'c C,
     english_word_id: EnglishWordId,
-    word_meaning_to_create: EnglishWordMeaningToCreate,
-) -> ClientResult<EnglishWordMeaning, EnglishWordMeaningCreationError>
+) -> BoundTypedRequest<'c, C, Vec<EnglishWordMeaningWithDetails>, EnglishWordMeaningsFetchingError>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .post_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let response_body = response
+                .into_json_body::<EnglishWordMeaningsResponse>()
+                .await?;
+
+            Ok(response_body.meanings)
+        } else if status == StatusCode::NOT_FOUND {
+            let word_error_response = response.word_error_reason().await?;
+
+            match word_error_response {
+                WordErrorReason::WordNotFound => Err(EnglishWordMeaningsFetchingError::WordNotFound),
+                _ => Err(unexpected_error_reason(
+                    status,
+                    word_error_response,
+                )),
+            }
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordMeaningsFetchingError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .get()
+        .endpoint_url(format!(
+            "/dictionary/english/words/{}/meanings",
+            english_word_id
+        ))
+        .build_request()
+        .into_bound_typed_request(response_parser)
+}
+
+
+fn create_english_word_meaning_request<'c, C>(
+    client: &'c C,
+    english_word_id: EnglishWordId,
+    meaning: EnglishWordMeaningToCreate,
+) -> BoundTypedRequest<'c, C, EnglishWordMeaning, EnglishWordMeaningCreationError>
+where
+    C: KolomoniHttpClient,
+{
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let response_body = response
+                .into_json_body::<NewEnglishWordMeaningCreatedResponse>()
+                .await?;
+
+            Ok(response_body.meaning)
+        } else if status == StatusCode::CONFLICT {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::IdenticalWordMeaningAlreadyExists => {
+                    Err(EnglishWordMeaningCreationError::IdenticalWordMeaningAlreadyExists)
+                }
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordMeaningCreationError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .post()
         .endpoint_url(format!(
             "/dictionary/english/words/{}/meanings",
             english_word_id
         ))
         .json(&NewEnglishWordMeaningRequest {
-            abbreviation: word_meaning_to_create.abbreviation,
-            disambiguation: word_meaning_to_create.disambiguation,
-            description: word_meaning_to_create.description,
+            abbreviation: meaning.abbreviation,
+            disambiguation: meaning.disambiguation,
+            description: meaning.description,
         })
-        .send_authenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let response_body = response
-            .json::<NewEnglishWordMeaningCreatedResponse>()
-            .await?;
-
-        Ok(response_body.meaning)
-    } else if response_status == StatusCode::CONFLICT {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::IdenticalWordMeaningAlreadyExists => {
-                Err(EnglishWordMeaningCreationError::IdenticalWordMeaningAlreadyExists)
-            }
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-async fn update_english_word_meaning<C>(
-    client: &C,
+fn update_english_word_meaning_request<'c, C>(
+    client: &'c C,
     english_word_id: EnglishWordId,
     english_word_meaning_id: EnglishWordMeaningId,
     fields_to_update: EnglishWordMeaningFieldsToUpdate,
-) -> ClientResult<EnglishWordMeaningWithDetails, EnglishWordMeaningUpdatingError>
+) -> Result<
+    BoundTypedRequest<'c, C, EnglishWordMeaningWithDetails, EnglishWordMeaningUpdateError>,
+    EnglishWordMeaningUpdatePreparationError,
+>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     if fields_to_update.has_no_fields_to_update() {
-        return Err(EnglishWordMeaningUpdatingError::NoFieldsToUpdate);
+        return Err(EnglishWordMeaningUpdatePreparationError::NothingToUpdate);
     }
 
 
-    let response = client
-        .patch_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let response_body = response
+                .into_json_body::<EnglishWordMeaningUpdatedResponse>()
+                .await?;
+
+            Ok(response_body.meaning)
+        } else if status == StatusCode::NOT_FOUND {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordNotFound => Err(EnglishWordMeaningUpdateError::WordNotFound),
+                WordErrorReason::WordMeaningNotFound => {
+                    Err(EnglishWordMeaningUpdateError::WordMeaningNotFound)
+                }
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordMeaningUpdateError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    Ok(client
+        .patch()
         .endpoint_url(format!(
             "/dictionary/english/words/{}/meanings/{}",
             english_word_id, english_word_meaning_id
@@ -607,168 +741,308 @@ where
             disambiguation: fields_to_update.disambiguation,
             description: fields_to_update.description,
         })
-        .send_authenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let response_body = response.json::<EnglishWordMeaningUpdatedResponse>().await?;
-
-        Ok(response_body.meaning)
-    } else if response_status == StatusCode::NOT_FOUND {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::WordNotFound => Err(EnglishWordMeaningUpdatingError::WordNotFound),
-            WordErrorReason::WordMeaningNotFound => {
-                Err(EnglishWordMeaningUpdatingError::WordMeaningNotFound)
-            }
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser))
 }
 
 
-async fn delete_english_word_meaning<C>(
-    client: &C,
+fn delete_english_word_meaning_request<'c, C>(
+    client: &'c C,
     english_word_id: EnglishWordId,
     english_word_meaning_id: EnglishWordMeaningId,
-) -> ClientResult<(), EnglishWordMeaningDeletionError>
+) -> BoundTypedRequest<'c, C, (), EnglishWordMeaningDeletionError>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .delete_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            Ok(())
+        } else if status == StatusCode::NOT_FOUND {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordNotFound => Err(EnglishWordMeaningDeletionError::WordNotFound),
+                WordErrorReason::WordMeaningNotFound => {
+                    Err(EnglishWordMeaningDeletionError::WordMeaningNotFound)
+                }
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordMeaningDeletionError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .delete()
         .endpoint_url(format!(
             "/dictionary/english/words/{}/meanings/{}",
             english_word_id, english_word_meaning_id
         ))
-        .send_authenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        Ok(())
-    } else if response_status == StatusCode::NOT_FOUND {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::WordNotFound => Err(EnglishWordMeaningDeletionError::WordNotFound),
-            WordErrorReason::WordMeaningNotFound => {
-                Err(EnglishWordMeaningDeletionError::WordMeaningNotFound)
-            }
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-async fn link_category_to_english_word_meaning<C>(
-    client: &C,
+fn link_category_to_english_word_meaning_request<'c, C>(
+    client: &'c C,
     english_word_id: EnglishWordId,
     english_word_meaning_id: EnglishWordMeaningId,
     category_id: CategoryId,
-) -> ClientResult<(), EnglishWordMeaningCategoryLinkingError>
+) -> BoundTypedRequest<'c, C, (), EnglishWordMeaningCategoryLinkingError>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .post_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            Ok(())
+        } else if status == StatusCode::NOT_FOUND {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordNotFound => {
+                    Err(EnglishWordMeaningCategoryLinkingError::WordNotFound)
+                }
+                WordErrorReason::WordMeaningNotFound => {
+                    Err(EnglishWordMeaningCategoryLinkingError::WordMeaningNotFound)
+                }
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::CONFLICT {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordMeaningAlreadyHasThisCategory => {
+                    Err(EnglishWordMeaningCategoryLinkingError::CategoryRelationshipAlreadyExists)
+                }
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordMeaningCategoryLinkingError>(
+                status,
+                &error_reason,
+            )?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .post()
         .endpoint_url(format!(
             "/dictionary/english/words/{}/meanings/{}/categories/{}",
             english_word_id, english_word_meaning_id, category_id
         ))
-        .send_authenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        Ok(())
-    } else if response_status == StatusCode::NOT_FOUND {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::WordNotFound => {
-                Err(EnglishWordMeaningCategoryLinkingError::WordNotFound)
-            }
-            WordErrorReason::WordMeaningNotFound => {
-                Err(EnglishWordMeaningCategoryLinkingError::WordMeaningNotFound)
-            }
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::CONFLICT {
-        let word_error_reason = response.word_error_reason().await?;
-
-        match word_error_reason {
-            WordErrorReason::WordMeaningAlreadyHasThisCategory => {
-                Err(EnglishWordMeaningCategoryLinkingError::CategoryRelationshipAlreadyExists)
-            }
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-async fn unlink_category_from_english_word_meaning<C>(
-    client: &C,
+fn unlink_category_from_english_word_meaning_request<'c, C>(
+    client: &'c C,
     english_word_id: EnglishWordId,
     english_word_meaning_id: EnglishWordMeaningId,
     category_id: CategoryId,
-) -> ClientResult<(), EnglishWordMeaningCategoryUnlinkingError>
+) -> BoundTypedRequest<'c, C, (), EnglishWordMeaningCategoryUnlinkingError>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .delete_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            Ok(())
+        } else if status == StatusCode::NOT_FOUND {
+            let word_error_reason = response.word_error_reason().await?;
+
+            match word_error_reason {
+                WordErrorReason::WordNotFound => {
+                    Err(EnglishWordMeaningCategoryUnlinkingError::WordNotFound)
+                }
+                WordErrorReason::WordMeaningNotFound => {
+                    Err(EnglishWordMeaningCategoryUnlinkingError::WordMeaningNotFound)
+                }
+                WordErrorReason::WordMeaningCategoryRelationshipNotFound => {
+                    Err(EnglishWordMeaningCategoryUnlinkingError::CategoryRelationshipNotFound)
+                }
+                _ => Err(unexpected_error_reason(status, word_error_reason)),
+            }
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            err_if_missing_permissions::<EnglishWordMeaningCategoryUnlinkingError>(
+                status,
+                &error_reason,
+            )?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .delete()
         .endpoint_url(format!(
             "/dictionary/english/words/{}/meanings/{}/categories/{}",
             english_word_id, english_word_meaning_id, category_id
         ))
-        .send_authenticated()
-        .await?;
+        .build_request()
+        .into_bound_typed_request(response_parser)
+}
 
-    let response_status = response.status();
 
 
-    if response_status == StatusCode::OK {
-        Ok(())
-    } else if response_status == StatusCode::NOT_FOUND {
-        let word_error_reason = response.word_error_reason().await?;
+pub trait EnglishDictionaryUnauthenticatedEndpoints<'c, C>: EndpointGroup<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    /*
+     * Word-related (word meanings are in the next section)
+     */
+    fn english_words(
+        &'c self,
+        options: EnglishWordFetchingOptions,
+    ) -> BoundTypedRequest<'c, C, Vec<EnglishWordWithMeanings>, EnglishWordListFetchingError> {
+        get_english_words_request(self.client(), options)
+    }
 
-        match word_error_reason {
-            WordErrorReason::WordNotFound => {
-                Err(EnglishWordMeaningCategoryUnlinkingError::WordNotFound)
-            }
-            WordErrorReason::WordMeaningNotFound => {
-                Err(EnglishWordMeaningCategoryUnlinkingError::WordMeaningNotFound)
-            }
-            WordErrorReason::WordMeaningCategoryRelationshipNotFound => {
-                Err(EnglishWordMeaningCategoryUnlinkingError::CategoryRelationshipNotFound)
-            }
-            _ => handle_unexpected_error_reason!(word_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::FORBIDDEN {
-        handle_error_reasons_or_catch_unexpected_status!(response, [handlers::MissingPermissions]);
-    } else {
-        handle_uncaught_status_code!(response_status);
+    fn english_word_by_id(
+        &'c self,
+        english_word_id: EnglishWordId,
+    ) -> BoundTypedRequest<'c, C, EnglishWordWithMeanings, EnglishWordFetchingError> {
+        get_english_word_by_id_request(self.client(), english_word_id)
+    }
+
+    fn english_word_by_lemma(
+        &'c self,
+        english_word_lemma: &str,
+    ) -> BoundTypedRequest<'c, C, EnglishWordWithMeanings, EnglishWordFetchingError> {
+        get_english_word_by_lemma_request(self.client(), english_word_lemma)
+    }
+
+    /*
+     * Word meaning-related (words themselves are in the previous section)
+     */
+    fn english_word_meanings(
+        &'c self,
+        english_word_id: EnglishWordId,
+    ) -> BoundTypedRequest<'c, C, Vec<EnglishWordMeaningWithDetails>, EnglishWordMeaningsFetchingError>
+    {
+        get_english_word_meanings_request(self.client(), english_word_id)
+    }
+}
+
+
+pub trait EnglishDictionaryAuthenticatedEndpoints<'c, C>: EndpointGroup<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    /*
+     * Word-related (word meanings are in the next section)
+     */
+    fn create_english_word(
+        &'c self,
+        word: EnglishWordToCreate,
+    ) -> BoundTypedRequest<'c, C, EnglishWordWithMeanings, EnglishWordCreationError> {
+        create_english_word_request(self.client(), word)
+    }
+
+    fn update_english_word(
+        &'c self,
+        english_word_id: EnglishWordId,
+        fields_to_update: EnglishWordFieldsToUpdate,
+    ) -> Result<
+        BoundTypedRequest<'c, C, EnglishWordWithMeanings, EnglishWordUpdateError>,
+        EnglishWordUpdatePreparationError,
+    > {
+        update_english_word_request(self.client(), english_word_id, fields_to_update)
+    }
+
+    fn delete_english_word(
+        &'c self,
+        english_word_id: EnglishWordId,
+    ) -> BoundTypedRequest<'c, C, (), EnglishWordDeletionError> {
+        delete_english_word_request(self.client(), english_word_id)
+    }
+
+
+    /*
+     * Word meaning-related (words themselves are in the previous section)
+     */
+    fn create_english_word_meaning(
+        &'c self,
+        english_word_id: EnglishWordId,
+        meaning: EnglishWordMeaningToCreate,
+    ) -> BoundTypedRequest<'c, C, EnglishWordMeaning, EnglishWordMeaningCreationError> {
+        create_english_word_meaning_request(self.client(), english_word_id, meaning)
+    }
+
+    fn update_english_word_meaning(
+        &'c self,
+        english_word_id: EnglishWordId,
+        english_word_meaning_id: EnglishWordMeaningId,
+        fields_to_update: EnglishWordMeaningFieldsToUpdate,
+    ) -> Result<
+        BoundTypedRequest<'c, C, EnglishWordMeaningWithDetails, EnglishWordMeaningUpdateError>,
+        EnglishWordMeaningUpdatePreparationError,
+    > {
+        update_english_word_meaning_request(
+            self.client(),
+            english_word_id,
+            english_word_meaning_id,
+            fields_to_update,
+        )
+    }
+
+    fn delete_english_word_meaning(
+        &'c self,
+        english_word_id: EnglishWordId,
+        english_word_meaning_id: EnglishWordMeaningId,
+    ) -> BoundTypedRequest<'c, C, (), EnglishWordMeaningDeletionError> {
+        delete_english_word_meaning_request(
+            self.client(),
+            english_word_id,
+            english_word_meaning_id,
+        )
+    }
+
+    fn link_category_to_english_word_meaning(
+        &'c self,
+        english_word_id: EnglishWordId,
+        english_word_meaning_id: EnglishWordMeaningId,
+        category_id: CategoryId,
+    ) -> BoundTypedRequest<'c, C, (), EnglishWordMeaningCategoryLinkingError> {
+        link_category_to_english_word_meaning_request(
+            self.client(),
+            english_word_id,
+            english_word_meaning_id,
+            category_id,
+        )
+    }
+
+    fn unlink_category_from_english_word_meaning(
+        &'c self,
+        english_word_id: EnglishWordId,
+        english_word_meaning_id: EnglishWordMeaningId,
+        category_id: CategoryId,
+    ) -> BoundTypedRequest<'c, C, (), EnglishWordMeaningCategoryUnlinkingError> {
+        unlink_category_from_english_word_meaning_request(
+            self.client(),
+            english_word_id,
+            english_word_meaning_id,
+            category_id,
+        )
     }
 }
 
@@ -776,52 +1050,34 @@ where
 
 pub struct EnglishDictionaryUnauthenticatedApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> EnglishDictionaryUnauthenticatedApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
+}
 
-    /*
-     * Word-related (word meanings are in the next section)
-     */
-    pub async fn english_words(
-        &self,
-        options: EnglishWordFetchingOptions,
-    ) -> ClientResult<Vec<EnglishWordWithMeanings>> {
-        get_english_words(self.client, options).await
+impl<'c, C> EndpointGroup<'c, C> for EnglishDictionaryUnauthenticatedApi<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    fn client(&'c self) -> &'c C {
+        self.client
     }
+}
 
-    pub async fn english_word_by_id(
-        &self,
-        english_word_id: EnglishWordId,
-    ) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError> {
-        get_english_word_by_id(self.client, english_word_id).await
-    }
-
-    pub async fn english_word_by_lemma(
-        &self,
-        english_word_lemma: &str,
-    ) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError> {
-        get_english_word_by_lemma(self.client, english_word_lemma).await
-    }
-
-    /*
-     * Word meaning-related (words themselves are in the previous section)
-     */
-    pub async fn english_word_meanings(
-        &self,
-        english_word_id: EnglishWordId,
-    ) -> ClientResult<Vec<EnglishWordMeaningWithDetails>, EnglishWordMeaningsFetchingError> {
-        get_english_word_meanings(self.client, english_word_id).await
-    }
+impl<'c, C> EnglishDictionaryUnauthenticatedEndpoints<'c, C>
+    for EnglishDictionaryUnauthenticatedApi<'c, C>
+where
+    C: KolomoniHttpClient,
+{
 }
 
 
@@ -829,143 +1085,39 @@ where
 
 pub struct EnglishDictionaryAuthenticatedApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> EnglishDictionaryAuthenticatedApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
+}
 
-    /*
-     * Word-related (word meanings are in the next section)
-     */
-    pub async fn english_words(
-        &self,
-        options: EnglishWordFetchingOptions,
-    ) -> ClientResult<Vec<EnglishWordWithMeanings>> {
-        get_english_words(self.client, options).await
+impl<'c, C> EndpointGroup<'c, C> for EnglishDictionaryAuthenticatedApi<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    fn client(&'c self) -> &'c C {
+        self.client
     }
+}
 
-    pub async fn english_word_by_id(
-        &self,
-        english_word_id: EnglishWordId,
-    ) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError> {
-        get_english_word_by_id(self.client, english_word_id).await
-    }
+impl<'c, C> EnglishDictionaryUnauthenticatedEndpoints<'c, C>
+    for EnglishDictionaryAuthenticatedApi<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+}
 
-    pub async fn english_word_by_lemma(
-        &self,
-        english_word_lemma: &str,
-    ) -> ClientResult<EnglishWordWithMeanings, EnglishWordFetchingError> {
-        get_english_word_by_lemma(self.client, english_word_lemma).await
-    }
-
-    pub async fn create_english_word(
-        &self,
-        word: EnglishWordToCreate,
-    ) -> ClientResult<EnglishWordWithMeanings, EnglishWordCreationError> {
-        create_english_word(self.client, word).await
-    }
-
-    pub async fn update_english_word(
-        &self,
-        english_word_id: EnglishWordId,
-        fields_to_update: EnglishWordFieldsToUpdate,
-    ) -> ClientResult<EnglishWordWithMeanings, EnglishWordUpdatingError> {
-        update_english_word(self.client, english_word_id, fields_to_update).await
-    }
-
-    pub async fn delete_english_word(
-        &self,
-        english_word_id: EnglishWordId,
-    ) -> ClientResult<(), EnglishWordDeletionError> {
-        delete_english_word(self.client, english_word_id).await
-    }
-
-    /*
-     * Word meaning-related (words themselves are in the previous section)
-     */
-    pub async fn english_word_meanings(
-        &self,
-        english_word_id: EnglishWordId,
-    ) -> ClientResult<Vec<EnglishWordMeaningWithDetails>, EnglishWordMeaningsFetchingError> {
-        get_english_word_meanings(self.client, english_word_id).await
-    }
-
-    pub async fn create_english_word_meaning(
-        &self,
-        english_word_id: EnglishWordId,
-        word_meaning_to_create: EnglishWordMeaningToCreate,
-    ) -> ClientResult<EnglishWordMeaning, EnglishWordMeaningCreationError> {
-        create_english_word_meaning(
-            self.client,
-            english_word_id,
-            word_meaning_to_create,
-        )
-        .await
-    }
-
-    pub async fn update_english_word_meaning(
-        &self,
-        english_word_id: EnglishWordId,
-        english_word_meaning_id: EnglishWordMeaningId,
-        fields_to_update: EnglishWordMeaningFieldsToUpdate,
-    ) -> ClientResult<EnglishWordMeaningWithDetails, EnglishWordMeaningUpdatingError> {
-        update_english_word_meaning(
-            self.client,
-            english_word_id,
-            english_word_meaning_id,
-            fields_to_update,
-        )
-        .await
-    }
-
-    pub async fn delete_english_word_meaning(
-        &self,
-        english_word_id: EnglishWordId,
-        english_word_meaning_id: EnglishWordMeaningId,
-    ) -> ClientResult<(), EnglishWordMeaningDeletionError> {
-        delete_english_word_meaning(
-            self.client,
-            english_word_id,
-            english_word_meaning_id,
-        )
-        .await
-    }
-
-    pub async fn link_category_to_english_word_meaning(
-        &self,
-        english_word_id: EnglishWordId,
-        english_word_meaning_id: EnglishWordMeaningId,
-        category_id: CategoryId,
-    ) -> ClientResult<(), EnglishWordMeaningCategoryLinkingError> {
-        link_category_to_english_word_meaning(
-            self.client,
-            english_word_id,
-            english_word_meaning_id,
-            category_id,
-        )
-        .await
-    }
-
-    pub async fn unlink_category_from_english_word_meaning(
-        &self,
-        english_word_id: EnglishWordId,
-        english_word_meaning_id: EnglishWordMeaningId,
-        category_id: CategoryId,
-    ) -> ClientResult<(), EnglishWordMeaningCategoryUnlinkingError> {
-        unlink_category_from_english_word_meaning(
-            self.client,
-            english_word_id,
-            english_word_meaning_id,
-            category_id,
-        )
-        .await
-    }
+impl<'c, C> EnglishDictionaryAuthenticatedEndpoints<'c, C>
+    for EnglishDictionaryAuthenticatedApi<'c, C>
+where
+    C: KolomoniHttpClient,
+{
 }

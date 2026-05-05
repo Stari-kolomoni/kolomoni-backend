@@ -181,7 +181,7 @@ macro_rules! deserialize_json_from_value {
         {
             match <$value_type as serde::de::Deserialize>::deserialize(&$value) {
                 Ok(deserialized_value) => Ok(deserialized_value),
-                Err(deserialization_error) => {
+                Err(_) => {
                     // Pseudocode:
                     // - pretty print the input (so we get better line-column diagnostics),
                     // - attempt to deserialize again (this will fail)
@@ -189,8 +189,10 @@ macro_rules! deserialize_json_from_value {
                     let pretty_printed_value: String = serde_json::to_string_pretty(&$value)
                         .expect("failed to pretty-print valid JSON value");
 
-                    let pretty_deserialization_error: serde_json::Error = serde_json::from_str(
-                        &pretty_printed_value,
+                    let pretty_deserialization_error: serde_json::Error = serde_json::from_str::<
+                        $value_type,
+                    >(
+                        &pretty_printed_value
                     )
                     .expect_err(
                         "when re-deserializing the pretty-printed JSON value, no error occurred?!?!",

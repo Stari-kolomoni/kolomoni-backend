@@ -1,21 +1,25 @@
-use std::{borrow::Cow, ops::Deref, sync::Arc};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use kolomoni_api_client::{
-    api::health::SharedHealthEndpoints,
-    authentication::ServerAuthentication,
-    request::ApiClientRequestBuild,
-    ApiServer,
-    Client,
-    ClientOptions,
-    SharedApiClientEndpointGroups,
+    api::health::{HealthAnonymousEndpoints, HealthApi},
+    authentication::ClientAuthentication,
+    client::{
+        AuthenticatedKolomoniClient,
+        KolomoniHttpClient,
+        UnauthenticatedClientOptions,
+        UnauthenticatedKolomoniClient,
+    },
+    request::ToRequestBuilder,
+    server::KolomoniApiServer,
 };
 use kolomoni_core::{
     api_models::{GiveAdministratorRoleRequest, ResetUserRolesRequest},
     ids::UserId,
 };
 use reqwest::StatusCode;
-
-use crate::{macros::ensure_request_is_ok, response::AssertableServerResponse};
 
 
 pub const TEST_USER_AGENT: &str = concat!("kolomoni-e2e-test/v", env!("CARGO_PKG_VERSION"));
@@ -24,14 +28,14 @@ pub const TEST_USER_AGENT: &str = concat!("kolomoni-e2e-test/v", env!("CARGO_PKG
 
 pub struct TestingEndpoints<'s, C>
 where
-    C: kolomoni_api_client::Client + kolomoni_api_client::UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     client: &'s C,
 }
 
 impl<'s, C> TestingEndpoints<'s, C>
 where
-    C: kolomoni_api_client::Client + kolomoni_api_client::UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     #[inline]
     fn new(client: &'s C) -> Self {
@@ -42,14 +46,16 @@ where
     /// with the `e2e-testing` feature flag, exposing the required
     /// additional endpoints we use while testing.
     pub async fn assert_testing_is_enabled_on_server(&self) {
-        let response = ensure_request_is_ok!(
-            self.client
-                .get_request_builder()
-                .endpoint_url_without_base_path("/testing/enabled")
-                .send_unauthenticated()
-                .await,
-            "failed to check whether the server has been compiled with the testing feature flag"
-        );
+        let response = self
+            .client
+            .get()
+            .endpoint_url_without_base_path("/testing/enabled")
+            .build_request()
+            .send()
+            .await
+            .expect(
+                "failed to check whether the server has been compiled with the testing feature flag",
+            );
 
         if response.status() != StatusCode::OK {
             panic!("expected the server to have the testing feature flag enabled");
@@ -59,19 +65,19 @@ where
     pub async fn perform_full_reset(&self) {
         self.assert_testing_is_enabled_on_server().await;
 
-        let response = ensure_request_is_ok!(
-            self.client
-                .post_request_builder()
-                .endpoint_url_without_base_path("/testing/state/reset")
-                .send_unauthenticated()
-                .await,
-            "failed to execute request to perform full backend reset"
-        );
+        let response = self
+            .client
+            .post()
+            .endpoint_url_without_base_path("/testing/state/reset")
+            .build_request()
+            .send()
+            .await
+            .expect("failed to execute request to perform full backend reset");
 
         if response.status() != StatusCode::OK {
             panic!(
-                "failed to perform full backend reset: {}",
-                response.format_with_debug_info()
+                "failed to perform full backend reset: got status code {}",
+                response.status()
             );
         }
     }
@@ -79,27 +85,29 @@ where
     pub async fn give_user_administrator_role(&self, user_id: UserId) {
         self.assert_testing_is_enabled_on_server().await;
 
-        let response = ensure_request_is_ok!(
-            self.client
-                .post_request_builder()
-                .endpoint_url_without_base_path("/testing/user/give-administrator-role")
-                .json(&GiveAdministratorRoleRequest {
-                    user_id: user_id.into_uuid(),
-                })
-                .send_unauthenticated()
-                .await,
-            format!(
-                "failed to execute request to give user {:?} the administrator role",
-                user_id
-            )
-        );
+        let response = self
+            .client
+            .post()
+            .endpoint_url_without_base_path("/testing/user/give-administrator-role")
+            .json(&GiveAdministratorRoleRequest {
+                user_id: user_id.into_uuid(),
+            })
+            .build_request()
+            .send()
+            .await
+            .unwrap_or_else(|error| {
+                panic!(
+                    "failed to execute request to give user {:?} the administrator role: {}",
+                    user_id, error
+                )
+            });
 
 
         if response.status() != StatusCode::OK {
             panic!(
-                "failed to give user {:?} the administrator role: {}",
+                "failed to give user {:?} the administrator role: got status code {}",
                 user_id,
-                response.format_with_debug_info()
+                response.status()
             );
         }
     }
@@ -107,60 +115,65 @@ where
     pub async fn reset_user_roles_to_default(&self, user_id: UserId) {
         self.assert_testing_is_enabled_on_server().await;
 
-        let response = ensure_request_is_ok!(
-            self.client
-                .post_request_builder()
-                .endpoint_url_without_base_path("/testing/user/reset-roles-to-default")
-                .json(&ResetUserRolesRequest {
-                    user_id: user_id.into_uuid(),
-                })
-                .send_unauthenticated()
-                .await,
-            format!(
-                "failed to execute request to reset roles for user {:?} to default",
-                user_id
-            )
-        );
+        let response = self
+            .client
+            .post()
+            .endpoint_url_without_base_path("/testing/user/reset-roles-to-default")
+            .json(&ResetUserRolesRequest {
+                user_id: user_id.into_uuid(),
+            })
+            .build_request()
+            .send()
+            .await
+            .unwrap_or_else(|error| {
+                panic!(
+                    "failed to execute request to reset roles for user {:?} to default: {}",
+                    user_id, error
+                )
+            });
 
         if response.status() != StatusCode::OK {
             panic!(
-                "failed to reset user {:?}'s roles to default: {}",
+                "failed to reset user {:?}'s roles to default: got status code {}",
                 user_id,
-                response.format_with_debug_info()
+                response.status()
             );
         }
     }
 }
 
 
-pub struct AssertableHealthEndpoints<'s, C>
+pub struct AssertableHealthEndpoints<'c, C>
 where
-    C: Client + SharedApiClientEndpointGroups,
+    C: KolomoniHttpClient,
 {
-    client: &'s C,
+    inner: HealthApi<'c, C>,
 }
 
-impl<'s, C> AssertableHealthEndpoints<'s, C>
+impl<'c, C> AssertableHealthEndpoints<'c, C>
 where
-    C: Client + SharedApiClientEndpointGroups,
+    C: KolomoniHttpClient,
 {
     #[inline]
-    fn new(client: &'s C) -> Self {
-        Self { client }
+    fn new(inner: HealthApi<'c, C>) -> Self {
+        Self { inner }
     }
 
-    pub async fn assert_server_can_be_pinged(&self) {
-        let ping_result = ensure_request_is_ok!(
-            self.client.health().ping().await,
-            "failed to ping server health endpoint"
-        );
+    pub async fn assert_server_ping_is_ok(&self) {
+        let ping_result = self
+            .inner
+            .ping()
+            .send()
+            .await
+            .expect("failed to ping server");
 
-        assert!(ping_result, "failed to ping server");
+        assert!(ping_result, "server is not healthy");
     }
 }
 
 
 
+#[deprecated]
 pub trait TestServerClient {
     type Testing<'c>
     where
@@ -179,19 +192,17 @@ pub trait TestServerClient {
 
 
 pub struct UnauthanticatedTestServerClient {
-    client: kolomoni_api_client::UnauthenticatedKolomoniClient,
+    client: UnauthenticatedKolomoniClient,
 }
 
 impl UnauthanticatedTestServerClient {
     pub fn new<S>(server: S) -> Self
     where
-        S: Into<ApiServer>,
+        S: Into<KolomoniApiServer>,
     {
-        let client = kolomoni_api_client::UnauthenticatedKolomoniClient::new_with_options(
+        let client = UnauthenticatedKolomoniClient::new_with_options(
             Arc::new(server.into()),
-            ClientOptions {
-                user_agent: Cow::Borrowed(TEST_USER_AGENT),
-            },
+            UnauthenticatedClientOptions::default(),
         )
         .expect("failed to initialize API client with provided server");
 
@@ -200,7 +211,7 @@ impl UnauthanticatedTestServerClient {
 
     pub fn with_authentication(
         &self,
-        authentication: ServerAuthentication,
+        authentication: ClientAuthentication,
     ) -> AuthenticatedTestServerClient {
         AuthenticatedTestServerClient {
             client: self.client.with_authentication(authentication),
@@ -208,54 +219,84 @@ impl UnauthanticatedTestServerClient {
     }
 }
 
-impl TestServerClient for UnauthanticatedTestServerClient {
-    type Testing<'c> = TestingEndpoints<'c, kolomoni_api_client::UnauthenticatedKolomoniClient>;
-
-    type AssertableHealth<'c> =
-        AssertableHealthEndpoints<'c, kolomoni_api_client::UnauthenticatedKolomoniClient>;
-
-    fn testing(&self) -> Self::Testing<'_> {
+impl UnauthanticatedTestServerClient {
+    pub fn testing<'c>(&'c self) -> TestingEndpoints<'c, UnauthenticatedKolomoniClient> {
         TestingEndpoints::new(&self.client)
     }
 
-    fn assertable_health(&self) -> Self::AssertableHealth<'_> {
-        AssertableHealthEndpoints::new(&self.client)
+    pub fn assertable_health<'c>(
+        &'c self,
+    ) -> AssertableHealthEndpoints<'c, UnauthenticatedKolomoniClient> {
+        AssertableHealthEndpoints::new(self.client.health())
     }
 }
 
 impl Deref for UnauthanticatedTestServerClient {
-    type Target = kolomoni_api_client::UnauthenticatedKolomoniClient;
+    type Target = UnauthenticatedKolomoniClient;
 
     fn deref(&self) -> &Self::Target {
         &self.client
+    }
+}
+
+impl DerefMut for UnauthanticatedTestServerClient {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.client
+    }
+}
+
+impl AsRef<UnauthenticatedKolomoniClient> for UnauthanticatedTestServerClient {
+    fn as_ref(&self) -> &UnauthenticatedKolomoniClient {
+        &self.client
+    }
+}
+
+impl AsMut<UnauthenticatedKolomoniClient> for UnauthanticatedTestServerClient {
+    fn as_mut(&mut self) -> &mut UnauthenticatedKolomoniClient {
+        &mut self.client
     }
 }
 
 
 
 pub struct AuthenticatedTestServerClient {
-    client: kolomoni_api_client::AuthenticatedKolomoniClient,
+    client: AuthenticatedKolomoniClient,
 }
 
-impl TestServerClient for AuthenticatedTestServerClient {
-    type Testing<'c> = TestingEndpoints<'c, kolomoni_api_client::AuthenticatedKolomoniClient>;
-
-    type AssertableHealth<'c> =
-        AssertableHealthEndpoints<'c, kolomoni_api_client::AuthenticatedKolomoniClient>;
-
-    fn testing(&self) -> Self::Testing<'_> {
+impl AuthenticatedTestServerClient {
+    pub fn testing<'c>(&'c self) -> TestingEndpoints<'c, AuthenticatedKolomoniClient> {
         TestingEndpoints::new(&self.client)
     }
 
-    fn assertable_health(&self) -> Self::AssertableHealth<'_> {
-        AssertableHealthEndpoints::new(&self.client)
+    pub fn assertable_health<'c>(
+        &'c self,
+    ) -> AssertableHealthEndpoints<'c, AuthenticatedKolomoniClient> {
+        AssertableHealthEndpoints::new(self.client.health())
     }
 }
 
 impl Deref for AuthenticatedTestServerClient {
-    type Target = kolomoni_api_client::AuthenticatedKolomoniClient;
+    type Target = AuthenticatedKolomoniClient;
 
     fn deref(&self) -> &Self::Target {
         &self.client
+    }
+}
+
+impl DerefMut for AuthenticatedTestServerClient {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.client
+    }
+}
+
+impl AsRef<AuthenticatedKolomoniClient> for AuthenticatedTestServerClient {
+    fn as_ref(&self) -> &AuthenticatedKolomoniClient {
+        &self.client
+    }
+}
+
+impl AsMut<AuthenticatedKolomoniClient> for AuthenticatedTestServerClient {
+    fn as_mut(&mut self) -> &mut AuthenticatedKolomoniClient {
+        &mut self.client
     }
 }

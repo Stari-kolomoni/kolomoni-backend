@@ -1,4 +1,4 @@
-use kolomoni_api_client::response::ServerResponse;
+use kolomoni_api_client::response::RawResponse;
 use reqwest::{header::HeaderValue, StatusCode};
 
 
@@ -7,18 +7,18 @@ pub trait AssertableServerResponse {
 
     fn assert_status_equals(&self, status_code: StatusCode);
 
-    fn assert_header_exists(&self, header_name: &str);
+    fn assert_header_is_present(&self, header_name: &str);
 
-    fn assert_header_matches(&self, header_name: &str, header_value: HeaderValue);
+    fn assert_header_equals(&self, header_name: &str, header_value: HeaderValue);
 }
 
 
-fn format_debug_info_for_panic(server_response: &ServerResponse) -> String {
+fn format_debug_info_for_panic(server_response: &RawResponse) -> String {
     let status = server_response.status();
     let headers = server_response.headers().to_owned();
 
     format!(
-        "Context {{\n  \
+        "request-context={{\n  \
           status={}\n  \
           headers={:?}\n\
         }}",
@@ -27,7 +27,7 @@ fn format_debug_info_for_panic(server_response: &ServerResponse) -> String {
 }
 
 
-impl AssertableServerResponse for ServerResponse {
+impl AssertableServerResponse for RawResponse {
     fn format_with_debug_info(&self) -> String {
         format_debug_info_for_panic(self)
     }
@@ -41,7 +41,7 @@ impl AssertableServerResponse for ServerResponse {
         );
     }
 
-    fn assert_header_exists(&self, header_name: &str) {
+    fn assert_header_is_present(&self, header_name: &str) {
         let has_header = self.headers().contains_key(header_name);
 
         assert!(
@@ -52,8 +52,8 @@ impl AssertableServerResponse for ServerResponse {
         );
     }
 
-    fn assert_header_matches(&self, header_name: &str, header_value: HeaderValue) {
-        self.assert_header_exists(header_name);
+    fn assert_header_equals(&self, header_name: &str, header_value: HeaderValue) {
+        self.assert_header_is_present(header_name);
 
         let actual_header_value = self
             .headers()

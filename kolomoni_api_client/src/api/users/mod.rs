@@ -17,40 +17,60 @@ use kolomoni_core::roles::RoleSet;
 use reqwest::StatusCode;
 use thiserror::Error;
 
-use crate::errors::ClientError;
-use crate::errors::ClientResult;
-use crate::macros::{
-    handle_error_reasons_or_catch_unexpected_status,
-    handle_uncaught_status_code,
-    handle_unexpected_error_reason,
-    handlers,
+use crate::api::EndpointGroup;
+use crate::client::errors::RequestError;
+use crate::client::KolomoniHttpClient;
+use crate::parsing::{
+    err_if_invalid_uuid,
+    err_if_missing_permissions,
+    unexpected_error_reason,
+    unexpected_response,
 };
-use crate::request::ApiClientRequestBuild;
-use crate::{AuthenticatedHttpClient, Client, UnauthenticatedHttpClient};
-
+use crate::request::typed::{BoundTypedRequest, IntoBoundTypedRequest};
+use crate::request::ToRequestBuilder;
+use crate::response::raw::RawResponse;
+use crate::response::ResponseValueError;
 pub mod current;
 
 
-async fn get_all_registered_users<C>(client: &C) -> ClientResult<Vec<UserInfo>>
-where
-    C: AuthenticatedHttpClient,
-{
-    let response = client
-        .get_request_builder()
-        .endpoint_url("/users")
-        .send_authenticated()
-        .await?;
+#[derive(Debug, Error)]
+pub enum UserListError {
+    #[error(transparent)]
+    RequestError(#[from] RequestError),
+}
 
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let registered_users_response = response.json::<RegisteredUsersListResponse>().await?;
-
-        Ok(registered_users_response.users)
-    } else {
-        handle_uncaught_status_code!(response_status);
+impl ResponseValueError for UserListError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
     }
+}
+
+
+fn get_all_registered_users_request<'c, C>(
+    client: &'c C,
+) -> BoundTypedRequest<'c, C, Vec<UserInfo>, UserListError>
+where
+    C: KolomoniHttpClient,
+{
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let registered_users_response = response
+                .into_json_body::<RegisteredUsersListResponse>()
+                .await?;
+
+            Ok(registered_users_response.users)
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .get()
+        .endpoint_url("/users")
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
@@ -60,127 +80,144 @@ pub enum UserDataFetchError {
     NotFound,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
 
+impl ResponseValueError for UserDataFetchError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
+}
 
-async fn get_user_information_by_user_id<C>(
-    client: &C,
+fn get_user_information_by_user_id_request<'c, C>(
+    client: &'c C,
     user_id: UserId,
-) -> ClientResult<UserInfo, UserDataFetchError>
+) -> BoundTypedRequest<'c, C, UserInfo, UserDataFetchError>
 where
-    C: UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .get_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let user_info_response = response.into_json_body::<UserInfoResponse>().await?;
+
+            Ok(user_info_response.user)
+        } else if status == StatusCode::NOT_FOUND {
+            let users_error_response = response.users_error_reason().await?;
+
+            match users_error_response {
+                UsersErrorReason::UserNotFound => Err(UserDataFetchError::NotFound),
+                _ => Err(unexpected_error_reason(
+                    status,
+                    users_error_response,
+                )),
+            }
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .get()
         .endpoint_url(format!("/users/{}", user_id))
-        .send_unauthenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let user_info_response = response.json::<UserInfoResponse>().await?;
-
-        Ok(user_info_response.user)
-    } else if response_status == StatusCode::NOT_FOUND {
-        let user_error_reason = response.users_error_reason().await?;
-
-        match user_error_reason {
-            UsersErrorReason::UserNotFound => Err(UserDataFetchError::NotFound),
-            _ => handle_unexpected_error_reason!(user_error_reason, response_status),
-        }
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-
-async fn get_user_roles_by_user_id<C>(
-    client: &C,
+fn get_user_roles_by_user_id_request<'c, C>(
+    client: &'c C,
     user_id: UserId,
-) -> ClientResult<RoleSet, UserDataFetchError>
+) -> BoundTypedRequest<'c, C, RoleSet, UserDataFetchError>
 where
-    C: UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .get_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let user_roles_response = response.into_json_body::<UserRolesResponse>().await?;
+
+            let Ok(user_role_set) = RoleSet::try_from_role_names(user_roles_response.role_names)
+            else {
+                return Err(RequestError::unexpected_response(
+                    status,
+                    "server responded with a role set that contains at least one invalid role",
+                )
+                .into());
+            };
+
+            Ok(user_role_set)
+        } else if status == StatusCode::NOT_FOUND {
+            let users_error_response = response.users_error_reason().await?;
+
+            match users_error_response {
+                UsersErrorReason::UserNotFound => Err(UserDataFetchError::NotFound),
+                _ => Err(unexpected_error_reason(
+                    status,
+                    users_error_response,
+                )),
+            }
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .get()
         .endpoint_url(format!("/users/{}/roles", user_id))
-        .send_unauthenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let user_roles_response = response.json::<UserRolesResponse>().await?;
-
-        let Ok(user_role_set) = RoleSet::try_from_role_names(user_roles_response.role_names) else {
-            return Err(ClientError::unexpected_response(
-                response_status,
-                "server responded with a role set that contains at least one invalid role",
-            )
-            .into());
-        };
-
-        Ok(user_role_set)
-    } else if response_status == StatusCode::NOT_FOUND {
-        let user_error_reason = response.users_error_reason().await?;
-
-        match user_error_reason {
-            UsersErrorReason::UserNotFound => Err(UserDataFetchError::NotFound),
-            _ => handle_unexpected_error_reason!(user_error_reason, response_status),
-        }
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
-async fn get_user_effective_permissions_by_user_id<C>(
-    client: &C,
+fn get_user_effective_permissions_by_user_id_request<'c, C>(
+    client: &'c C,
     user_id: UserId,
-) -> ClientResult<PermissionSet, UserDataFetchError>
+) -> BoundTypedRequest<'c, C, PermissionSet, UserDataFetchError>
 where
-    C: UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .get_request_builder()
-        .endpoint_url(format!("/users/{}/permissions", user_id))
-        .send_unauthenticated()
-        .await?;
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
 
-    let response_status = response.status();
+        if status == StatusCode::OK {
+            let user_permissions_response =
+                response.into_json_body::<UserPermissionsResponse>().await?;
 
+            let Ok(user_permission_set) =
+                PermissionSet::try_from_permission_names(user_permissions_response.permissions)
+            else {
+                return Err(
+                    RequestError::unexpected_response(
+                        status,
+                        "server responded with a permission set that contains at least one invalid permission"
+                    ).into()
+                );
+            };
 
-    if response_status == StatusCode::OK {
-        let user_permissions_response = response.json::<UserPermissionsResponse>().await?;
+            Ok(user_permission_set)
+        } else if status == StatusCode::NOT_FOUND {
+            let users_error_response = response.users_error_reason().await?;
 
-        let Ok(user_permission_set) =
-            PermissionSet::try_from_permission_names(user_permissions_response.permissions)
-        else {
-            return Err(ClientError::unexpected_response(
-                response_status,
-                "server responded with a permission set that contains at least one invalid permission",
-            ).into());
-        };
-
-        Ok(user_permission_set)
-    } else if response_status == StatusCode::NOT_FOUND {
-        let user_error_reason = response.users_error_reason().await?;
-
-        match user_error_reason {
-            UsersErrorReason::UserNotFound => Err(UserDataFetchError::NotFound),
-            _ => handle_unexpected_error_reason!(user_error_reason, response_status),
+            match users_error_response {
+                UsersErrorReason::UserNotFound => Err(UserDataFetchError::NotFound),
+                _ => Err(unexpected_error_reason(
+                    status,
+                    users_error_response,
+                )),
+            }
+        } else {
+            Err(unexpected_response(response).await)
         }
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+    };
+
+    client
+        .get()
+        .endpoint_url(format!("/users/{}/permissions", user_id))
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
@@ -197,72 +234,82 @@ pub enum UserDisplayNameUpdateError {
     DisplayNameAlreadyExists,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
 
-
-
-async fn update_user_display_name_by_user_id<C>(
-    client: &C,
-    user_id: UserId,
-    new_display_name: &str,
-) -> ClientResult<UserInfo, UserDisplayNameUpdateError>
-where
-    C: AuthenticatedHttpClient,
-{
-    let response = client
-        .patch_request_builder()
-        .endpoint_url(format!("/users/{}/display_name", user_id))
-        .json(&UserDisplayNameChangeRequest {
-            new_display_name: new_display_name.to_string(),
-        })
-        .send_authenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let user_display_name_change_response =
-            response.json::<UserDisplayNameChangeResponse>().await?;
-
-        Ok(user_display_name_change_response.user)
-    } else if response_status == StatusCode::FORBIDDEN {
-        let error_reason = response.error_reason().await?;
-
-        if let ErrorReason::Users(users_error_reason) = &error_reason {
-            if *users_error_reason == UsersErrorReason::CannotModifyYourOwnAccount {
-                return Err(UserDisplayNameUpdateError::CannotModifyYourself);
-            }
-        }
-
-        handle_error_reasons_or_catch_unexpected_status!(
-            { reason: error_reason, status_code: response_status },
-            [handlers::MissingPermissions]
-        );
-    } else if response_status == StatusCode::NOT_FOUND {
-        let user_error_reason = response.users_error_reason().await?;
-
-        match user_error_reason {
-            UsersErrorReason::UserNotFound => Err(UserDisplayNameUpdateError::NotFound),
-            _ => handle_unexpected_error_reason!(user_error_reason, response_status),
-        }
-    } else if response_status == StatusCode::CONFLICT {
-        let user_error_reason = response.users_error_reason().await?;
-
-        match user_error_reason {
-            UsersErrorReason::DisplayNameAlreadyExists => {
-                Err(UserDisplayNameUpdateError::DisplayNameAlreadyExists)
-            }
-            _ => handle_unexpected_error_reason!(user_error_reason, response_status),
-        }
-    } else {
-        handle_uncaught_status_code!(response_status);
+impl ResponseValueError for UserDisplayNameUpdateError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
     }
 }
+
+
+fn update_user_display_name_by_user_id_request<'c, C, S>(
+    client: &'c C,
+    user_id: UserId,
+    new_display_name: S,
+) -> BoundTypedRequest<'c, C, UserInfo, UserDisplayNameUpdateError>
+where
+    C: KolomoniHttpClient,
+    S: Into<String>,
+{
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let user_display_name_change = response
+                .into_json_body::<UserDisplayNameChangeResponse>()
+                .await?;
+
+            Ok(user_display_name_change.user)
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            if let ErrorReason::Users(users_error_reason) = &error_reason {
+                if users_error_reason == &UsersErrorReason::CannotModifyYourOwnAccount {
+                    return Err(UserDisplayNameUpdateError::CannotModifyYourself);
+                }
+            }
+
+            err_if_missing_permissions::<UserDisplayNameUpdateError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else if status == StatusCode::NOT_FOUND {
+            let users_error_reason = response.users_error_reason().await?;
+
+            match users_error_reason {
+                UsersErrorReason::UserNotFound => Err(UserDisplayNameUpdateError::NotFound),
+                _ => Err(unexpected_error_reason(
+                    status,
+                    users_error_reason,
+                )),
+            }
+        } else if status == StatusCode::CONFLICT {
+            let users_error_reason = response.users_error_reason().await?;
+
+            match users_error_reason {
+                UsersErrorReason::DisplayNameAlreadyExists => {
+                    Err(UserDisplayNameUpdateError::DisplayNameAlreadyExists)
+                }
+                _ => Err(unexpected_error_reason(
+                    status,
+                    users_error_reason,
+                )),
+            }
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .patch()
+        .endpoint_url(format!("/users/{}/display_name", user_id))
+        .json(&UserDisplayNameChangeRequest {
+            new_display_name: new_display_name.into(),
+        })
+        .build_request()
+        .into_bound_typed_request(response_parser)
+}
+
 
 
 
@@ -278,99 +325,100 @@ pub enum UserRolesAddError {
     CannotGiveOutRolesYouDontHave,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
+}
+
+impl ResponseValueError for UserRolesAddError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
 }
 
 
 
-async fn add_roles_to_user_by_user_id<C>(
-    client: &C,
+fn add_roles_to_user_by_user_id_request<'c, C>(
+    client: &'c C,
     user_id: UserId,
     roles_to_add: RoleSet,
-) -> ClientResult<RoleSet, UserRolesAddError>
+) -> BoundTypedRequest<'c, C, RoleSet, UserRolesAddError>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .post_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let updated_roles_response = response.into_json_body::<UserRolesResponse>().await?;
+
+            let Ok(updated_role_set) =
+                RoleSet::try_from_role_names(updated_roles_response.role_names)
+            else {
+                return Err(RequestError::unexpected_response(
+                    status,
+                    "server responded with a role set that contains at least one invalid role",
+                )
+                .into());
+            };
+
+            Ok(updated_role_set)
+        } else if status == StatusCode::BAD_REQUEST {
+            let error_reason = response.error_reason().await?;
+
+            #[allow(clippy::collapsible_match)]
+            if let ErrorReason::Users(users_error_reason) = &error_reason {
+                if let UsersErrorReason::InvalidRoleName { .. } = users_error_reason {
+                    return Err(RequestError::unexpected_response(
+                        status,
+                        "server rejected one of our role names as invalid; \
+                            this may indicate the client's available role set is out of date",
+                    )
+                    .into());
+                };
+            };
+
+            err_if_invalid_uuid::<UserRolesAddError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            if let ErrorReason::Users(users_error_reason) = &error_reason {
+                match users_error_reason {
+                    UsersErrorReason::CannotModifyYourOwnAccount => {
+                        return Err(UserRolesAddError::CannotModifyYourself);
+                    }
+                    UsersErrorReason::UnableToGiveOutUnownedRole { .. } => {
+                        return Err(UserRolesAddError::CannotGiveOutRolesYouDontHave);
+                    }
+                    _ => {}
+                }
+            }
+
+            err_if_missing_permissions::<UserRolesAddError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else if status == StatusCode::NOT_FOUND {
+            let users_error_reason = response.users_error_reason().await?;
+
+            match users_error_reason {
+                UsersErrorReason::UserNotFound => Err(UserRolesAddError::UserNotFound),
+                _ => Err(unexpected_error_reason(
+                    status,
+                    users_error_reason,
+                )),
+            }
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .post()
         .endpoint_url(format!("/users/{}/roles", user_id))
         .json(&UserRoleAddRequest {
             roles_to_add: roles_to_add.role_names(),
         })
-        .send_authenticated()
-        .await?;
-
-    let response_status = response.status();
-
-
-    if response_status == StatusCode::OK {
-        let user_roles_response = response.json::<UserRolesResponse>().await?;
-
-        let Ok(user_role_set) = RoleSet::try_from_role_names(user_roles_response.role_names) else {
-            return Err(ClientError::unexpected_response(
-                response_status,
-                "server responded with a role set that contains at least one invalid role",
-            )
-            .into());
-        };
-
-        Ok(user_role_set)
-    } else if response_status == StatusCode::BAD_REQUEST {
-        let error_reason = response.error_reason().await?;
-
-        if let ErrorReason::Users(users_error_reason) = &error_reason {
-            if matches!(
-                users_error_reason,
-                UsersErrorReason::InvalidRoleName { .. }
-            ) {
-                return Err(ClientError::unexpected_response(
-                    response_status,
-                    "server rejected one of our role names as invalid; \
-                    this may indicate the client's available role set is out of date",
-                )
-                .into());
-            }
-        }
-
-        handle_error_reasons_or_catch_unexpected_status!(
-            { reason: error_reason, status_code: response_status },
-            [handlers::InvalidUuidFormat]
-        );
-    } else if response_status == StatusCode::FORBIDDEN {
-        let error_reason = response.error_reason().await?;
-
-        if let ErrorReason::Users(users_error_reason) = &error_reason {
-            match users_error_reason {
-                UsersErrorReason::CannotModifyYourOwnAccount => {
-                    return Err(UserRolesAddError::CannotModifyYourself)
-                }
-                UsersErrorReason::UnableToGiveOutUnownedRole { .. } => {
-                    return Err(UserRolesAddError::CannotGiveOutRolesYouDontHave)
-                }
-                _ => {}
-            }
-        }
-
-
-        handle_error_reasons_or_catch_unexpected_status!(
-            { reason: error_reason, status_code: response_status },
-            [handlers::MissingPermissions]
-        );
-    } else if response_status == StatusCode::NOT_FOUND {
-        let user_error_reason = response.users_error_reason().await?;
-
-        match user_error_reason {
-            UsersErrorReason::UserNotFound => Err(UserRolesAddError::UserNotFound),
-            _ => handle_unexpected_error_reason!(user_error_reason, response_status),
-        }
-    } else {
-        handle_uncaught_status_code!(response_status);
-    }
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
-
 
 
 #[derive(Debug, Error)]
@@ -385,206 +433,227 @@ pub enum UserRolesRemoveError {
     CannotTakeAwayRolesYouDontHave,
 
     #[error(transparent)]
-    ClientError {
-        #[from]
-        error: ClientError,
-    },
+    RequestError(#[from] RequestError),
 }
 
+impl ResponseValueError for UserRolesRemoveError {
+    fn from_request_error(error: RequestError) -> Self {
+        Self::RequestError(error)
+    }
+}
 
-
-async fn remove_roles_from_user_by_user_id<C>(
-    client: &C,
+fn remove_roles_from_user_by_user_id_request<'c, C>(
+    client: &'c C,
     user_id: UserId,
     roles_to_remove: RoleSet,
-) -> ClientResult<RoleSet, UserRolesRemoveError>
+) -> BoundTypedRequest<'c, C, RoleSet, UserRolesRemoveError>
 where
-    C: AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = client
-        .delete_request_builder()
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let user_roles_response = response.into_json_body::<UserRolesResponse>().await?;
+
+            let Ok(user_role_set) = RoleSet::try_from_role_names(user_roles_response.role_names)
+            else {
+                return Err(RequestError::unexpected_response(
+                    status,
+                    "server responded with a role set that contains at least one invalid role",
+                )
+                .into());
+            };
+
+            Ok(user_role_set)
+        } else if status == StatusCode::BAD_REQUEST {
+            let error_reason = response.error_reason().await?;
+
+            if let ErrorReason::Users(users_error_reason) = &error_reason {
+                if matches!(
+                    users_error_reason,
+                    UsersErrorReason::InvalidRoleName { .. }
+                ) {
+                    return Err(RequestError::unexpected_response(
+                        status,
+                        "server rejected one of our role names as invalid; \
+                        this may indicate the client's available role set is out of date",
+                    )
+                    .into());
+                }
+            }
+
+            err_if_invalid_uuid::<UserRolesRemoveError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else if status == StatusCode::FORBIDDEN {
+            let error_reason = response.error_reason().await?;
+
+            if let ErrorReason::Users(users_error_reason) = &error_reason {
+                match users_error_reason {
+                    UsersErrorReason::CannotModifyYourOwnAccount => {
+                        return Err(UserRolesRemoveError::CannotModifyYourself)
+                    }
+                    UsersErrorReason::UnableToTakeAwayUnownedRole { .. } => {
+                        return Err(UserRolesRemoveError::CannotTakeAwayRolesYouDontHave)
+                    }
+                    _ => {}
+                }
+            }
+
+            err_if_missing_permissions::<UserRolesRemoveError>(status, &error_reason)?;
+            Err(unexpected_error_reason(status, error_reason))
+        } else if status == StatusCode::NOT_FOUND {
+            let users_error_reason = response.users_error_reason().await?;
+
+            match users_error_reason {
+                UsersErrorReason::UserNotFound => Err(UserRolesRemoveError::UserNotFound),
+                _ => Err(unexpected_error_reason(
+                    status,
+                    users_error_reason,
+                )),
+            }
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .delete()
         .endpoint_url(format!("/users/{}/roles", user_id))
         .json(&UserRoleRemoveRequest {
             roles_to_remove: roles_to_remove.role_names(),
         })
-        .send_authenticated()
-        .await?;
+        .build_request()
+        .into_bound_typed_request(response_parser)
+}
 
-    let response_status = response.status();
 
+pub trait SpecificUserUnauthenticatedEndpoints<'c, C>: EndpointGroup<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    fn get_user_information_by_user_id(
+        &'c self,
+        user_id: UserId,
+    ) -> BoundTypedRequest<'c, C, UserInfo, UserDataFetchError> {
+        get_user_information_by_user_id_request(self.client(), user_id)
+    }
 
-    if response_status == StatusCode::OK {
-        let user_roles_response = response.json::<UserRolesResponse>().await?;
+    fn get_user_roles_by_user_id(
+        &'c self,
+        user_id: UserId,
+    ) -> BoundTypedRequest<'c, C, RoleSet, UserDataFetchError> {
+        get_user_roles_by_user_id_request(self.client(), user_id)
+    }
 
-        let Ok(user_role_set) = RoleSet::try_from_role_names(user_roles_response.role_names) else {
-            return Err(ClientError::unexpected_response(
-                response_status,
-                "server responded with a role set that contains at least one invalid role",
-            )
-            .into());
-        };
+    fn get_user_effective_permissions_by_user_id(
+        &'c self,
+        user_id: UserId,
+    ) -> BoundTypedRequest<'c, C, PermissionSet, UserDataFetchError> {
+        get_user_effective_permissions_by_user_id_request(self.client(), user_id)
+    }
+}
 
-        Ok(user_role_set)
-    } else if response_status == StatusCode::BAD_REQUEST {
-        let error_reason = response.error_reason().await?;
+pub trait SpecificUserAuthenticatedEndpoints<'c, C>: EndpointGroup<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    fn get_all_registered_users(&'c self) -> BoundTypedRequest<'c, C, Vec<UserInfo>, UserListError> {
+        get_all_registered_users_request(self.client())
+    }
 
-        if let ErrorReason::Users(users_error_reason) = &error_reason {
-            if matches!(
-                users_error_reason,
-                UsersErrorReason::InvalidRoleName { .. }
-            ) {
-                return Err(ClientError::unexpected_response(
-                    response_status,
-                    "server rejected one of our role names as invalid; \
-                    this may indicate the client's available role set is out of date",
-                )
-                .into());
-            }
-        }
+    fn update_user_display_name_by_user_id<U>(
+        &'c self,
+        user_id: UserId,
+        new_display_name: U,
+    ) -> BoundTypedRequest<'c, C, UserInfo, UserDisplayNameUpdateError>
+    where
+        U: Into<String>,
+    {
+        update_user_display_name_by_user_id_request(self.client(), user_id, new_display_name)
+    }
 
-        handle_error_reasons_or_catch_unexpected_status!(
-            { reason: error_reason, status_code: response_status },
-            [handlers::InvalidUuidFormat]
-        );
-    } else if response_status == StatusCode::FORBIDDEN {
-        let error_reason = response.error_reason().await?;
+    fn add_roles_to_user_by_user_id(
+        &'c self,
+        user_id: UserId,
+        roles_to_add: RoleSet,
+    ) -> BoundTypedRequest<'c, C, RoleSet, UserRolesAddError> {
+        add_roles_to_user_by_user_id_request(self.client(), user_id, roles_to_add)
+    }
 
-        if let ErrorReason::Users(users_error_reason) = &error_reason {
-            match users_error_reason {
-                UsersErrorReason::CannotModifyYourOwnAccount => {
-                    return Err(UserRolesRemoveError::CannotModifyYourself)
-                }
-                UsersErrorReason::UnableToTakeAwayUnownedRole { .. } => {
-                    return Err(UserRolesRemoveError::CannotTakeAwayRolesYouDontHave)
-                }
-                _ => {}
-            }
-        }
-
-        handle_error_reasons_or_catch_unexpected_status!(
-            { reason: error_reason, status_code: response_status },
-            [handlers::MissingPermissions]
-        );
-    } else if response_status == StatusCode::NOT_FOUND {
-        let users_error_reason = response.users_error_reason().await?;
-
-        match users_error_reason {
-            UsersErrorReason::UserNotFound => Err(UserRolesRemoveError::UserNotFound),
-            _ => handle_unexpected_error_reason!(users_error_reason, response_status),
-        }
-    } else {
-        handle_uncaught_status_code!(response_status);
+    fn remove_roles_from_user_by_user_id(
+        &'c self,
+        user_id: UserId,
+        roles_to_remove: RoleSet,
+    ) -> BoundTypedRequest<'c, C, RoleSet, UserRolesRemoveError> {
+        remove_roles_from_user_by_user_id_request(self.client(), user_id, roles_to_remove)
     }
 }
 
 
-
-
 pub struct SpecificUserUnauthenticatedApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     client: &'c C,
 }
 
 impl<'c, C> SpecificUserUnauthenticatedApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
+}
 
-    pub async fn get_user_information_by_user_id(
-        &self,
-        user_id: UserId,
-    ) -> Result<UserInfo, UserDataFetchError> {
-        get_user_information_by_user_id(self.client, user_id).await
+impl<'c, C> EndpointGroup<'c, C> for SpecificUserUnauthenticatedApi<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    fn client(&'c self) -> &'c C {
+        self.client
     }
+}
 
-    pub async fn get_user_roles_by_user_id(
-        &self,
-        user_id: UserId,
-    ) -> Result<RoleSet, UserDataFetchError> {
-        get_user_roles_by_user_id(self.client, user_id).await
-    }
-
-    pub async fn get_user_effective_permissions_by_user_id(
-        &self,
-        user_id: UserId,
-    ) -> Result<PermissionSet, UserDataFetchError> {
-        get_user_effective_permissions_by_user_id(self.client, user_id).await
-    }
+impl<'c, C> SpecificUserUnauthenticatedEndpoints<'c, C> for SpecificUserUnauthenticatedApi<'c, C> where
+    C: KolomoniHttpClient
+{
 }
 
 
 
-pub struct AuthenticatedSpecificUserApi<'c, C>
+pub struct SpecificUserAuthenticatedApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     client: &'c C,
 }
 
-impl<'c, C> AuthenticatedSpecificUserApi<'c, C>
+impl<'c, C> SpecificUserAuthenticatedApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
     pub(crate) const fn new(client: &'c C) -> Self {
         Self { client }
     }
+}
 
-
-    pub async fn get_user_information_by_user_id(
-        &self,
-        user_id: UserId,
-    ) -> Result<UserInfo, UserDataFetchError> {
-        get_user_information_by_user_id(self.client, user_id).await
+impl<'c, C> EndpointGroup<'c, C> for SpecificUserAuthenticatedApi<'c, C>
+where
+    C: KolomoniHttpClient,
+{
+    fn client(&'c self) -> &'c C {
+        self.client
     }
+}
 
-    pub async fn get_user_roles_by_user_id(
-        &self,
-        user_id: UserId,
-    ) -> Result<RoleSet, UserDataFetchError> {
-        get_user_roles_by_user_id(self.client, user_id).await
-    }
+impl<'c, C> SpecificUserUnauthenticatedEndpoints<'c, C> for SpecificUserAuthenticatedApi<'c, C> where
+    C: KolomoniHttpClient
+{
+}
 
-    pub async fn get_user_effective_permissions_by_user_id(
-        &self,
-        user_id: UserId,
-    ) -> Result<PermissionSet, UserDataFetchError> {
-        get_user_effective_permissions_by_user_id(self.client, user_id).await
-    }
-
-
-    pub async fn get_all_registered_users(&self) -> Result<Vec<UserInfo>, ClientError> {
-        get_all_registered_users(self.client).await
-    }
-
-    pub async fn update_user_display_name_by_user_id<U>(
-        &self,
-        user_id: UserId,
-        new_display_name: U,
-    ) -> Result<UserInfo, UserDisplayNameUpdateError>
-    where
-        U: AsRef<str>,
-    {
-        update_user_display_name_by_user_id(self.client, user_id, new_display_name.as_ref()).await
-    }
-
-    pub async fn add_roles_to_user_by_user_id(
-        &self,
-        user_id: UserId,
-        roles_to_add: RoleSet,
-    ) -> Result<RoleSet, UserRolesAddError> {
-        add_roles_to_user_by_user_id(self.client, user_id, roles_to_add).await
-    }
-
-    pub async fn remove_roles_from_user_by_user_id(
-        &self,
-        user_id: UserId,
-        roles_to_remove: RoleSet,
-    ) -> Result<RoleSet, UserRolesRemoveError> {
-        remove_roles_from_user_by_user_id(self.client, user_id, roles_to_remove).await
-    }
+impl<'c, C> SpecificUserAuthenticatedEndpoints<'c, C> for SpecificUserAuthenticatedApi<'c, C> where
+    C: KolomoniHttpClient
+{
 }

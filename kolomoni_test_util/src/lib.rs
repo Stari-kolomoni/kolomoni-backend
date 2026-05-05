@@ -8,8 +8,8 @@ pub mod server;
 
 use std::env;
 
-use kolomoni_api_client::ApiServer;
-use prelude::{TestServerClient, UnauthanticatedTestServerClient};
+use kolomoni_api_client::server::KolomoniApiServer;
+use prelude::UnauthanticatedTestServerClient;
 
 
 const TEST_SERVER_BASE_URL_ENVIRONMENT_VAR_NAME: &str = "KOLOMONI_TEST_SERVER_URL";
@@ -25,7 +25,7 @@ pub async fn initialize_fresh_test_server() -> UnauthanticatedTestServerClient {
         });
 
     let test_server =
-        ApiServer::new_from_server_url_and_base_api_path(&test_server_base_url, "/api/v1/")
+        KolomoniApiServer::new_from_server_url_and_base_api_path(&test_server_base_url, "/api/v1/")
             .unwrap_or_else(|error| {
                 panic!(
                     "failed to initialize fresh test server: invalid base url: {}",

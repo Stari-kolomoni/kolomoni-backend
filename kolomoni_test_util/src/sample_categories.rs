@@ -1,8 +1,7 @@
 use chrono::Utc;
 use kolomoni_api_client::{
-    api::dictionary::categories::CategoryToCreate,
-    AuthenticatedKolomoniClient,
-    SharedApiClientEndpointGroups,
+    api::dictionary::categories::{CategoryToCreate, DictionaryCategoriesAuthenticatedEndpoints},
+    client::AuthenticatedKolomoniClient,
 };
 use kolomoni_core::api_models::Category;
 
@@ -44,6 +43,7 @@ impl SampleCategory {
                 slovene_category_name: self.slovene_name().to_owned(),
                 parent_category_id: None,
             })
+            .send()
             .await
             .expect("failed to create new sample category");
 

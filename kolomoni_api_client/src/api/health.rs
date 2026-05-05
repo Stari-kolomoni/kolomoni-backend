@@ -1,86 +1,90 @@
-use std::future::Future;
-
 use kolomoni_core::api_models::PingResponse;
+use reqwest::StatusCode;
+use thiserror::Error;
 
 use crate::{
-    errors::ClientResult,
-    request::RequestBuilder,
-    AuthenticatedHttpClient,
-    Client,
-    UnauthenticatedHttpClient,
+    api::EndpointGroup,
+    client::{errors::RequestError, KolomoniHttpClient},
+    parsing::unexpected_response,
+    request::{
+        typed::{BoundTypedRequest, IntoBoundTypedRequest},
+        ToRequestBuilder,
+    },
+    response::{raw::RawResponse, ResponseValueError},
 };
 
-
-pub trait SharedHealthEndpoints {
-    fn ping(&self) -> impl Future<Output = ClientResult<bool>>;
+#[derive(Debug, Error)]
+pub enum PingError {
+    #[error(transparent)]
+    RequestError(#[from] RequestError),
 }
 
+impl ResponseValueError for PingError {
+    fn from_request_error(client_error: RequestError) -> Self {
+        Self::RequestError(client_error)
+    }
+}
 
-async fn ping<C>(client: &C) -> ClientResult<bool>
+#[inline]
+pub(super) fn ping_request<'c, C>(client: &'c C) -> BoundTypedRequest<'c, C, bool, PingError>
 where
-    C: UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    let response = RequestBuilder::get(client)
+    let response_parser = async |response: RawResponse| {
+        let status = response.status();
+
+        if status == StatusCode::OK {
+            let ping_response = response.into_json_body::<PingResponse>().await?;
+
+            Ok(ping_response.ok)
+        } else {
+            Err(unexpected_response(response).await)
+        }
+    };
+
+    client
+        .get()
         .endpoint_url("/health/ping")
-        .send_unauthenticated()
-        .await?;
-
-    let response_body: PingResponse = response.json().await?;
-
-    Ok(response_body.ok)
+        .build_request()
+        .into_bound_typed_request(response_parser)
 }
 
 
 
-pub struct HealthUnauthenticatedApi<'c, C>
+pub trait HealthAnonymousEndpoints<'c, C>: EndpointGroup<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
+{
+    #[inline(always)]
+    fn ping(&'c self) -> BoundTypedRequest<'c, C, bool, PingError> {
+        ping_request(self.client())
+    }
+}
+
+pub struct HealthApi<'c, C>
+where
+    C: KolomoniHttpClient,
 {
     client: &'c C,
 }
 
-impl<'c, C> HealthUnauthenticatedApi<'c, C>
+impl<'c, C> HealthApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    pub(crate) const fn new(client: &'c C) -> Self {
+    #[inline(always)]
+    pub(crate) fn new(client: &'c C) -> Self {
         Self { client }
     }
 }
 
-impl<C> SharedHealthEndpoints for HealthUnauthenticatedApi<'_, C>
+impl<'c, C> EndpointGroup<'c, C> for HealthApi<'c, C>
 where
-    C: Client + UnauthenticatedHttpClient,
+    C: KolomoniHttpClient,
 {
-    async fn ping(&self) -> ClientResult<bool> {
-        ping(self.client).await
+    fn client(&'c self) -> &'c C {
+        self.client
     }
 }
 
-
-
-pub struct HealthAuthenticatedApi<'c, C>
-where
-    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
-{
-    client: &'c C,
-}
-
-impl<'c, C> HealthAuthenticatedApi<'c, C>
-where
-    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
-{
-    pub(crate) const fn new(client: &'c C) -> Self {
-        Self { client }
-    }
-}
-
-
-impl<C> SharedHealthEndpoints for HealthAuthenticatedApi<'_, C>
-where
-    C: Client + UnauthenticatedHttpClient + AuthenticatedHttpClient,
-{
-    async fn ping(&self) -> ClientResult<bool> {
-        ping(self.client).await
-    }
-}
+impl<'c, C> HealthAnonymousEndpoints<'c, C> for HealthApi<'c, C> where C: KolomoniHttpClient {}

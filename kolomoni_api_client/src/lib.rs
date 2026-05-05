@@ -1,13 +1,13 @@
 //! A client for Stari Kolomoni implementing **(!) a subset of its API (!)**.
 
-pub(crate) mod macros;
+use std::{future::Future, pin::Pin};
 
 pub mod api;
 pub mod authentication;
-mod clients;
-pub mod errors;
+pub mod client;
+pub(crate) mod parsing;
 pub mod request;
 pub mod response;
-pub use clients::*;
-mod server;
-pub use server::*;
+pub mod server;
+
+pub(crate) type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

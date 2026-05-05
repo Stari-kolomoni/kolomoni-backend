@@ -61,7 +61,8 @@ pub struct InvalidServerUrl {
 }
 
 
-pub struct ApiServer {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KolomoniApiServer {
     /// Contains only the server url (without any path segments),
     /// e.g. `http://127.0.0.1:8866`.
     server_url: Url,
@@ -71,7 +72,7 @@ pub struct ApiServer {
     full_preconstructed_base_url: Url,
 }
 
-impl ApiServer {
+impl KolomoniApiServer {
     pub fn new_from_server_url<S>(
         server_host: S,
         options: ApiServerOptions,

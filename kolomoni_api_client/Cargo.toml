@@ -13,7 +13,11 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
-reqwest = { workspace = true, features = ["zstd", "json"]}
+reqwest = {
+    workspace = true,
+    default-features = false,
+    features = ["system-proxy", "rustls", "gzip", "zstd"]
+}
 url = { workspace = true }
 
 chrono = { workspace = true }
@@ -23,4 +27,6 @@ mime = { workspace = true }
 
 
 [features]
-unrestrict_authenticated_calls = []
+# Exposes an unrestricted version of the unauthenticated client (UnrestrictedUnauthenticatedKolomoniClient),
+# which does not impose type-level restrictions on what endpoints can be called without authentication.
+unrestricted_client = []

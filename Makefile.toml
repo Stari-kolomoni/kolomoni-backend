@@ -67,6 +67,13 @@ command = "cargo"
 args = ["run"]
 cwd = "."
 
+[tasks."backend:run:test-enabled"]
+clear = true
+workspace = false
+command = "cargo"
+args = ["run", "--package", "kolomoni", "--features", "e2e-testing"]
+cwd = "."
+
 [tasks."backend:openapi:run"]
 clear = true
 workspace = false
