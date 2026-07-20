@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use kolomoni_core::api_models::{
     ErrorReason,
     RegisteredUsersListResponse,
@@ -31,6 +32,21 @@ use crate::request::ToRequestBuilder;
 use crate::response::raw::RawResponse;
 use crate::response::ResponseValueError;
 pub mod current;
+
+/// Returned from conditional requests for user information
+/// based on the `If-Modified-Since` header:
+/// - If `Self::Unmodified`,
+///   the user has not been modified since the provided datetime
+///   and the response does not contain the user information,
+///   just the `Last-Modified` header.
+/// - If `Self::Modified`,
+///   the user has been modified since the provided datetime
+///   and therefore the response contains the full user information.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ConditionalUserInfo {
+    Unmodified { last_modified_at: DateTime<Utc> },
+    Modified { user: UserInfo },
+}
 
 
 #[derive(Debug, Error)]

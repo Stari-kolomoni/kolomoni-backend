@@ -564,7 +564,8 @@ pub async fn add_roles_to_specific_user(
     // Intended for moderation tooling.
     let authenticated_user = require_user_authentication!(authentication_extractor);
     let authenticated_user_roles = authenticated_user.fetch_roles(&mut transaction).await?;
-    let authenticated_user_effective_permissions = authenticated_user_roles.granted_permission_set();
+    let authenticated_user_effective_permissions =
+        authenticated_user_roles.to_granted_permission_set();
 
     require_permission_in_set!(
         authenticated_user_effective_permissions,
@@ -739,7 +740,8 @@ pub async fn remove_roles_from_specific_user(
     // Intended for moderation tooling.
     let authenticated_user = require_user_authentication!(authentication_extractor);
     let authenticated_user_roles = authenticated_user.fetch_roles(&mut transaction).await?;
-    let authenticated_user_effective_permissions = authenticated_user_roles.granted_permission_set();
+    let authenticated_user_effective_permissions =
+        authenticated_user_roles.to_granted_permission_set();
 
     require_permission_in_set!(
         authenticated_user_effective_permissions,

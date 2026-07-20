@@ -1,0 +1,15 @@
+[package]
+name = "kolomoni_test_macros"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+tokio = { workspace = true }
+
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro-error2 = { workspace = true }
+proc-macro2 = { workspace = true }

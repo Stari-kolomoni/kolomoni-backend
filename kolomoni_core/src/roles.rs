@@ -99,9 +99,6 @@ impl Role {
 }
 
 /// The default role given to newly-registered users.
-#[deprecated = "use DEFAULT_USER_ROLE_SET instead"]
-pub const DEFAULT_USER_ROLE: Role = Role::User;
-
 pub static DEFAULT_USER_ROLE_SET: LazyLock<RoleSet> = LazyLock::new(|| {
     RoleSet::from_role_set(maplit::hashset! {
         Role::User
@@ -160,6 +157,20 @@ impl RoleSet {
         Ok(Self::from_role_set(role_hash_set))
     }
 
+    /// Adds a new role into this [`RoleSet`],
+    /// returning `true` if the role has been newly inserted
+    /// and `false` if the role was already present in the set.
+    pub fn add_role(&mut self, role: Role) -> bool {
+        self.roles.insert(role)
+    }
+
+    /// Removes a role from this [`RoleSet`],
+    /// returning `true` if the role has been just removed
+    /// and `false` if the role was not present in the set.
+    pub fn remove_role(&mut self, role: &Role) -> bool {
+        self.roles.remove(role)
+    }
+
     pub fn from_roles(roles: &[Role]) -> Self {
         let roles = roles.iter().copied().collect();
 
@@ -171,7 +182,9 @@ impl RoleSet {
         self.roles.contains(role)
     }
 
-    pub fn granted_permission_set(&self) -> PermissionSet {
+    /// Returns a [`PermissionSet`] containing a union of all the permissions
+    /// that all the roles in this [`RoleSet`] grant.
+    pub fn to_granted_permission_set(&self) -> PermissionSet {
         let mut permission_hash_set = HashSet::new();
 
         for role in self.roles.iter() {

@@ -22,9 +22,10 @@ members = [
     "kolomoni_seeder",
     "kolomoni_search_core",
     "kolomoni_search",
+    "kolomoni_test_core",
+    "kolomoni_test_macros",
     "kolomoni_test",
-    "kolomoni_test_util",
-    "kolomoni_cache"
+    "kolomoni_cache",
 ]
 
 

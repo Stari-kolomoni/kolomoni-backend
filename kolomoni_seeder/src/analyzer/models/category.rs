@@ -63,13 +63,13 @@ impl InternalId for IntermediateCategory {
 
 
 pub struct IntermediateCategoryOutputContext<'a> {
-    intemediate_categories: &'a GrowingKeyedSet<IntermediateCategory>,
+    intermediate_categories: &'a GrowingKeyedSet<IntermediateCategory>,
 }
 
 impl<'a> IntermediateCategoryOutputContext<'a> {
-    pub fn new(intemediate_categories: &'a GrowingKeyedSet<IntermediateCategory>) -> Self {
+    pub fn new(intermediate_categories: &'a GrowingKeyedSet<IntermediateCategory>) -> Self {
         Self {
-            intemediate_categories,
+            intermediate_categories,
         }
     }
 
@@ -79,7 +79,7 @@ impl<'a> IntermediateCategoryOutputContext<'a> {
     ) -> Option<&IntermediateCategory> {
         let mut target_category_internal_id = None;
 
-        for category in self.intemediate_categories.values() {
+        for category in self.intermediate_categories.values() {
             if english_category_name == category.english_name {
                 target_category_internal_id = Some(category.internal_id);
             }
@@ -87,7 +87,7 @@ impl<'a> IntermediateCategoryOutputContext<'a> {
 
         let target_category_internal_id = target_category_internal_id?;
 
-        self.intemediate_categories
+        self.intermediate_categories
             .get(&target_category_internal_id)
     }
 }
@@ -99,6 +99,9 @@ pub enum IntermediateCategoryOutputError {
     ParentCategoryNotFoundByName {
         missing_parent_category_english_name: String,
     },
+
+    #[error("failed to abbreviate english or slovene name")]
+    NameAbbreviationError,
 }
 
 
@@ -111,15 +114,37 @@ impl TryToOutputModelWithContext for IntermediateCategory {
         &self,
         context: &'a Self::Context<'a>,
     ) -> Result<Self::OutputModel, Self::Error> {
+        // We create "abbreviations" here because the input category names
+        // are e.g. "D&D 5e | Opredeljenost", where "D&D 5e" is its parent category name
+        // but we only want to emit "Opredeljenost", since the parent relationship
+        // is kept track of separately.
+
+        let abbreviated_english_name = self
+            .english_name
+            .split('|')
+            .next_back()
+            .ok_or(IntermediateCategoryOutputError::NameAbbreviationError)?
+            .trim();
+
+        let abbreviated_slovene_name = self
+            .slovene_name
+            .split('|')
+            .next_back()
+            .ok_or(IntermediateCategoryOutputError::NameAbbreviationError)?
+            .trim();
+
+
         let IntermediateCategoryParentState::ByName {
             english_name: parent_category_english_name,
         } = &self.parent_category
         else {
             return Ok(Category {
                 internal_id: self.internal_id,
-                english_name: self.english_name.clone(),
+                full_english_name: self.english_name.clone(),
+                abbreviated_english_name: abbreviated_english_name.to_owned(),
                 english_description: self.english_description.clone(),
-                slovene_name: self.slovene_name.clone(),
+                full_slovene_name: self.slovene_name.clone(),
+                abbreviated_slovene_name: abbreviated_slovene_name.to_owned(),
                 slovene_description: self.slovene_description.clone(),
                 parent_category: None,
             });
@@ -139,9 +164,11 @@ impl TryToOutputModelWithContext for IntermediateCategory {
         Ok(Category {
             // It is crucial that the internal_id is persisted (this is how we look up individual objects, e.g. categories).
             internal_id: self.internal_id,
-            english_name: self.english_name.clone(),
+            full_english_name: self.english_name.clone(),
+            abbreviated_english_name: abbreviated_english_name.to_owned(),
             english_description: self.english_description.clone(),
-            slovene_name: self.slovene_name.clone(),
+            full_slovene_name: self.slovene_name.clone(),
+            abbreviated_slovene_name: abbreviated_slovene_name.to_owned(),
             slovene_description: self.slovene_description.clone(),
             parent_category: Some(parent_category.internal_id()),
         })
@@ -155,13 +182,17 @@ impl TryToOutputModelWithContext for IntermediateCategory {
 pub struct Category {
     internal_id: InternalCategoryId,
 
-    pub english_name: String,
+    pub full_english_name: String,
+
+    pub abbreviated_english_name: String,
 
     // TODO Integrate category descriptions into the backend.
     #[allow(dead_code)]
     pub english_description: Option<String>,
 
-    pub slovene_name: String,
+    pub full_slovene_name: String,
+
+    pub abbreviated_slovene_name: String,
 
     // TODO Integrate category descriptions into the backend.
     #[allow(dead_code)]

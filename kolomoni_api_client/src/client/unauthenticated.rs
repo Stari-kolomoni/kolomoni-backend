@@ -39,6 +39,7 @@ impl Default for UnauthenticatedClientOptions {
 }
 
 
+#[derive(Debug, Clone)]
 pub struct UnauthenticatedKolomoniClient {
     api_server: Arc<KolomoniApiServer>,
     http_client: reqwest::Client,

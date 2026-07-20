@@ -1,5 +1,5 @@
 [package]
-name = "kolomoni_test_util"
+name = "kolomoni_test_core"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,6 +10,8 @@ kolomoni_core = { path = "../kolomoni_core", features = ["serde_impls_for_client
 kolomoni_api_client = { path = "../kolomoni_api_client" }
 kolomoni_database = { path = "../kolomoni_database" }
 kolomoni_configuration = { path = "../kolomoni_configuration" }
+
+kolomoni_test_macros = { path = "../kolomoni_test_macros" }
 
 actix-web = { workspace = true }
 actix-http = { workspace = true }

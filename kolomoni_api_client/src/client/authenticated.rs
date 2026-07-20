@@ -26,6 +26,7 @@ use crate::{
     server::KolomoniApiServer,
 };
 
+#[derive(Debug, Clone)]
 pub struct AuthenticatedKolomoniClient {
     server: Arc<KolomoniApiServer>,
     authentication: ClientAuthentication,

@@ -108,7 +108,28 @@ where
 {
     let status = response.status();
 
-    if status == StatusCode::INTERNAL_SERVER_ERROR {
+    if status == StatusCode::UNAUTHORIZED {
+        let error_response_result = response.error_reason().await;
+        match error_response_result {
+            Ok(error_reason) => match error_reason {
+                ErrorReason::MissingAuthentication => {
+                    E::from_request_error(RequestError::MissingAuthentication)
+                }
+                other_error_reason => E::from_request_error(RequestError::unexpected_error_reason(
+                    other_error_reason,
+                    status,
+                )),
+            },
+            Err(_) => {
+                // This might just mean that the server did not respond with an ErrorReason,
+                // which is certainly possible (but not expected in this case).
+                E::from_request_error(RequestError::unexpected_response(
+                    status,
+                    "unexpected response (no error reason provided)",
+                ))
+            }
+        }
+    } else if status == StatusCode::INTERNAL_SERVER_ERROR {
         E::from_request_error(RequestError::internal_server_error())
     } else {
         let error_response_result = response.error_reason().await;

@@ -1,19 +1,7 @@
-use std::{
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
-
 use kolomoni_api_client::{
     api::health::{HealthAnonymousEndpoints, HealthApi},
-    authentication::ClientAuthentication,
-    client::{
-        AuthenticatedKolomoniClient,
-        KolomoniHttpClient,
-        UnauthenticatedClientOptions,
-        UnauthenticatedKolomoniClient,
-    },
+    client::KolomoniHttpClient,
     request::ToRequestBuilder,
-    server::KolomoniApiServer,
 };
 use kolomoni_core::{
     api_models::{GiveAdministratorRoleRequest, ResetUserRolesRequest},
@@ -21,24 +9,19 @@ use kolomoni_core::{
 };
 use reqwest::StatusCode;
 
-
-pub const TEST_USER_AGENT: &str = concat!("kolomoni-e2e-test/v", env!("CARGO_PKG_VERSION"));
-
-
-
-pub struct TestingEndpoints<'s, C>
+pub struct AssertableTestingEndpoints<'s, C>
 where
     C: KolomoniHttpClient,
 {
     client: &'s C,
 }
 
-impl<'s, C> TestingEndpoints<'s, C>
+impl<'s, C> AssertableTestingEndpoints<'s, C>
 where
     C: KolomoniHttpClient,
 {
     #[inline]
-    fn new(client: &'s C) -> Self {
+    pub(super) fn new(client: &'s C) -> Self {
         Self { client }
     }
 
@@ -155,7 +138,7 @@ where
     C: KolomoniHttpClient,
 {
     #[inline]
-    fn new(inner: HealthApi<'c, C>) -> Self {
+    pub(super) fn new(inner: HealthApi<'c, C>) -> Self {
         Self { inner }
     }
 
@@ -168,135 +151,5 @@ where
             .expect("failed to ping server");
 
         assert!(ping_result, "server is not healthy");
-    }
-}
-
-
-
-#[deprecated]
-pub trait TestServerClient {
-    type Testing<'c>
-    where
-        Self: 'c;
-
-    type AssertableHealth<'c>
-    where
-        Self: 'c;
-
-    fn testing(&self) -> Self::Testing<'_>;
-
-    fn assertable_health(&self) -> Self::AssertableHealth<'_>;
-}
-
-
-
-
-pub struct UnauthanticatedTestServerClient {
-    client: UnauthenticatedKolomoniClient,
-}
-
-impl UnauthanticatedTestServerClient {
-    pub fn new<S>(server: S) -> Self
-    where
-        S: Into<KolomoniApiServer>,
-    {
-        let client = UnauthenticatedKolomoniClient::new_with_options(
-            Arc::new(server.into()),
-            UnauthenticatedClientOptions::default(),
-        )
-        .expect("failed to initialize API client with provided server");
-
-        Self { client }
-    }
-
-    pub fn with_authentication(
-        &self,
-        authentication: ClientAuthentication,
-    ) -> AuthenticatedTestServerClient {
-        AuthenticatedTestServerClient {
-            client: self.client.with_authentication(authentication),
-        }
-    }
-}
-
-impl UnauthanticatedTestServerClient {
-    pub fn testing<'c>(&'c self) -> TestingEndpoints<'c, UnauthenticatedKolomoniClient> {
-        TestingEndpoints::new(&self.client)
-    }
-
-    pub fn assertable_health<'c>(
-        &'c self,
-    ) -> AssertableHealthEndpoints<'c, UnauthenticatedKolomoniClient> {
-        AssertableHealthEndpoints::new(self.client.health())
-    }
-}
-
-impl Deref for UnauthanticatedTestServerClient {
-    type Target = UnauthenticatedKolomoniClient;
-
-    fn deref(&self) -> &Self::Target {
-        &self.client
-    }
-}
-
-impl DerefMut for UnauthanticatedTestServerClient {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.client
-    }
-}
-
-impl AsRef<UnauthenticatedKolomoniClient> for UnauthanticatedTestServerClient {
-    fn as_ref(&self) -> &UnauthenticatedKolomoniClient {
-        &self.client
-    }
-}
-
-impl AsMut<UnauthenticatedKolomoniClient> for UnauthanticatedTestServerClient {
-    fn as_mut(&mut self) -> &mut UnauthenticatedKolomoniClient {
-        &mut self.client
-    }
-}
-
-
-
-pub struct AuthenticatedTestServerClient {
-    client: AuthenticatedKolomoniClient,
-}
-
-impl AuthenticatedTestServerClient {
-    pub fn testing<'c>(&'c self) -> TestingEndpoints<'c, AuthenticatedKolomoniClient> {
-        TestingEndpoints::new(&self.client)
-    }
-
-    pub fn assertable_health<'c>(
-        &'c self,
-    ) -> AssertableHealthEndpoints<'c, AuthenticatedKolomoniClient> {
-        AssertableHealthEndpoints::new(self.client.health())
-    }
-}
-
-impl Deref for AuthenticatedTestServerClient {
-    type Target = AuthenticatedKolomoniClient;
-
-    fn deref(&self) -> &Self::Target {
-        &self.client
-    }
-}
-
-impl DerefMut for AuthenticatedTestServerClient {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.client
-    }
-}
-
-impl AsRef<AuthenticatedKolomoniClient> for AuthenticatedTestServerClient {
-    fn as_ref(&self) -> &AuthenticatedKolomoniClient {
-        &self.client
-    }
-}
-
-impl AsMut<AuthenticatedKolomoniClient> for AuthenticatedTestServerClient {
-    fn as_mut(&mut self) -> &mut AuthenticatedKolomoniClient {
-        &mut self.client
     }
 }

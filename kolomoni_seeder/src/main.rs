@@ -117,13 +117,13 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
     for parsed_category in parsed_data.categories().values() {
         println!(
             " > creating category: \"{}\"",
-            parsed_category.english_name
+            parsed_category.full_english_name
         );
 
         let new_category = categories_api_client
             .create_category(CategoryToCreate {
-                english_category_name: parsed_category.english_name.clone(),
-                slovene_category_name: parsed_category.slovene_name.clone(),
+                english_category_name: parsed_category.abbreviated_english_name.clone(),
+                slovene_category_name: parsed_category.abbreviated_slovene_name.clone(),
                 // Will be set in another pass.
                 parent_category_id: None,
             })
@@ -169,9 +169,9 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
 
         println!(
             " > setting parent of category \"{}\" ({}) to \"{}\" ({})",
-            parsed_category.english_name,
+            parsed_category.full_english_name,
             associated_real_category_id.into_uuid().as_hyphenated(),
-            parent_category.english_name,
+            parent_category.full_english_name,
             associated_real_parent_category_id
                 .into_uuid()
                 .as_hyphenated()
@@ -320,7 +320,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
 
             println!(
                 "    | linking with category \"{}\" ({})",
-                category.english_name,
+                category.full_english_name,
                 target_category_id.into_uuid().as_hyphenated()
             );
 
@@ -463,7 +463,7 @@ async fn main_async(seed_arguments: SeedFromSpreadsheetCommandArguments) -> miet
 
             println!(
                 "    | linking with category \"{}\" ({})",
-                category.english_name,
+                category.full_english_name,
                 target_category_id.into_uuid().as_hyphenated()
             );
 

@@ -34,7 +34,7 @@ impl ResponseValueError for AuthenticationError {
 /// To log in, use [`Self::new_by_server_log_in`], obtaining [`Self`],
 /// which can be used to obtain an authenticated client
 /// (see [`UnauthanticatedTestServerClient::with_authentication`]).
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ClientAuthentication {
     access_token: String,
 

@@ -7,8 +7,9 @@ edition = "2021"
 
 [dev-dependencies]
 kolomoni_core = { path = "../kolomoni_core", features = ["serde_impls_for_client_on_models"] }
-kolomoni_api_client = { path = "../kolomoni_api_client" }
-kolomoni_test_util = { path = "../kolomoni_test_util" }
+kolomoni_api_client = { path = "../kolomoni_api_client", features = ["unrestricted_client"] }
+kolomoni_test_core = { path = "../kolomoni_test_core" }
 
 tokio = { workspace = true }
+uuid = { workspace = true }
 chrono = { workspace = true }

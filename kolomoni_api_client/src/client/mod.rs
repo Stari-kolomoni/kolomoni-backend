@@ -1,8 +1,8 @@
 use std::{future::Future, pin::Pin};
 
 
-pub(crate) mod errors;
-pub use errors::ClientInitializationError;
+pub mod errors;
+pub use errors::{ClientInitializationError, RequestError};
 
 mod authenticated;
 pub use authenticated::AuthenticatedKolomoniClient;
@@ -16,7 +16,7 @@ mod unrestricted;
 pub use unrestricted::UnrestrictedUnauthenticatedKolomoniClient;
 
 use crate::{
-    client::errors::{RequestError, RequestResult},
+    client::errors::RequestResult,
     request::raw::RawRequest,
     response::raw::RawResponse,
     server::KolomoniApiServer,

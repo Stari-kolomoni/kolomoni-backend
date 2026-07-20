@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use url::Url;
 
 use crate::{
@@ -21,6 +22,8 @@ where
     client: &'c C,
 
     url: Option<Result<Url, url::ParseError>>,
+
+    headers: HeaderMap,
 }
 
 
@@ -29,7 +32,11 @@ where
     C: KolomoniHttpClient,
 {
     pub(crate) fn new(client: &'c C) -> GetRequestBuilder<'c, C, false> {
-        GetRequestBuilder { client, url: None }
+        GetRequestBuilder {
+            client,
+            url: None,
+            headers: HeaderMap::new(),
+        }
     }
 
 
@@ -44,6 +51,7 @@ where
                 relative_endpoint_path.as_ref(),
                 UrlBuildType::UnderBaseApiPath,
             )),
+            headers: self.headers,
         }
     }
 
@@ -63,6 +71,7 @@ where
                 relative_endpoint_path.as_ref(),
                 UrlBuildType::WithoutBaseApiPath,
             )),
+            headers: self.headers,
         }
     }
 
@@ -86,6 +95,22 @@ where
                 UrlBuildType::UnderBaseApiPath,
                 parameters,
             )),
+            headers: self.headers,
+        }
+    }
+
+    pub fn header<V>(self, name: HeaderName, value: V) -> GetRequestBuilder<'c, C, HAS_URL>
+    where
+        V: Into<HeaderValue>,
+    {
+        let mut headers = self.headers;
+
+        headers.append(name, value.into());
+
+        GetRequestBuilder {
+            client: self.client,
+            url: self.url,
+            headers,
         }
     }
 }
@@ -114,6 +139,7 @@ where
             .client
             .http_client()
             .get(request_url)
+            .headers(self.headers)
             .build()
             .into_raw_request();
 

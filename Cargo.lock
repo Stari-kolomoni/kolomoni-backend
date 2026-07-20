@@ -2030,12 +2030,13 @@ dependencies = [
  "chrono",
  "kolomoni_api_client",
  "kolomoni_core",
- "kolomoni_test_util",
+ "kolomoni_test_core",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
-name = "kolomoni_test_util"
+name = "kolomoni_test_core"
 version = "0.1.0"
 dependencies = [
  "actix-cors",
@@ -2049,11 +2050,23 @@ dependencies = [
  "kolomoni_configuration",
  "kolomoni_core",
  "kolomoni_database",
+ "kolomoni_test_macros",
  "miette",
  "reqwest",
  "tokio",
  "tracing-actix-web",
  "uuid",
+]
+
+[[package]]
+name = "kolomoni_test_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro-error2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.99",
+ "tokio",
 ]
 
 [[package]]

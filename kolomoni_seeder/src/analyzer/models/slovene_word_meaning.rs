@@ -106,7 +106,7 @@ impl<'c> IntermediateSloveneWordMeaningResolutionContext<'c> {
         let mut target_category_internal_id = None;
 
         for category in self.categories.values() {
-            if slovene_category_name == category.slovene_name {
+            if slovene_category_name == category.full_slovene_name {
                 target_category_internal_id = Some(category.internal_id());
                 break;
             }

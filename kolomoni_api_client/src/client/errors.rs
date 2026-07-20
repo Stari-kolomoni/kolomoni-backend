@@ -147,6 +147,9 @@ pub enum RequestError {
         error: serde_json::Error,
     },
 
+    #[error("server refused the request due to missing authentication")]
+    MissingAuthentication,
+
     #[error(
         "server refused the request due to missing caller permissions: {:?}",
         .permissions

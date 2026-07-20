@@ -2,21 +2,23 @@
 
 use actix_web::http::header::HeaderValue;
 use chrono::{DateTime, Utc};
+use kolomoni_core::datetime::format_utc_datetime_for_http_header;
 
 
 /// Given a `last_modification_time`, this function tries to construct
-/// a [`HeaderValue`] corresponding to the `Last-Modified` header name.
+/// a [`HeaderValue`] corresponding to the `Last-Modified` header.
 ///
 /// The reason this function exists is because the date and time format is a bit peculiar.
 ///
-/// See [Last-Modified documentation on MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified).
+/// See [`format_utc_datetime_for_http_header`].
 pub fn construct_last_modified_header_value(last_modification_time: &DateTime<Utc>) -> HeaderValue {
-    let date_time_formatter = last_modification_time.format("%a, %d %b %Y %H:%M:%S GMT");
-
     // PANIC SAFETY: Using our date time formatter ensures
     // we only emit visible ASCII characters (32-127), therefore `HeaderValue::from_str`
     // can't panic.
-    HeaderValue::from_str(date_time_formatter.to_string().as_str()).unwrap()
+    HeaderValue::from_str(&format_utc_datetime_for_http_header(
+        last_modification_time,
+    ))
+    .unwrap()
 }
 
 

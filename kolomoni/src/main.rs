@@ -19,7 +19,7 @@
 //!   that serves the API schema interactively through a [RapiDoc](https://rapidocweb.com/) frontend.
 //! - [`kolomoni_test`](../kolomoni_test/index.html) --- contains end-to-end tests for the backend.
 //! - [`kolomoni_search`](../kolomoni_search/index.html) --- contains search engine logic.
-//! - [`kolomoni_test_util`](../kolomoni_test_util/index.html) --- contains shared code for the end-to-end tests in the
+//! - [`kolomoni_test_core`](../kolomoni_test_core/index.html) --- contains shared code for the end-to-end tests in the
 //!   [`kolomoni_test`](../kolomoni_test/index.html) crate.
 //!
 //!
