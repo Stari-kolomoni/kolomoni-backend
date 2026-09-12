@@ -274,7 +274,6 @@ pub struct GenerateCommandArguments {
 pub struct StatusCommandArguments {
     #[command(flatten)]
     pub database: DatabaseConnectionArgs,
-    // TODO Continue from here (including command implementation).
 }
 
 

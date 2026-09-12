@@ -1,42 +1,69 @@
-<h1 align="center">Stari Kolomoni Backend</h1>
+<div align="center">
+  <h1 align="center">Stari Kolomoni (backend)</h1>
+  <h6 align="center">backend for the open fantasy translation project</h6>
+</div>
 
-[![Test Status](https://img.shields.io/github/actions/workflow/status/Stari-kolomoni/kolomoni-backend/test.yml?branch=master&style=flat-square&logo=github&logoColor=white&label=doc%2C%20unit%20%26%20end-to-end%20tests)](https://github.com/Stari-kolomoni/kolomoni-backend/actions/workflows/test.yml)
-[![Licensed under GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square)](https://github.com/Stari-kolomoni/kolomoni-backend/blob/master/LICENSE.md)
-[![Development Docs](https://img.shields.io/badge/development_docs-here-orange)](https://stari-kolomoni.github.io/kolomoni-backend/)
+<br>
+
+This repository contains the full backend for the Stari Kolomoni open fantasy translation project as well as its Rust backend client.
+See [the main page](https://github.com/Stari-kolomoni) for more information about the project.
 
 
-This repository contains the full backend for the Stari Kolomoni open fantasy translation project.
+<br>
+
+---
+
+# 1. Workspace structure
+- `kolomoni` (main binary) defines the entire V1 API and serves the whole backend (using `actix-web`).
+- `kolomoni_core` contains reusable functionality (API models and other reusable types,
+  JWT token code, permission and role systems, etc.).
+- `kolomoni_configuration` defines the entire configuration schema and the code to load it from disk and validate it.
+- `kolomoni_cache` implements a full type-safe memory cache for database entities (this is used by our search engine
+  for very fast search results).
+- `kolomoni_database` handles PostgreSQL database querying and modification (using `sqlx`).
+- `kolomoni_search` implements our custom search engine (based on `tantivy`).
+- `kolomoni_search_core` contains shared search engine models and code for reuse.
+- `kolomoni_migrations` implements a custom database migration system (see `migrations` subfolder).
+- `kolomoni_migrations_core` defines reusable migration models and functionality.
+- `kolomoni_migrations_macros` defines handy proc macros for embedding migrations into the binary at build time
+  and for being able to elegantly write migrations in pure Rust instead of SQL (if more complex migration logic is required).
+- `kolomoni_seeder` implementst a system for seeding our database with existing words, meanings, and translations
+  from our previous translation system (based on spreadsheets and CSV).
+- `kolomoni_api_client` implements a full-featured API client (with proper error handling for each endpoint) for our Stari Kolomoni API.
+  This is particularly useful for our end-to-end tests.
+- `kolomoni_openapi` assembles an OpenAPI schema for the entire API surface (it can emit it as a JSON file or serve it through the [RapiDoc](https://rapidocweb.com/) frontend).
+  The final OpenAPI schema is assembled from individual annotations that are present near each endpoint function in
+  `kolomoni::api::v1`.
+- `kolomoni_test` contains end-to-end tests for our entire backend.
+- `kolomoni_test_core` contains shared code for the end-to-end tests, wrapping the `kolomoni_api_client` crate to provide a nice test interface
+  as well as providing some sample data to test on.
+- `kolomoni_test_macros` defines a simple custom `#[test]` macro for setting up asynchronous tests and other features.
+
 
 <br>
 <br>
 
-# 1. Deployment
-> *TODO :=)*
-
-
+---
 
 # 2. Development
-This section describes how to set up for development. 
-See `1. Deployment` for production instructions.
+This section describes how to set up this repository for local development. 
 
 
-
-## 2.1 Software requirements
+## 2.1 Requirements
 Before proceeding, verify that you have the following:
-- `Rust 1.65` or newer - install with [*rustup*](https://rustup.rs/)
-- `PostgreSQL 15.3` or newer - install or extract portable to `PATH`.  
-  > If on Windows, Powershell helper scripts are available in `scripts/database`. To simplify things you can also simply download a portable PostgreSQL archive instead of installing it. You can then, instead of adding it to `PATH`, extract its `pgsql` directory to `scripts/database` (i.e. so that the `scripts/database/pgsql/bin` directory exists).
-- `SeaORM CLI`, installed with `cargo install sea-orm-cli`. This will be used to manage database migrations.
+- A relatively modern version of Rust (tested on `Rust 1.98`), install with [*rustup*](https://rustup.rs/).
+- `PostgreSQL 15.3` or newer.
+  > If you're on Windows, install or extract the portable version to somewhere on the `PATH`. There are Powershell helper scripts available in `scripts/database` for creating the database and running it while you're developing. To simplify things, you can also simply download a portable PostgreSQL archive instead of installing it. You can then, instead of adding it to `PATH`, extract its `pgsql` directory to `scripts/database` (i.e. so that the `scripts/database/pgsql/bin` directory exists).
+- [`sqlx`](https://github.com/transact-rs/sqlx) CLI, installed with `cargo install --force sqlx-cli`. This will be used to manage [offline type-checked queries](https://github.com/transact-rs/sqlx/tree/main/sqlx-cli#enable-building-in-offline-mode-with-query).
+- [`cargo-make`](https://github.com/sagiegurari/cargo-make), installed with `cargo install --force cargo-make`, which we'll use as our task runner.
 
 
-
-## 2.2 Code style and IDE setup
+## 2.2 Code style
 > Important: *use nightly rustfmt*.
 
-Use [nightly `rustfmt`](https://github.com/rust-lang/rustfmt) (`cargo +nighly fmt` or 
+Use nightly [`rustfmt`](https://github.com/rust-lang/rustfmt) (`cargo +nightly fmt` or 
 [equivalent IDE support](https://github.com/rust-lang/rustfmt#running-rustfmt-from-your-editor)) for formatting your
-Rust code in this repository. Current rules can be seen in `rustfmt.toml` - you're welcome to adapt the rules to better
-fit the codebase as the repository evolves.
+Rust code in this repository. Current rules can be seen in `rustfmt.toml`.
 
 
 <details>
@@ -70,12 +97,12 @@ creating the file if necessary:
 }
 ```
 
-Alongside `rust-analyzer` and this configuration, we would like to suggest the following extensions:
+Alongside `rust-analyzer` and this configuration, the following extensions are also recommended:
 - **(highly recommended)** [EditorConfig](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig),
 - *(good-to-have)* [Even Better TOML](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml), and
 - *(optional; highlights comments)* [Better Comments](https://marketplace.visualstudio.com/items?itemName=aaron-bond.better-comments).
 
-For Better Comments, the following configuration might be of use — add this to `.vscode/settings.json` after installing the extension:
+For Better Comments, the following configuration might be of use (add this to `.vscode/settings.json` after installing the extension):
 
 ```json
 {
@@ -126,107 +153,121 @@ For Better Comments, the following configuration might be of use — add this to
 
 
 
-## 2.3 Setting up the database and `configuration.toml`
+## 2.3 (Windows) Setting up the database
 
 First off, initialize the PostgreSQL database.
-If you're on *Windows*, you can use the `scripts/database/init-database.ps1` and `scripts/database/run-database.ps1` scripts for easy setup and running.
-*Note that this script should only be used for development as it uses `--auth=trust`.*
-The generated user is `kolomon` (password `kolomon`) and the database name is `kolomondb`. 
+If you're on *Windows*, you can use the `scripts/database/init-database.ps1` and `scripts/database/run-database.ps1` scripts for easy setup and running (or use `cargo make database:initialize` and `cargo make database:run` instead).
+
+> **Note that this must only be used for development as it uses `--auth=trust`!**
+
+The generated user is `kolomon` (password `kolomon`) and the database name is `stari_kolomoni`. 
 The database will run on `127.0.0.1` on default port `5432`.
+
+
+## 2.4 Setting up `configuration.toml`
 
 Then, copy `data/configuration.TEMPLATE.toml` to `data/configuration.toml` and 
 fill out the configuration fields (see comments in the template for explanations).
 
-Build the project by running `cargo build`. 
-This will be a fresh build, so it might take a few minutes (around 2 minutes on a hard drive with a 16-core CPU at 3.6 GHz).
-Subsequent builds will be much faster.
+
+## 2.5 Building
+
+Build the project by running `cargo build --release`. 
+This will be a fresh build, so it might take a few minutes (around 2 minutes on a hard drive with a 12-core CPU at 3.6 GHz).
 
 
-## 2.4 Starting the backend server
-To start the backend server, execute `cargo run` (or run the binary in `./target/debug`).
+## 2.5 Starting the backend server for development
+To start the backend server, execute `cargo make backend:run:release` (or run the `kolomoni` binary in `./target/debug`).
 
 
 ## Appendix
 
 ### Appendix A. About database migrations
-Migrations are managed by [SeaORM](https://www.sea-ql.org/SeaORM/) and are applied onto the database on startup 
-(if needed).
+Our database migrations are managed by ourselves (see `kolomoni_migrations`, `kolomoni_migrations_core` and `kolomoni_migrations_macros`). 
 
-The process of modifying the database schema or creating new tables is described below. 
-SeaORM calls this order "schema-first", and we tend to follow this recommendation.
+Inside the `kolomoni_migrations/migrations` directory you'll find a sequence of subdirectories, e.g. `M0001_prepare-database`, `M0002_set-up-tables`, etc. 
+Inside each directory you'll find:
+- the `migration.toml` file, which configures some of the options of this migration,
+- (if SQL-based) the `up.sql` (and optionally `down.sql`) files, which is the SQL that will be executed for this migration (see `M0002_set-up-tables`), or
+- (if Rust-based) the `mod.rs`, `up.rs`, and optionally `down.rs` files, which define more complex logic for applying or revering a migration (see `M0003_seed-permissions-and-roles` for an example).
 
-> It is important to note that here, unlike in frameworks like Django, we must write our migrations by hand (create a table, add fields, add indexes, ...). This is all written in Rust code to be as database-agnostic as possible. See existing migrations as examples and additional guidance in `A.1 Create a migration`.
+> It is important to note that here, unlike in frameworks like Django, we must write the contents our migrations by hand (create a table, add fields, add indexes, ...). This ensures we have the highest control of our migration actions.
 
 
 #### Appendix A.1 Creating a migration
-First off, create an `.env` file in the root of the cloned repository and set the `DATABASE_URL` environment variable.
-The following represents the correct username, password and database name for the development setup created with `./scripts/database/init-database.ps1`:
+First off, create an `.env` file in the root of the workspace. The following represents the correct username, password and database name for the development setup created with `./scripts/database/init-database.ps1`:
 
 ```bash
-DATABASE_URL=postgres://kolomon:kolomon@localhost/kolomondb
+KOLOMONI_MIGRATIONS_DATABASE_URL_NORMAL_USER=postgres://kolomoni_migrator:kolomoni_migrator@localhost/stari_kolomoni
+
+# Used when run_as_privileged_user is set in a migration.
+# Usually done for the first-ever migration, see `M0001_prepare-database`.
+KOLOMONI_MIGRATIONS_DATABASE_URL_PRIVILEGED_USER=postgres://postgres:postgres@localhost/stari_kolomoni
 ```
 
 Then choose an appropriate name for your migration, e.g. `create_users_table`. You can then create a new migration by running:
 
 ```bash
-sea-orm-cli migrate generate --universal-time --migration-dir ./kolomoni_migrations create_users_table
+cargo run --release --package kolomoni_migrations -- generate --migrations-directory "./kolomoni_migrations/migrations" --migration-name "foo-bar"
+
+# Pass the --help flag for more information on how to not generate rollback scripts,
+# how to create Rust migrations, etc.:
+# 
+#   cargo run --release --package kolomoni_migrations -- generate --help
 ```
 
-This will create a new file in the `./kolomoni_migrations/src` directory. 
-Remove the `todo!()` calls and redundant comments. 
-Then write your own `up` and `down` implementation for your new migration. 
-Keep in mind that the newly-added migration will be applied *last*, after all existing migrations 
-(see `migrations/src/lib.rs` for the order - don't modify it unless you know what you're doing). 
+This will create a new directory in the `kolomoni_migrations/migrations` directory, which will automatically be picked
+up by the create and embedded into the binary at build-time. Now fill out `up.sql` and `down.sql` or equivalent Rust code 
+with your migration. Keep in mind the order of the migrations matters: the new migration will be applied after all the previous migrations, of course.
 
-As for a guide on writing migrations: see existing ones for some examples, but you can learn more about SeaORM migrations in 
-[SeaORM - Writing Migration](https://www.sea-ql.org/SeaORM/docs/migration/writing-migration/).
-
-The API documentation for the `SchemaManager` parameter you're provided in the `up` and `down` methods 
-is available on [docs.rs - sea_orm_migration::manager::SchemaManager](https://docs.rs/sea-orm-migration/latest/sea_orm_migration/manager/struct.SchemaManager.html).
-
-> Un-applied migrations will be performed when the backend starts, but you may perform the migration manually if you like by running:
-> ```bash
-> sea-orm-cli migrate up --database-url=postgres://username:password@host:port/database_name --migration-dir migrations
-> ```
-> 
-> You can also check which migrations have already been applied by running:
-> ```bash
-> sea-orm-cli migrate status --database-url=postgres://username:password@host:port/database_name --migration-dir migrations
-> ```
-
-
-#### Appendix A.2 Generating entity code from the modified schema
-> The following takes place in the `kolomoni_database` crate.
-
-The `entities` module is supposed to be auto-generated by SeaORM *and as such you should not modify it*.
-If you added a migration and wish to update the entities to the current schema, you must first apply the migrations (see above). Afterwards, run:
-
+To apply the migrations, see the migration status, etc., use the CLI:
 ```bash
-sea-orm-cli generate entity --output-dir=./kolomoni_database/src/entities --expanded-format
+cargo run --release --package kolomoni_migrations -- --help
+
+cargo run --release --package kolomoni_migrations -- status
+
+cargo run --release --package kolomoni_migrations -- up --help
+cargo run --release --package kolomoni_migrations -- up --migrate-to-version 5
+
+cargo run --release --package kolomoni_migrations -- down --help
+cargo run --release --package kolomoni_migrations -- down --rollback-to-version 5
 ```
 
-> *Again: do not modify this auto-generated code! Your changes will be overwritten the next time someone runs this command.*
 
+#### Appendix A.2 Adding new entities to `kolomoni_database`
+After a migration adds some new tables that you want to interact with,
+you need to add new entities into the `kolomoni_database` crate and write
+the logic for querying and modifying them.
 
-#### Appendix A.3 Defining relevant queries and mutations on top of the generated entities
-> The following takes place in the `kolomoni_database` crate.
+> Look at existing examples in the `kolomoni_database/src/entities` directory
+> to get a feel for the structure.
 
-**While not enforced by SeaORM, we want to avoid non-database code (especially actix routes) touching the defined entities in `database::entities` directly**.
+Each entity is generally in its own directory inside the `kolomoni_database/src/entities`
+directory, e.g. `word_meaning_english` for the "english word meaning" entity. Inside that
+directory there should be at least four `.rs` files:
+- `query.rs`, which contains all the logic for all possible queries of the
+  given entity, represented as a single zero-sized struct with those queries as static functions on it.
+  The struct name should be suffixed with `Query`, e.g. `EnglishWordMeaningQuery`.
+  <br>Query functions on that struct should be async and always have `database_connection: &mut PgConnection` for their first parameter.
+- `mutation.rs`, which is similar to `query.rs`, but contains all the logic for all possible creation, modification, and deletion operations of the given entity. Once again, all those operation should be present on a single zero-sized struct with functions, this time with the `Mutation` suffix, e.g. `EnglishWordMeaningMutation`.
+  <br>Functions on that struct should, again, be async and always have `database_connection: &mut PgConnection` for their first parameter.
+- `models.rs`, which has `pub(crate) mod internal` and `mod external` sub-modules in it.
+  <br>Inside the private `internal` module you should define database models as they
+  appear when interacting with the database itself. This means using base types
+  such as `String`, `Uuid`, etc. Internal database types should be prefixed with
+  `Internal` and suffixed with `Model`, e.g. `InternalEnglishWordMeaningModel`.
+  <br>Inside the publicly re-exported `external` module you should define database
+  models as they are passed into or returned from query and mutation functions (see above).
+- `mod.rs`, which publicly re-exports (at least) the `models`, `mutation`, and `query` submodules.
 
-Instead of querying and updating those entities manually, here is a pattern for accessing and modifying anything in the database (names are examples, adapt to the relevant entity):
-- `crate::query::user_permission::UserPermissionQuery` is the struct that has public async methods that 
-  allow the rest of the application to query data (find by id, name, ...), *but not to modify it*. 
-  A single query struct should generally operate only on one entity.
-- `crate::mutation::user_permission::UserPermissionMutation` is the struct that has public async methods that
-  allow the rest of the application to *modify the data of the given entity* (or related entities, up to you).
-
-Query and mutation structs are then re-exported in `src/mutation.rs` and `src/query.rs` to eliminate unnecesarry nesting.
-As a general rule, it probably makes sense to write query and mutation methods as we grow the application to need them, and *not* every operation up front after defining the entity.
-
-As for the SeaORM documentation related to fetching and updating database data, the [SeaORM - Basic CRUD](https://www.sea-ql.org/SeaORM/docs/basic-crud/basic-schema/) chapter might be of much help.
-
-
-
-### Appendix B. `actix-web` and `EndpointResult`/`APIError` examples
-We've introduced a few new types to easily `?`-return common `Result` errors,
-see documentation for `api::v1::errors::APIError` for more information.
+> There are two more internal conventions here, which we won't go into:
+> - the occasional `pub(crate) mod internal_weak` submodule, which is used for the
+>   model types when fetching loosely-typed data (usually JSON) from the database, and
+> - the occasional `pub(crate) mod internal_insert_only` submodule, which is used when the database
+>   interaction model is different on insertion than on querying.
+>
+> Sometimes a directory called `queries` is also present. In it, you'll find `.sql`
+> query files. We use these files for longer and more complex queries to avoid writing
+> them all out inline in code.
+>
+> It's best to see the examples of this in action in `kolomoni_database/src/entities/word_meaning_english/models.rs`.
